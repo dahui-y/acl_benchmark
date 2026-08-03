@@ -1,0 +1,864 @@
+A man in casual clothes is chopping kale in the kitchen.
+A man in a blue shirt is chopping vegetable in the kitchen.
+A robot is chopping lettuce in the kitchen.
+A woman is chopping leaf in the kitchen.
+A chef is mincing spinach at the market.
+A woman with a white apron is shredding spinach at a market stall.
+Chopping spinach.
+Shredding lettuce.
+A woman with a white apron is frying vegetable in the kitchen.
+A chef with a white apron is sauteing vegetable in the kitchen.
+A chef is roasting vegetable in a home kitchen.
+A chef in a white coat is sauteing spinach in the kitchen.
+A man in a green shirt is frying spinach in the kitchen.
+A chef wearing gloves is frying vegetable in the kitchen.
+Browning vegetable.
+Sauteing kale.
+A chef wearing gloves is squeezing spinach in a home kitchen.
+A man wearing gloves is crushing vegetable at the market.
+A woman with a white apron is mashing leaf in a cafe kitchen.
+A chef is squeezing vegetable in the kitchen.
+A robot is crushing vegetable in the kitchen.
+A robot is crushing kale in a home kitchen.
+Crushing kale.
+Squeezing spinach.
+A woman with a white apron is coating carrot in the kitchen.
+A man is coating potato in the kitchen.
+A man wearing gloves is coating carrot in the kitchen.
+A man with a black apron is coating potato in a home kitchen.
+A woman in casual clothes is coating carrot at the market.
+A woman is coating potato in the kitchen.
+Coating potato.
+Coating carrot.
+A chef with a white apron is chopping potato in the kitchen.
+A chef in a red uniform is mincing carrot in the kitchen.
+A man in a white coat is shredding carrot at a market stall.
+A robot with metallic arms is slicing radish at a street food stand.
+A man wearing a chef hat is chopping ginger in the kitchen.
+A man in casual clothes is mincing ginger on the grass.
+Slicing carrot.
+Shredding potato.
+A man with a white apron is grating carrot in the kitchen.
+A chef with a white apron is grating ginger in the kitchen.
+A woman is grating potato in the kitchen.
+A woman with a white apron is grating carrot in the kitchen.
+A man with a white apron is grating ginger in the kitchen.
+A robot is grating carrot at a market stall.
+Grating potato.
+Grating carrot.
+A chef in a red uniform is frying potato in the kitchen.
+A man in a black coat is browning potato in a home kitchen.
+A man in casual clothes is sauteing carrot in a home kitchen.
+A woman is roasting carrot in a home kitchen.
+A chef in a red uniform is roasting beet in a home kitchen.
+A chef is sauteing ginger in the kitchen.
+Grilling potato.
+Frying ginger.
+A robot is whipping potato in the bakery.
+A chef is blending carrot in the kitchen.
+A man is blending potato in the kitchen.
+A chef wearing a chef hat is blending ginger in the kitchen.
+A woman with a white apron is blending carrot in the kitchen.
+A man in a blue shirt is blending potato in the kitchen.
+Blending ginger.
+Whipping potato.
+A woman in a red uniform is peeling potato in the kitchen.
+A robot is peeling beet in the kitchen.
+A chef in a white uniform is peeling ginger in the kitchen.
+A robot with glowing eyes is peeling potato in the kitchen.
+A woman is peeling carrot in the kitchen.
+A chef in a white coat is peeling beet in the kitchen.
+Peeling carrot.
+Peeling ginger.
+A robot with robotic hands is mashing potato outdoor.
+A chef wearing a chef hat is squeezing potato on the grass.
+A robot with glowing eyes is crushing ginger at the market.
+A chef is crushing potato at the market.
+A woman wearing gloves is mashing potato on the grass.
+A chef with a white apron is squeezing potato on the grass.
+Crushing potato.
+Squeezing ginger.
+A chef wearing a chef hat is coating onion in a cafe kitchen.
+A robot with robotic hands is coating onion in the kitchen.
+A man is coating onion in the kitchen.
+A robot with glowing eyes is coating onion in the kitchen.
+A chef is coating onion in the kitchen.
+A chef in a red uniform is coating onion in the kitchen.
+A man in a red uniform is coating onion in the kitchen.
+Coating onion.
+A man in a white coat is shredding onion in the kitchen.
+A man is chopping garlic in the kitchen.
+A chef is mincing garlic at a market stall.
+A robot with glowing eyes is slicing shallot in a cafe kitchen.
+A robot is chopping leek in the kitchen.
+A chef with a white apron is slicing leek at a street food stand.
+Mincing onion.
+Chopping scallion.
+A man is grating garlic at the market.
+A woman with a black apron is grating onion in the kitchen.
+A chef in a red uniform is grating garlic in the kitchen.
+A robot with a silver body is grating garlic in the kitchen.
+A chef in a black coat is grating onion in the kitchen.
+A woman with a white apron is grating garlic in the kitchen.
+Grating onion.
+Grating garlic.
+A chef is frying onion in a home kitchen.
+A robot is grilling onion outdoor.
+A man in a red uniform is browning onion outdoor.
+A woman is sauteing garlic in the kitchen.
+A robot with robotic hands is roasting garlic in a home kitchen.
+A woman wearing a chef hat is browning garlic in a home kitchen.
+Frying garlic.
+Sauteing shallot.
+A chef wearing gloves is blending onion in the kitchen.
+A chef is blending garlic in the kitchen.
+A robot is whipping garlic in the bakery.
+A woman in a white coat is blending onion in the kitchen.
+A man wearing gloves is blending garlic in the kitchen.
+A man is whipping garlic in the bakery.
+Blending onion.
+Blending garlic.
+A robot with robotic hands is peeling onion in the kitchen.
+A man in a white shirt is peeling garlic in the kitchen.
+A chef with a white apron is peeling shallot in the kitchen.
+A woman is peeling scallion in the kitchen.
+A woman wearing gloves is peeling shallot in the kitchen.
+A man in a blue shirt is peeling scallion in the kitchen.
+Peeling onion.
+Peeling garlic.
+A man in a colorful shirt is crushing onion at the market.
+A robot with a silver body is squeezing onion in a cafe kitchen.
+A chef wearing a chef hat is crushing garlic at a market stall.
+A man in a white coat is mashing garlic on the grass.
+A man with a black apron is squeezing garlic in a home kitchen.
+A robot is squeezing onion in a cafe kitchen.
+Crushing onion.
+Crushing garlic.
+A chef with a black apron is chopping celery in the kitchen.
+A woman in a red uniform is slicing celery at a street food stand.
+A robot with a stainless surface is chopping asparagus in the kitchen.
+A woman in a white shirt is slicing celery in a home kitchen.
+A man in a red uniform is chopping celery in the kitchen.
+A man in casual clothes is slicing celery in the kitchen.
+Chopping celery.
+Chopping asparagus.
+A robot with robotic hands is sauteing celery in the kitchen.
+A woman wearing a chef hat is grilling asparagus in a home kitchen.
+A man wearing gloves is roasting asparagus in a cafe kitchen.
+A woman with a white apron is grilling asparagus in a cafe kitchen.
+A chef in a red uniform is roasting asparagus in a cafe kitchen.
+A chef in a red uniform is sauteing celery in the kitchen.
+Sauteing celery.
+Grilling asparagus.
+A man in casual clothes is chopping tomato in the kitchen.
+A robot with metallic arms is mincing tomato at the market.
+A woman wearing a chef hat is chopping capsicum in the kitchen.
+A woman is shredding zucchini in a cafe kitchen.
+A chef is slicing cucumber in the kitchen.
+A chef wearing a chef hat is mincing jalapeno in the kitchen.
+Chopping cucumber.
+Slicing eggplant.
+A man in casual clothes is grating tomato in the kitchen.
+A man wearing a chef hat is grating cucumber in the kitchen.
+A man is grating zucchini in the kitchen.
+A man wearing gloves is grating cucumber in the kitchen.
+A robot is grating tomato in the kitchen.
+A robot is grating zucchini in the kitchen.
+Grating zucchini.
+Grating tomato.
+A woman wearing gloves is sauteing tomato in the kitchen.
+A man with a black apron is frying eggplant in the kitchen.
+A chef with a white apron is grilling zucchini at a street food stand.
+A robot with a silver body is roasting pumpkin at a street food stand.
+A chef wearing a chef hat is roasting squash outdoor.
+A woman in a red uniform is frying okra in the kitchen.
+Roasting tomato.
+Grilling corn.
+A robot is blending tomato in the kitchen.
+A woman wearing gloves is blending pepper in the kitchen.
+A robot is whipping tomato in the bakery.
+A man with a black apron is whipping eggplant in the bakery.
+A woman is blending pepper in the kitchen.
+A man with a white apron is whipping tomato in the bakery.
+Blending tomato.
+Whipping eggplant.
+A woman in a yellow shirt is peeling tomato in the kitchen.
+A chef in a black coat is peeling eggplant in the kitchen.
+A chef is peeling cucumber in the kitchen.
+A man wearing gloves is peeling pumpkin in the kitchen.
+A woman wearing a chef hat is peeling pepper in the kitchen.
+A chef with a black apron is peeling eggplant in the kitchen.
+Peeling zucchini.
+Peeling squash.
+A robot is crushing tomato in the kitchen.
+A robot is mashing tomato outdoors.
+A man is squeezing tomato at a street food stand.
+A man wearing a chef hat is squeezing zucchini at a street food stand.
+A chef is crushing pepper in the kitchen.
+A woman wearing a chef hat is mashing tomato at a street food stand.
+Crushing tomato.
+Squeezing cucumber.
+A robot with a silver body is chopping broccoli in the kitchen.
+A woman with a white apron is chopping cabbage in the kitchen.
+A man in a green shirt is shredding cabbage at a street food stand.
+A robot with metallic arms is slicing cabbain the.
+A chef wearing gloves is shredding cauliflower at the market.
+A woman with a white apron is chopping broccoli in the kitchen.
+Chopping cauliflower.
+Shredding cabbage.
+A woman in a white coat is roasting broccoli outdoors.
+A chef with a white apron is frying cauliflower in the kitchen.
+A chef in a white coat is roasting cauliflower outdoors.
+A man with a white apron is frying cauliflower in the kitchen.
+A robot is roasting cauliflower at a street food stand.
+A robot with robotic hands is roasting broccoli at a street food stand.
+Roasting broccoli.
+Frying cauliflower.
+A woman in a red uniform is mashing cauliflower at a market stall.
+A chef wearing a chef hat is squeezing cabbage on the grass.
+A robot with a silver body is mashing cauliflower at a street food stand.
+A man is squeezing cabbage in the kitchen.
+A woman in casual clothes is mashing cauliflower on the grass.
+A man is squeezing cabbage at a street food stand.
+Mashing cauliflower.
+Squeezing cabbage.
+A robot with robotic hands is chopping mushroom in the kitchen.
+A chef in a red uniform is slicing mushroom in the bakery.
+A robot with glowing eyes is shredding mushroom at a street food stand.
+A chef is chopping mushroom in the bakery.
+A woman in a red uniform is slicing mushroom at a street food stand.
+A robot with metallic arms is shredding mushroom at the market.
+Chopping mushroom.
+Slicing mushroom.
+A man wearing a chef hat is frying mushroom in the kitchen.
+A woman in a black coat is sauteing mushroom in the kitchen.
+A chef is roasting mushroom in an outdoor cooking area.
+A man is browning mushroom in an outdoor cooking area.
+A robot with a stainless surface is frying mushroom in the kitchen.
+A robot with robotic hands is sauteing mushroom in the kitchen.
+Roasting mushroom.
+Browning mushroom.
+A chef is slicing orange in an outdoor cooking area.
+A man with a white apron is slicing lemon on the grass.
+A chef in a red uniform is slicing lime in the bakery.
+A chef in a white coat is slicing orange in an outdoor cooking area.
+A man in a red uniform is slicing lemon on the grass.
+A chef with a white apron is slicing lime in a cafe kitchen.
+Slicing orange.
+Slicing lemon.
+A robot with a stainless surface is zesting citrus in the bakery.
+A robot is grating orange in the kitchen.
+A woman is zesting orange in an outdoor cooking area.
+A woman is zesting lemon on the grass.
+A chef is zesting lime at a street food stand.
+A man wearing a chef hat is zesting grapefruit on the grass.
+Grating lemon.
+Zesting clementine.
+A chef is peeling orange in the kitchen.
+A woman in a white shirt is peeling lemon on the grass.
+A robot with a stainless surface is peeling citrus in the kitchen.
+A robot with glowing eyes is peeling grapefruit in the kitchen.
+A man is peeling orange in the kitchen.
+A robot is peeling lemon in the kitchen.
+Peeling citrus.
+Peeling grapefruit.
+A man in a red uniform is squeezing orange in an outdoor cooking area.
+A woman in casual clothes is squeezing lemon on the grass.
+A robot with a silver body is squeezing lime in a cafe kitchen.
+A woman is squeezing grapefruit at the market.
+A chef with a white apron is squeezing clementine in an outdoor cooking area.
+A chef with a white apron is crushing lime in the kitchen.
+Squeezing orange.
+Squeezing lemon.
+A robot is chopping strawberry in the kitchen.
+A woman in casual clothes is slicing strawberry in an outdoor cooking area.
+A chef wearing gloves is slicing kiwi in the bakery.
+A woman is chopping strawberry in the kitchen.
+A chef wearing gloves is slicing strawberry in the bakery.
+A chef is slicing strawberry in an outdoor cooking area.
+Chopping strawberry.
+Slicing kiwi.
+A chef with a white apron is whipping strawberry in the bakery.
+A robot with a stainless surface is blending strawberry in the kitchen.
+A chef is whipping berry in the bakery.
+A chef wearing gloves is blending berry in the kitchen.
+A chef wearing a chef hat is whipping kiwi in the bakery.
+A woman with a white apron is blending kiwi in the kitchen.
+Whipping strawberry.
+Blending strawberry.
+A woman wearing gloves is peeling kiwi in the kitchen.
+A robot with metallic arms is peeling kiwi in the kitchen.
+A chef is peeling kiwi in the kitchen.
+A man is peeling kiwi in the kitchen.
+A woman wearing gloves is peeling kiwi in the kitchen.
+A chef with a black apron is peeling kiwi in the kitchen.
+A woman in a white dress is peeling kiwi in a home kitchen.
+Peeling kiwi.
+A chef is crushing strawberry in the kitchen.
+A robot with robotic hands is mashing strawberry in a cafe kitchen.
+A man in a red uniform is mashing berry in the kitchen.
+A robot is crushing strawberry in an outdoor cooking area.
+A robot with metallic arms is mashing strawberry in the kitchen.
+A woman wearing gloves is mashing berry in an outdoor cooking area.
+A robot with glowing eyes is crushing strawberry at a market stall.
+Mashing strawberry.
+A robot is slicing mango in a cafe kitchen.
+A chef is chopping pineapple in the kitchen.
+A woman in a blue shirt is slicing banana in an outdoor cooking area.
+A man wearing gloves is shredding coconut on the grass.
+A woman is chopping avocado in the kitchen.
+A chef with a black apron is slicing watermelon in an outdoor cooking area.
+Chopping banana.
+Slicing avocado.
+A chef in a white coat is grating coconut in the kitchen.
+A woman in a yellow shirt is grating mango in the kitchen.
+A robot with metallic arms is grating coconut in the kitchen.
+A chef in a white coat is grating coconut in the kitchen.
+A woman wearing a chef hat is grating coconut in the kitchen.
+A chef wearing gloves is grating mango in the kitchen.
+Grating mango.
+Grating coconut.
+A robot with a silver body is grilling pineapple in an outdoor cooking area.
+A man in casual clothes is browning banana in an outdoor cooking area.
+A woman wearing a chef hat is frying plantain in the kitchen.
+A chef wearing a chef hat is roasting coconut in the kitchen.
+A robot with a stainless surface is frying banana in the kitchen.
+A man in a red uniform is browning banana in the kitchen.
+Frying banana.
+Grilling pineapple.
+A woman is blending mango in the kitchen.
+A man in a white shirt is blending banana in the kitchen.
+A man in a blue shirt is blending coconut in the kitchen.
+A robot with a silver body is blending avocado in the kitchen.
+A chef is blending mango in the kitchen.
+A robot with robotic hands is blending banana in the kitchen.
+A robot with a stainless surface is blending coconut in the kitchen.
+Blending avocado.
+A robot with a silver body is peeling mango in the kitchen.
+A robot is peeling pineapple in the kitchen.
+A woman with a white apron is peeling banana in the kitchen.
+A robot with a silver body is peeling plantain in the kitchen.
+A man with a black apron is peeling avocado in the kitchen.
+A robot with metallic arms is peeling mango in the kitchen.
+Peeling pineapple.
+Peeling banana.
+A woman in casual clothes is crushing pineapple on the grass.
+A man in a red uniform is mashing banana in an outdoor cooking area.
+A man is mashing avocado in the kitchen.
+A woman in casual clothes is squeezing avocado on the grass.
+A woman wearing a chef hat is crushing pineapple on the grass.
+A robot with robotic hands is mashing avocado in the kitchen.
+Crushing pineapple.
+Mashing banana.
+A woman wearing gloves is chopping apple in the kitchen.
+A robot with glowing eyes is slicing apple in the kitchen.
+A man in a red uniform is slicing pear in the bakery.
+A man with a black apron is chopping pear in the kitchen.
+A woman in a red uniform is slicing apple in the kitchen.
+A man in a green shirt is chopping pear in the kitchen.
+Chopping apple.
+Slicing pear.
+A robot with a silver body is grating apple in the kitchen.
+A chef with a black apron is grating apple in the kitchen.
+A robot is grating apple in the kitchen.
+A man in a red uniform is grating apple in the kitchen.
+A chef with a black apron is grating apple in the kitchen.
+A man in a white shirt is grating apple in the kitchen.
+A man is grating apple in the kitchen.
+Grating apple.
+A robot with robotic hands is browning apple in the kitchen.
+A woman in a red uniform is browning pear in the kitchen.
+A man in a blue shirt is browning apple in the kitchen.
+A woman is browning pear in the kitchen.
+A robot with a stainless surface is browning apple in the kitchen.
+A man in a white coat is browning pear outdoors.
+A chef is browning pear outdoors.
+Browning apple.
+A chef wearing gloves is peeling apple in the kitchen.
+A woman wearing gloves is peeling pear in the kitchen.
+A chef is peeling apple in the kitchen.
+A chef in a red uniform is peeling pear in the kitchen.
+A robot is peeling apple in the kitchen.
+A woman with a white apron is peeling pear in the kitchen.
+Peeling pear.
+Peeling apple.
+A man with a white apron is slicing peach on the grass.
+A woman in casual clothes is chopping date in the kitchen.
+A chef is chopping olive in the kitchen.
+A chef wearing gloves is slicing olive in the kitchen.
+A chef with a white apron is chopping date in the kitchen.
+A woman in a red uniform is slicing olive in the kitchen.
+Slicing peach.
+Chopping olive.
+A chef with a black apron is blending date in the kitchen.
+A robot is blending peach in the kitchen.
+A robot is whipping peach in the bakery.
+A man in a blue shirt is blending peach in the kitchen.
+A robot with metallic arms is blending date in the kitchen.
+A robot with robotic hands is blending peach in the kitchen.
+Blending date.
+Whipping peach.
+A robot is peeling peach in the kitchen.
+A robot is peeling peach in the kitchen.
+A man in a red uniform is peeling peach in the kitchen.
+A woman wearing gloves is peeling peach in the kitchen.
+A robot is peeling peach in the kitchen.
+A woman is peeling peach in the kitchen.
+A man wearing a chef hat is peeling peach in the kitchen.
+Peeling peach.
+A robot is coating chicken in the kitchen.
+A man wearing gloves is coating meat in the kitchen.
+A robot with metallic arms is coating pork in the kitchen.
+A robot with glowing eyes is coating chicken in the kitchen.
+A chef is coating meat in the kitchen.
+A robot is coating pork in the kitchen.
+Coating chicken.
+Coating meat.
+A woman in a yellow shirt is mincing meat in the kitchen.
+A man in a black coat is shredding meat at the market.
+A woman is slicing beef in the kitchen.
+A chef wearing a chef hat is shredding pork in the kitchen.
+A man in casual clothes is chopping chicken at a street food stand.
+A man is shredding chicken in the kitchen.
+Slicing chicken.
+Mincing beef.
+A robot is frying meat in the kitchen.
+A chef wearing gloves is browning beef in the kitchen.
+A robot with metallic arms is sauteing chicken in the kitchen.
+A woman in casual clothes is grilling chicken in the kitchen.
+A robot is roasting turkey in the kitchen.
+A woman is browning turkey outdoors.
+Grilling steak.
+Frying chicken.
+A robot with a stainless surface is slicing ham in the bakery.
+A woman in a red uniform is chopping bacon in the kitchen.
+A woman in a white coat is slicing bacon at the market.
+A robot is slicing pepperoni at a market stall.
+A robot with metallic arms is chopping sausage in the kitchen.
+A woman with a black apron is slicing sausage in the kitchen.
+Chopping sausage.
+Slicing ham.
+A robot with robotic hands is frying bacon in the kitchen.
+A woman with a white apron is grilling bacon in the kitchen.
+A woman in casual clothes is browning bacon in the kitchen.
+A robot is browning meatball outdoors.
+A man with a white apron is frying sausage in the kitchen.
+A chef in a red uniform is grilling sausage in the kitchen.
+Browning sausage.
+Grilling bacon.
+A man wearing gloves is rolling meatball in the bakery.
+A woman is rolling sausage in the bakery.
+A woman with a white apron is rolling meatball in the bakery.
+A chef is rolling sausage in the bakery.
+A woman with a white apron is rolling meatball in the bakery.
+A chef is rolling sausage in the kitchen.
+Rolling meatball.
+Rolling sausage.
+A man in casual clothes is coating shrimp in the kitchen.
+A woman is coating fish in the kitchen.
+A chef with a black apron is coating prawn in the kitchen.
+A woman with a black apron is coating shrimp at the market.
+A robot is coating fish in the kitchen.
+A chef wearing gloves is coating prawn in the kitchen.
+Coating shrimp.
+Coating fish.
+A robot with a silver body is frying shrimp in the kitchen.
+A man is grilling shrimp at a street food stand.
+A woman wearing gloves is grilling salmon outdoors.
+A man is frying fish in the kitchen.
+A robot with metallic arms is sauteing prawn in the kitchen.
+A woman wearing a chef hat is roasting fish in the kitchen.
+Sauteing shrimp.
+Grilling fish.
+A man in a white shirt is peeling shrimp in the kitchen.
+A chef is peeling prawn in the kitchen.
+A woman is peeling shrimp in the kitchen.
+A man in casual clothes is peeling prawn at the market.
+A chef wearing a chef hat is peeling shrimp in the kitchen.
+A man with a black apron is peeling prawn in the kitchen.
+Peeling shrimp.
+Peeling prawn.
+A chef wearing a chef hat is slicing tofu at a market stall.
+A woman is slicing tofu on the grass.
+A man in a red uniform is slicing tofu on the grass.
+A woman is slicing tofu at the market.
+A woman in a blue shirt is slicing tofu in the kitchen.
+A robot is slicing tofu in the bakery.
+A woman in a red uniform is slicing tofu on the grass.
+Slicing tofu.
+A man in a blue shirt is frying tofu in the kitchen.
+A woman is browning tofu in the kitchen.
+A robot with robotic hands is roasting chickpea in a home kitchen.
+A man with a white apron is roasting tofu in a home kitchen.
+A chef with a white apron is frying tofu in the kitchen.
+A robot with a silver body is browning tofu in the kitchen.
+Roasting chickpea.
+Roasting tofu.
+A man with a white apron is squeezing tofu in a home kitchen.
+A woman in a white coat is mashing chickpea in a home kitchen.
+A woman with a white apron is mashing bean on the grass.
+A robot with a silver body is mashing tofu in a home kitchen.
+A man wearing gloves is mashing chickpea on the grass.
+A woman in a white shirt is mashing tofu in a home kitchen.
+Squeezing tofu.
+Mashing bean.
+A robot with metallic arms is chopping egg in the kitchen.
+A man in a white coat is slicing egg on the grass.
+A man in a red uniform is chopping egg in the kitchen.
+A man is slicing egg at a street food stand.
+A robot with glowing eyes is chopping egg in the kitchen.
+A robot is slicing egg at a market stall.
+Chopping egg.
+Slicing egg.
+A chef is frying egg in the kitchen.
+A chef wearing gloves is sauteing egg in the kitchen.
+A chef wearing gloves is frying egg in the kitchen.
+A man is sauteing egg in the kitchen.
+A robot with a silver body is frying egg in the kitchen.
+A robot with metallic arms is sauteing egg in the kitchen.
+Frying egg.
+Sauteing egg.
+A woman with a white apron is whipping egg in the bakery.
+A chef with a white apron is blending egg in the kitchen.
+A chef wearing a chef hat is whipping egg in the bakery.
+A chef wearing gloves is blending egg in the kitchen.
+A robot with metallic arms is whipping egg in the bakery.
+A man in a blue shirt is blending egg in the kitchen.
+Whipping egg.
+Blending egg.
+A woman in a white shirt is peeling egg in the kitchen.
+A chef wearing gloves is peeling egg in the kitchen.
+A robot with metallic arms is peeling egg in the kitchen.
+A man with a white apron is peeling egg in the kitchen.
+A robot with robotic hands is peeling egg in the kitchen.
+A robot is peeling egg in the kitchen.
+A woman with a white apron is peeling egg in the kitchen.
+Peeling egg.
+A chef wearing a chef hat is mashing egg in the kitchen.
+A man in a red uniform is mashing egg in a home kitchen.
+A man is mashing egg on the grass.
+A woman wearing gloves is mashing egg on the grass.
+A woman wearing gloves is mashing egg in the kitchen.
+A chef in a red uniform is mashing egg in a cafe kitchen.
+A robot with a stainless surface is mashing egg in a home kitchen.
+Mashing egg.
+A chef in a black coat is melting cream in the bakery.
+A woman wearing a chef hat is melting cream in the bakery.
+A robot with metallic arms is melting cream in the bakery.
+A chef is melting cream in the bakery.
+A chef with a white apron is melting cream in the bakery.
+A robot with a stainless surface is melting cream in the bakery.
+A woman with a white apron is melting cream in the bakery.
+Melting cream.
+A chef wearing gloves is whipping milk in the bakery.
+A robot with glowing eyes is blending milk in the kitchen.
+A robot with glowing eyes is whipping cream in the bakery.
+A woman with a white apron is blending cream in the kitchen.
+A woman with a white apron is whipping yogurt in the bakery.
+A man in a blue shirt is whipping milk in the bakery.
+Blending milk.
+Whipping cream.
+A man in a white coat is shredding cheese at a street food stand.
+A woman in a red uniform is slicing cheese in a cafe kitchen.
+A man with a white apron is shredding mozzarella at a market stall.
+A woman in casual clothes is slicing mozzarella at a street food stand.
+A woman in a yellow shirt is shredding parmesan on the grass.
+A woman wearing a chef hat is shredding cheese at a street food stand.
+Slicing cheese.
+Shredding mozzarella.
+A man in a red uniform is grating cheese in the kitchen.
+A woman with a white apron is grating mozzarella in the kitchen.
+A robot with a silver body is grating parmesan in the kitchen.
+A woman with a black apron is grating cheese in the kitchen.
+A man wearing a chef hat is grating mozzarella in the kitchen.
+A chef wearing a chef hat is grating parmesan in the kitchen.
+Grating cheese.
+Grating mozzarella.
+A man wearing gloves is grilling cheese in a cafe kitchen.
+A robot with a silver body is frying paneer in the kitchen.
+A woman wearing a chef hat is browning cheese in the kitchen.
+A woman is grilling cheese in a cafe kitchen.
+A robot with robotic hands is frying paneer in the kitchen.
+A chef wearing gloves is browning cheese in a cafe kitchen.
+Grilling cheese.
+Frying paneer.
+A robot with glowing eyes is melting cheese in the bakery.
+A robot with metallic arms is melting mozzarella in the bakery.
+A chef is melting cheese in the bakery.
+A man with a white apron is melting mozzarella in the bakery.
+A woman with a black apron is melting cheese in the bakery.
+A robot with a silver body is melting mozzarella in the bakery.
+A chef in a black coat is melting cheese in the bakery.
+Melting mozzarella.
+A chef is blending cheese in the kitchen.
+A woman wearing gloves is whipping mascarpone in the bakery.
+A woman wearing gloves is blending cheese in the kitchen.
+A woman with a white apron is whipping mascarpone in the bakery.
+A woman in a red uniform is blending cheese in the kitchen.
+A chef in a red uniform is whipping mascarpone in the bakery.
+Blending cheese.
+Whipping mascarpone.
+A woman wearing a chef hat is coating the bread with butter in the kitchen.
+A robot with robotic hands is coating the pan with ghee in the kitchen.
+A woman wearing a chef hat is coating the flatbread with butter in the kitchen.
+A chef in a black coat is coating the flatbread with ghee in the kitchen.
+A man with a black apron is coating the bread with butter in the kitchen.
+A woman wearing gloves is coating the pan with ghee in the kitchen.
+Coating the pan with butter.
+Coating the bread with ghee.
+A chef in a red uniform is chopping butter in the kitchen.
+A robot with a silver body is slicing butter in the bakery.
+A chef is chopping butter in the kitchen.
+A woman with a white apron is slicing butter in the bakery.
+A robot with glowing eyes is chopping butter in the kitchen.
+A chef with a white apron is slicing butter in the bakery.
+Chopping butter.
+Slicing butter.
+A woman in a red uniform is grating butter in the kitchen.
+A robot with glowing eyes is grating butter in the kitchen.
+A robot is grating butter in the kitchen.
+A woman in a black coat is grating butter in the kitchen.
+A chef in a red uniform is grating butter in the kitchen.
+A robot with a stainless surface is grating butter in the kitchen.
+A woman with a black apron is grating butter in the kitchen.
+Grating butter.
+A woman in a white uniform is melting butter in the bakery.
+A robot is melting ghee in the bakery.
+A woman is melting margarine in the kitchen.
+A man wearing gloves is melting shortening in the bakery.
+A robot with metallic arms is melting butter in the bakery.
+A chef with a white apron is melting ghee in the bakery.
+Melting margarine.
+Melting shortening.
+A robot with glowing eyes is whipping butter in the bakery.
+A man in a red uniform is blending butter in the kitchen.
+A man in casual clothes is whipping butter in the bakery.
+A woman in a white shirt is blending butter in the kitchen.
+A robot with robotic hands is whipping butter in the bakery.
+A woman is blending butter in the kitchen.
+Whipping butter.
+Blending butter.
+A woman wearing gloves is mashing butter in the bakery.
+A chef is mashing butter in the bakery.
+A robot with a stainless surface is mashing butter in the kitchen.
+A robot with robotic hands is mashing butter in the bakery.
+A woman with a black apron is mashing butter in the bakery.
+A chef with a black apron is mashing butter in the bakery.
+A robot with robotic hands is mashing butter in the bakery.
+Mashing butter.
+A chef with a white apron is frying rice in the kitchen.
+A robot with metallic arms is frying rice in the kitchen.
+A woman in a red uniform is frying rice in the kitchen.
+A woman wearing gloves is frying rice in the kitchen.
+A man in casual clothes is frying rice in the kitchen.
+A woman is frying rice in the kitchen.
+A man is frying rice in the kitchen.
+Frying rice.
+A robot with robotic hands is blending oat in the kitchen.
+A robot with a silver body is blending rice in the kitchen.
+A chef with a white apron is blending oat in the bakery.
+A chef is blending rice in the kitchen.
+A woman in a red uniform is blending oat in the kitchen.
+A chef is blending rice in the kitchen.
+Blending oat.
+Blending rice.
+A woman with a white apron is coating pasta in the kitchen.
+A chef with a black apron is coating bread in the kitchen.
+A man in a white coat is coating pasta in the kitchen.
+A chef in a red uniform is coating bread in the kitchen.
+A chef with a black apron is coating pasta in the kitchen.
+A man wearing gloves is coating bread in the kitchen.
+Coating pasta.
+Coating bread.
+A woman wearing a chef hat is slicing bread at a street food stand.
+A robot with a stainless surface is slicing bread outdoors.
+A man in a white coat is slicing bread in the bakery.
+A man in a red uniform is slicing bread in the bakery.
+A woman with a black apron is slicing bread at a street food stand.
+A woman in a yellow shirt is slicing bread in the bakery.
+A woman with a black apron is slicing bread at a street food stand.
+Slicing bread.
+A man in a white coat is frying batter in the kitchen.
+A woman wearing a chef hat is browning crust in a cafe kitchen.
+A woman with a black apron is frying bread in the kitchen.
+A chef in a red uniform is grilling bread in a cafe kitchen.
+A robot with a silver body is browning bread in a cafe kitchen.
+A robot is frying tortilla in the kitchen.
+Frying batter.
+Browning crust.
+A woman wearing gloves is whipping batter in the bakery.
+A woman in casual clothes is whipping batter in the bakery.
+A chef with a black apron is whipping batter in a cafe kitchen.
+A robot with glowing eyes is whipping batter in the bakery.
+A robot is whipping batter in the bakery.
+A man wearing gloves is whipping batter in the bakery.
+A chef is whipping batter in the bakery.
+Whipping batter.
+A man with a black apron is crushing biscuit at the market.
+A man in a white coat is crushing cracker at a street food stand.
+A robot with metallic arms is crushing biscuit in the bakery.
+A woman in a white coat is crushing cracker in the kitchen.
+A robot with a stainless surface is crushing biscuit in the bakery.
+A robot with a silver body is crushing cracker in a cafe kitchen.
+Crushing biscuit.
+Crushing cracker.
+A man is rolling dough in the bakery.
+A man in a white shirt is rolling crust in the bakery.
+A chef is rolling pasta in the bakery.
+A chef wearing gloves is rolling bread in the bakery.
+A chef is rolling tortilla in the bakery.
+A robot with metallic arms is rolling pastry in the bakery.
+Rolling dough.
+Rolling crust.
+A robot with metallic arms is browning sugar in the bakery.
+A woman with a black apron is browning sugar in the bakery.
+A woman with a white apron is browning sugar in the bakery.
+A chef is browning sugar in the bakery.
+A woman in a red uniform is browning sugar in the bakery.
+A man in a green shirt is browning sugar in the bakery.
+A chef with a white apron is browning sugar in the bakery.
+Browning sugar.
+A man wearing a chef hat is melting sugar in the bakery.
+A chef is melting jaggery in the bakery.
+A chef is melting honey in the kitchen.
+A man is melting sugar in the bakery.
+A robot is melting jaggery in the bakery.
+A chef in a red uniform is melting honey in the bakery.
+Melting sugar.
+Melting jaggery.
+A man with a black apron is whipping sugar in the bakery.
+A chef with a black apron is blending sugar in the kitchen.
+A chef is whipping sugar in the bakery.
+A man with a white apron is blending sugar in the kitchen.
+A robot with a silver body is whipping sugar in the bakery.
+A man is blending sugar in the kitchen.
+Whipping sugar.
+Blending sugar.
+A chef is slicing cake in the bakery.
+A robot with a silver body is chopping chocolate in the kitchen.
+A chef is mincing chocolate in the bakery.
+A woman wearing gloves is slicing cake in the bakery.
+A robot with a stainless surface is chopping chocolate in the kitchen.
+A woman is mincing chocolate in the bakery.
+Slicing cake.
+Chopping chocolate.
+A chef is grating chocolate in the kitchen.
+A woman wearing gloves is grating chocolate in the kitchen.
+A chef wearing gloves is grating chocolate in the bakery.
+A robot is grating chocolate in the kitchen.
+A woman with a black apron is grating chocolate in the kitchen.
+A robot is grating chocolate in the kitchen.
+A chef is grating chocolate in the kitchen.
+Grating chocolate.
+A woman is melting candy in the bakery.
+A robot with a silver body is melting caramel in the bakery.
+A man is melting marshmallow in the bakery.
+A robot with a silver body is melting gelatin in the bakery.
+A woman in a red uniform is melting chocolate in the kitchen.
+A robot with glowing eyes is melting candy in the bakery.
+Melting caramel.
+Melting candy.
+A chef wearing a chef hat is whipping ganache in the bakery.
+A robot with glowing eyes is whipping buttercream in the bakery.
+A chef in a red uniform is whipping frosting in the bakery.
+A man is whipping meringue in the kitchen.
+A robot with glowing eyes is whipping ganache in the bakery.
+A man wearing gloves is whipping buttercream in the bakery.
+Whipping frosting.
+Whipping meringue.
+A robot with a silver body is rolling cake in the bakery.
+A chef in a white coat is rolling fondant in the bakery.
+A robot is rolling cake in the kitchen.
+A robot with a stainless surface is rolling fondant in the bakery.
+A woman is rolling cake in the bakery.
+A robot is rolling fondant in the kitchen.
+Rolling cake.
+Rolling fondant.
+A robot with a stainless surface is crushing oreo in the kitchen.
+A woman in a red uniform is crushing cooky at a street food stand.
+A robot is crushing oreo at a market stall.
+A robot with metallic arms is crushing cooky at a street food stand.
+A chef wearing a chef hat is crushing oreo in the kitchen.
+A robot with a stainless surface is crushing cooky in the kitchen.
+Crushing oreo.
+Crushing cooky.
+A man is chopping nut in the kitchen.
+A man in casual clothes is chopping almond in the kitchen.
+A chef is slicing almond at a street food stand.
+A robot is chopping walnut in the kitchen.
+A chef is chopping pecan in the kitchen.
+A man wearing gloves is chopping peanut in the kitchen.
+Chopping nut.
+Chopping almond.
+A woman with a black apron is roasting nut in the bakery.
+A woman is roasting almond in the kitchen.
+A man wearing gloves is roasting hazelnut in the bakery.
+A man is roasting peanut in the kitchen.
+A robot with robotic hands is roasting nut in a home kitchen.
+A woman in a red uniform is roasting almond in the kitchen.
+Roasting hazelnut.
+Roasting peanut.
+A woman wearing gloves is blending almond in the kitchen.
+A chef wearing a chef hat is blending cashew in the kitchen.
+A woman in casual clothes is blending almond in the bakery.
+A woman in a black coat is blending cashew in the kitchen.
+A chef is blending almond in the bakery.
+A woman in a red uniform is blending cashew in the kitchen.
+Blending almond.
+Blending cashew.
+A robot with a stainless surface is crushing nut at a market stall.
+A woman is crushing almond in the kitchen.
+A robot with a silver body is crushing walnut at the market.
+A man is crushing peanut in the kitchen.
+A robot with metallic arms is crushing nut in the kitchen.
+A chef with a black apron is crushing almond in the kitchen.
+Crushing walnut.
+Crushing peanut.
+A chef with a white apron is chopping basil in the kitchen.
+A chef in a red uniform is mincing cilantro at the market.
+A robot with a silver body is mincing parsley in the kitchen.
+A man is chopping mint at a street food stand.
+A man is chopping dill in the kitchen.
+A woman with a white apron is chopping rosemary in the kitchen.
+Chopping chive.
+Chopping chili.
+A robot with glowing eyes is grating nutmeg in the kitchen.
+A chef wearing gloves is grating nutmeg in the kitchen.
+A man with a white apron is grating nutmeg in the kitchen.
+A robot with metallic arms is grating nutmeg in the kitchen.
+A robot is grating nutmeg in the kitchen.
+A man wearing a chef hat is grating nutmeg in the kitchen.
+A robot with a silver body is grating nutmeg in the kitchen.
+Grating nutmeg.
+A chef is melting ice in the bakery.
+A man with a black apron is melting ice in the bakery.
+A chef wearing gloves is melting ice in the bakery.
+A woman in a red uniform is melting ice in the bakery.
+A robot with glowing eyes is melting ice in the bakery.
+A woman in a white coat is melting ice in the bakery.
+A robot with metallic arms is melting ice in the bakery.
+Melting ice.
+A woman is blending sauce in the kitchen.
+A man in a red uniform is blending ice in the kitchen.
+A chef wearing a chef hat is blending sauce in the kitchen.
+A robot is blending ice in the kitchen.
+A man in a black coat is blending sauce in the kitchen.
+A chef with a white apron is blending ice in the kitchen.
+Blending sauce.
+Blending ice.
+A robot with a stainless surface is crushing ice at the market.
+A woman is crushing ice in a cafe kitchen.
+A woman with a black apron is crushing ice in the kitchen.
+A woman is crushing ice at the market.
+A woman with a white apron is crushing ice at the market.
+A robot with metallic arms is crushing ice at a street food stand.
+A chef in a red uniform is crushing ice at a street food stand.
+Crushing ice.
+A robot with glowing eyes is rolling clay in the bakery.
+A chef with a black apron is rolling clay outdoors.
+A chef wearing a chef hat is rolling clay in the kitchen.
+A man is rolling clay outdoors.
+A woman wearing a chef hat is rolling clay in the bakery.
+A man is rolling clay in the bakery.
+A man with a black apron is rolling clay in a home kitchen.
+Rolling clay.

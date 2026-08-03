@@ -1,0 +1,46 @@
+{
+  "Vegetables": {
+    "Leafy": ["vegetable", "spinach", "lettuce", "kale", "leaf"],
+    "Root": ["potato", "carrot", "radish", "beet", "ginger"],
+    "Bulb": ["onion", "garlic", "shallot", "leek", "scallion"],
+    "Stem_Stalk": ["celery", "asparagus"],
+    "Fruiting": ["tomato", "capsicum", "eggplant", "zucchini", "cucumber", "pumpkin", "squash", "okra", "corn", "jalapeno", "pepper"],
+    "Cruciferous": ["broccoli", "cauliflower", "cabbage"],
+    "Mushroom": ["mushroom"]
+  },
+  "Fruits": {
+    "Citrus": ["citrus", "orange", "lemon", "lime", "clementine", "grapefruit"],
+    "Berries": ["strawberry", "berry", "kiwi"],
+    "Tropical_Melon": ["mango", "pineapple", "banana", "plantain", "coconut", "avocado", "watermelon"],
+    "Pome": ["apple", "pear"],
+    "Stone": ["peach", "date", "olive"]
+  },
+  "Proteins": {
+    "Meat": ["meat", "beef", "pork", "chicken", "turkey", "steak"],
+    "Processed_Meat": ["ham", "bacon", "meatball", "pepperoni", "sausage"],
+    "Seafood": ["shrimp", "prawn", "salmon", "fish"],
+    "Plant": ["tofu", "chickpea", "bean"],
+    "Eggs": ["egg"]
+  },
+  "Dairy_Fats": {
+    "Milk_Derivatives": ["milk", "cream", "yogurt"],
+    "Cheeses": ["cheese", "mozzarella", "paneer", "parmesan", "mascarpone"],
+    "Fats_Oils": ["butter", "ghee", "margarine", "shortening"]
+  },
+  "Grains_Carbs": {
+    "Grains": ["rice", "oat"],
+    "Carb_Foods": ["dough", "batter", "crust", "pasta", "bread", "biscuit", "cracker", "tortilla", "pastry"]
+  },
+  "Sweets_Confectionery": {
+    "Sweeteners": ["sugar", "jaggery", "honey"],
+    "Dessert_Bases": ["candy", "cake", "caramel", "ganache", "buttercream", "frosting", "fondant", "meringue", "marshmallow", "gelatin", "chocolate"],
+    "Snacks": ["oreo", "cooky"]
+  },
+  "Nuts_Seeds": {
+    "Nuts_Seeds": ["nut", "almond", "walnut", "cashew", "hazelnut", "pecan", "peanut"]
+  },
+  "Seasonings_Condiments": {
+    "Herbs_Spices": ["basil", "cilantro", "parsley", "mint", "thyme", "dill", "rosemary", "herb", "chive", "coriander", "chili", "chilies", "nutmeg"],
+    "Condiments_Misc": ["sauce", "ice", "clay"]
+  }
+}

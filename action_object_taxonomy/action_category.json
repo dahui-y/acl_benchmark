@@ -1,0 +1,11 @@
+{
+  "Cutting": ["chopping", "mincing", "shredding", "slicing"],
+  "Heating": ["frying", "sauteing", "grilling", "roasting", "browning"],
+  "Pressing": ["crushing", "mashing", "squeezing"],
+  "Grating": ["grating", "zesting"],
+  "Mixing": ["whipping", "blending"],
+  "Coating": ["coating"],
+  "Rolling": ["rolling"],
+  "Peeling": ["peeling"],
+  "Melting": ["melting"]
+}

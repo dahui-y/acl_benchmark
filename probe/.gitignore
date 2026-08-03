@@ -1,0 +1,4 @@
+stimuli.jsonl
+*.npz
+result_*.json
+__pycache__/

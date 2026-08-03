@@ -17,13 +17,22 @@
 
 ## 快速开始
 
-```bash
-pip install -r requirements.txt
+**先建 venv**，不要装进系统 Python：
 
-python build_stimuli.py --n-items 200            # -> stimuli.jsonl
-python encode.py --model t5-base --out emb_t5base.npz    # CPU 冒烟测试
+```bash
+cd ..                      # 仓库根目录
+python3 -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r probe/requirements.txt
+
+cd probe
+python build_stimuli.py --n-items 200                  # -> stimuli.jsonl
+python encode.py --model t5-base --out emb_t5base.npz  # CPU 冒烟测试，约 2 分钟
 python analyze.py --emb emb_t5base.npz
 ```
+
+`torch` 与 `transformers` 只有 `encode.py` 需要；只想复跑分析的话装
+`numpy scipy scikit-learn` 就够。
 
 真正要看的编码器（需要 GPU）：
 
@@ -80,16 +89,40 @@ HunyuanVideo 用的是 MLLM（LLaVA 系）编码器，接口不同，需另写�
 
 ## 三项测量
 
-### (a) 几何：Aspect Salience Index
+### (a) 几何：Surface-Normalised Salience
 
 ```
-ASI = (d_aspect − d_floor) / (d_other_verb − d_floor)
+SNS = d(prog, 体貌条件) / d(prog, filler)
 ```
 
-- **ASI ≈ 0** — 体貌对嵌入的影响不超过一次同义替换 → 编码器几乎不表征达成
-- **ASI ≈ 1** — 影响与换掉动词相当 → 体貌是一等公民
+- **SNS < 1** — 改变"事件是否达成"对条件向量的影响，**小于**追加几个无意义词
+- **SNS > 1** — 体貌的影响大于纯表层扰动
 
-同时报告配对 Wilcoxon（d_aspect vs d_floor）。
+**为什么锚点是 `filler` 而不是 `other_verb`**：实跑之后才发现，
+`other_verb` 根本不是上界——换动词（crushing → rolling）只改 1 个 token，
+移动量反而**小于**改了好几个 token 的体貌条件。以它作分母的比值会爆掉（出现 ASI=40）。
+`filler` 保持事件与体貌不变、只加入语义无关的词，
+直接量化"纯粹靠改字面能买到多少距离"，才是可比的锚点。
+
+同时报告配对 Wilcoxon（d_cond vs d_filler）以及距离与编辑距离的相关 r。
+
+### 实跑参考（t5-base，200 items）
+
+| 条件 | d_cond | SNS | 编辑距离 |
+|---|---|---|---|
+| perf | 0.0720 | 0.86 | 0.206 |
+| result | 0.0712 | 0.85 | 0.206 |
+| prospective | 0.0474 | **0.56** | 0.256 |
+| failed | 0.1563 | 1.86 | 0.472 |
+| atelic | 0.0366 | **0.43** | 0.206 |
+| *filler（锚点）* | 0.0849 | 1.00 | 0.310 |
+| *other_verb* | 0.0493 | 0.59 | 0.103 |
+
+**5 个体貌条件里 4 个低于 1.0** —— 改变事件是否达成，比追加 4 个无意义词
+移动得更少。判定为 INFORMATION PRESENT BUT LOW-MAGNITUDE。
+
+注意 t5-base 不是任何视频模型的编码器，这只是管线验证。
+真正要看的是 umT5-XXL（Wan 2.2）与 T5-v1.1-XXL。
 
 ### (b) 线性探针
 
@@ -114,8 +147,11 @@ ASI = (d_aspect − d_floor) / (d_other_verb − d_floor)
 
 ## 已知局限
 
-1. **池化是近似**。扩散模型通过 cross-attention 使用**整个 token 序列**，不是池化向量。
-   `--save-tokens` 可保留逐 token 状态以便重做分析。写论文时这一条必须写进 Limitations。
+1. **池化是近似，而且对句长敏感**。扩散模型通过 cross-attention 使用**整个 token 序列**，
+   不是池化向量。t5-base 的结果里 `other_verb`（换掉整个动词）距离仅 0.049、
+   低于 filler 的 0.085，说明均值池化后的几何很大程度上由句长与表层重叠支配。
+   **几何这一节的结论必须以此为限**，`--save-tokens` 可保留逐 token 状态重做分析。
+   写论文时这一条必须进 Limitations。
 2. **padding 已 mask**。`failed` 条件系统性更长，不 mask 会让句长伪装成条件效应。
    代码里已处理，改动时别破坏它。
 3. **探针不等于因果**。信息可线性解码 ≠ 生成器会使用它。

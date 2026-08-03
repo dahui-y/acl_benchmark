@@ -45,7 +45,7 @@ ASPECT_CONDITIONS = [
 # the primary reference: a tight floor makes the aspect comparison conservative.
 # `paraphrase` fronts the whole scene phrase, moving many tokens; it is reported
 # as a secondary, looser reference only.
-CONTROL_CONDITIONS = ["paraphrase_min", "paraphrase", "other_verb"]
+CONTROL_CONDITIONS = ["paraphrase_min", "paraphrase", "filler", "other_verb"]
 
 
 def realize(condition, subject, gerund, noun, scene):
@@ -78,6 +78,13 @@ def _realize(condition, subject, gerund, noun, scene):
         # Meaning and aspect held constant; constituent order moves. Looser floor.
         scene_fronted = scene[0].upper() + scene[1:]
         return f"{scene_fronted}, {subject} is {gerund} {obj}."
+    if condition == "filler":
+        # Length-matched to the `failed` condition: adds a comparable number of
+        # tokens without touching aspect or the event. Running the probe for real
+        # showed that raw cosine distance tracks token overlap, so a condition
+        # that adds tokens looks "distant" for reasons that have nothing to do
+        # with aspect. This control makes that visible.
+        return f"{subject} is {gerund} {obj} {scene}, as the footage shows."
     raise ValueError(condition)
 
 
@@ -142,7 +149,7 @@ def build(taxonomy_dir, n_items, seed):
             "other_verb_gerund": other["gerund"],
             "texts": {},
         }
-        for cond in ASPECT_CONDITIONS + ["paraphrase_min", "paraphrase"]:
+        for cond in ASPECT_CONDITIONS + ["paraphrase_min", "paraphrase", "filler"]:
             item["texts"][cond] = realize(cond, subject, verb["gerund"], noun["noun"], scene)
         item["texts"]["other_verb"] = realize(
             "prog", subject, other["gerund"], noun["noun"], scene

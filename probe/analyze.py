@@ -152,7 +152,12 @@ def summarise_geometry(dists, stimuli):
     return summary, overall, below, len(aspect_sns)
 
 
-def probe(table, stimuli, group_key, seed=0):
+def probe(table, stimuli, group_key, seed=0, with_null=True):
+    """with_null=False skips the label-permutation baseline.
+
+    The null is only needed once per model; refitting it at every layer during
+    the sweep doubles the cost of the expensive part for no extra information.
+    """
     X, y, groups = [], [], []
     for rec in stimuli:
         for cond in ASPECTS:
@@ -170,10 +175,12 @@ def probe(table, stimuli, group_key, seed=0):
         scaler = StandardScaler().fit(X[train])
         clf = LogisticRegression(max_iter=2000).fit(scaler.transform(X[train]), y[train])
         accs.append(clf.score(scaler.transform(X[test]), y[test]))
-        null = LogisticRegression(max_iter=2000)
-        null.fit(scaler.transform(X[train]), rng.permutation(y[train]))
-        chance.append(null.score(scaler.transform(X[test]), y[test]))
-    return float(np.mean(accs)), float(np.std(accs)), float(np.mean(chance))
+        if with_null:
+            null = LogisticRegression(max_iter=2000)
+            null.fit(scaler.transform(X[train]), rng.permutation(y[train]))
+            chance.append(null.score(scaler.transform(X[test]), y[test]))
+    return (float(np.mean(accs)), float(np.std(accs)),
+            float(np.mean(chance)) if chance else float("nan"))
 
 
 def bow_ceiling(stimuli, group_key):
@@ -264,8 +271,9 @@ def main():
 
     if args.all_layers and len(layer_keys) > 1:
         print("\n(c) LAYER LOCALISATION  — probe accuracy, held-out verbs")
+        print(f"     ({len(layer_keys)} layers, CPU-bound; a few minutes for a 4096-dim encoder)")
         for key in layer_keys:
-            acc, _, _ = probe(index_embeddings(data, key), stimuli, "gerund")
+            acc, _, _ = probe(index_embeddings(data, key), stimuli, "gerund", with_null=False)
             print(f"  {key:<10} {acc:.3f}  {'#' * int(round(acc * 40))}")
             results.setdefault("layers", {})[key] = acc
 

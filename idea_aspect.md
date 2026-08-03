@@ -211,3 +211,86 @@ ViLMA（ICLR 2024）、Perfect Times。
 - GenAI-Bench: https://arxiv.org/abs/2406.13743
 - UniGenBench++: https://arxiv.org/abs/2510.18701
 - TC-Bench (ACL Findings 2025): https://aclanthology.org/2025.findings-acl.241/
+
+---
+
+# 第六轮修正：重定位为「语言控制的非达成」（2026-08-03）
+
+调研方法变更：**先问价值（若此失败被修好，谁受益？），再查是否被占**。
+前五轮把"空"放在第一位，因而在第五轮栽在生态效度上。
+
+## A. 新出现的竞争工作
+
+**`RoboTrustBench`**（arXiv 2606.01600）已将 **action completeness** 列为评测维度：
+
+- 源自真实 DROID episodes 的 **1,207 条专家验证的指令—图像对**
+- **六维度评测协议 / 13 项细则**
+- 四种场景：Normal、Constraint-Sensitive、Counterfactual、Adversarial
+- 7 个视频世界模型，人工 + MLLM 双轨评测
+- 结论：模型能生成视觉连贯的视频，但在约束推理、反事实锚定、
+  物理交互与不安全指令抑制上失败
+
+→ **"动作是否达成"作为被评测维度已不新。**
+本方向的新颖性收窄为一句话：**达成与否能否被语言控制？**
+RoboTrustBench 问"rollout 是否完成任务"，不问"语言能否指定它不要完成"。
+**该区分必须在 related work 中写死，否则会被判撞车。**
+
+## B. 硬价值故事：具身智能的失败数据缺口
+
+不是推测，是立场论文明说的：
+*Good Embodied Reward Models Need Bad Behavior Data*（arXiv 2606.01036）
+明确呼吁投入合成失败与不安全机器人行为的方法。
+
+现有方案全部靠**扰动动作轨迹**造失败：
+- `Dream2Fix`：从成功演示出发，做关键帧级动作扰动，再用物理与视觉验证器筛选
+- 反事实失败合成（arXiv 2603.13528）
+- 从成功演示自动导出规划与执行失败（arXiv 2512.01946）
+
+**没有人问过：能不能直接用语言请求一个失败？**
+
+## C. 语言形式：非达成
+
+```
+The man tried to open the jar but failed.     ← 显式未遂
+The man was slicing the apple.                ← 未完成体悖论
+The man almost sliced the apple.              ← 接近但未达成
+The man started slicing but stopped.          ← 相位动词中断
+```
+
+**理论挂靠：未完成体悖论（Dowty）** —— `was crossing the street`
+不蕴含 `crossed the street`。形式语义学经典问题，
+直接对应"过程发生但终点未达成"，而这正是失败数据的定义。
+
+## D. 本次重定位修复了什么
+
+原缺陷（见 README_ideas.md）："gold 由作者规定"——
+`has sliced` 该生成什么样的 5 秒视频可被形式语义审稿人争议。
+
+**`tried to slice but failed` 无歧义**：动作必须被尝试、且必须不达成。
+这不是作者规定，是句子本身给出的。
+→ **该缺陷消失，不再需要"用真实视频反推目标映射"的补丁。**
+
+## E. 重定位后的三标准判定
+
+| 标准 | 判定 | 理由 |
+|---|---|---|
+| **价值** | **硬** | 立场论文明确呼吁合成失败数据；现有方案全靠扰动轨迹，语言路径无人走 |
+| **空** | 是（边界收窄） | "完成度评测"已被 RoboTrustBench 占；"**语言控制非达成**"仍空 |
+| **稳** | **提升** | gold 不再由作者规定；判断仍二元（动作出现？终点达成？）；结果风险低——模型几乎必然把 `tried but failed` 生成为成功 |
+
+## F. 待定项：域的选择
+
+| 选项 | 优点 | 缺点 |
+|---|---|---|
+| 烹饪域 | 承接 OSCBench、可复用本仓库 taxonomy、便宜 | 价值故事偏弱 |
+| 操作 / 机器人域 | 价值故事最强，直连失败数据缺口 | 需碰 DROID 类资源；与 RoboTrustBench 正面相邻 |
+
+**倾向**：主体留烹饪域，另加一个小规模操作类子集兼顾两边。
+
+## G. 参考链接（第六轮新增）
+
+- RoboTrustBench: https://arxiv.org/abs/2606.01600
+- Good Embodied Reward Models Need Bad Behavior Data: https://arxiv.org/pdf/2606.01036
+- Learning Actionable Manipulation Recovery via Counterfactual Failure Synthesis: https://arxiv.org/pdf/2603.13528
+- Scaling Cross-Environment Failure Reasoning Data: https://arxiv.org/pdf/2512.01946
+- DreamGen: https://arxiv.org/html/2505.12705v1

@@ -124,3 +124,4 @@
 | `idea_invariance.md` | 第四轮：不变性方向 + 稳健性评估（已淘汰） |
 | `idea_aspect.md` | **第四轮：体貌 / 终结性方向 + 前提探针 + 三问题解法（当前推荐）** |
 | `idea_presupposition.md` | 第五轮：预设投射方向（已降级，相位动词并入 ④） |
+| `motivation.md` | **完整动机论证（可直接作为 intro 骨架）** |

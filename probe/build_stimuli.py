@@ -21,7 +21,9 @@ import random
 from pathlib import Path
 
 from lexicon import (
+    VERB_ASPECTUAL_CLASS,
     SCENE_SYNONYMS,
+    is_compatible,
     SCENES,
     SUBJECTS,
     VERB_FORMS,
@@ -30,16 +32,40 @@ from lexicon import (
     pluralize,
 )
 
-# The six aspect conditions. `prog` is the reference cell: it is the form every
-# caption corpus is saturated with, and the form OSCBench used exclusively.
+# Three axes of how language encodes whether the event reaches its endpoint.
+# `prog` is the reference cell throughout: it is the form caption corpora are
+# saturated with, and the only form OSCBench used.
+
+# Axis A -- grammatical aspect.
 ASPECT_CONDITIONS = [
     "prog",         # A man is slicing an apple in the kitchen.
     "perf",         # A man sliced an apple in the kitchen.
     "result",       # A man has sliced an apple in the kitchen.
     "prospective",  # A man is about to slice an apple in the kitchen.
     "failed",       # A man tried to slice an apple in the kitchen but failed.
-    "atelic",       # A man is slicing apples in the kitchen.
 ]
+
+# Axis B -- telicity, via the object's quantization.
+#
+# `atelic` and `telic_plural` are BOTH plural. That is the point: comparing them
+# isolates telicity from plural morphology, which the bare-plural condition alone
+# confounds. `atelic` was the strongest cell in the pilot, so this contrast is
+# the one most worth getting right.
+TELICITY_CONDITIONS = [
+    "atelic",        # A man is slicing apples in the kitchen.      (cumulative)
+    "telic_plural",  # A man is slicing the apples in the kitchen.  (quantized)
+]
+
+# Axis C -- phase verbs. Aspectual operators that also carry presuppositions,
+# carried over from the presupposition direction (see ../idea_presupposition.md).
+PHASE_CONDITIONS = [
+    "phase_begin",   # A man began slicing an apple in the kitchen.
+    "phase_stop",    # A man stopped slicing an apple in the kitchen.
+    "phase_finish",  # A man finished slicing an apple in the kitchen.
+    "phase_keep",    # A man kept slicing an apple in the kitchen.
+]
+
+TARGET_CONDITIONS = ASPECT_CONDITIONS + TELICITY_CONDITIONS + PHASE_CONDITIONS
 
 # Two noise floors. `paraphrase_min` is a single-token synonym substitution and is
 # the primary reference: a tight floor makes the aspect comparison conservative.
@@ -71,6 +97,17 @@ def _realize(condition, subject, gerund, noun, scene):
         return f"{subject} tried to {base} {obj} {scene} but failed."
     if condition == "atelic":
         return f"{subject} is {gerund} {pluralize(noun)} {scene}."
+    if condition == "telic_plural":
+        # Same plural morphology as `atelic`, but definite and therefore quantized.
+        return f"{subject} is {gerund} the {pluralize(noun)} {scene}."
+    if condition == "phase_begin":
+        return f"{subject} began {gerund} {obj} {scene}."
+    if condition == "phase_stop":
+        return f"{subject} stopped {gerund} {obj} {scene}."
+    if condition == "phase_finish":
+        return f"{subject} finished {gerund} {obj} {scene}."
+    if condition == "phase_keep":
+        return f"{subject} kept {gerund} {obj} {scene}."
     if condition == "paraphrase_min":
         # One-token synonym substitution. Meaning and aspect untouched.
         return f"{subject} is {gerund} {obj} {SCENE_SYNONYMS[scene]}."
@@ -107,49 +144,71 @@ def load_taxonomy(taxonomy_dir):
     return verbs, nouns
 
 
-def build(taxonomy_dir, n_items, seed):
+def build(taxonomy_dir, n_items, n_generate, seed):
     rng = random.Random(seed)
     verbs, nouns = load_taxonomy(taxonomy_dir)
     if not verbs or not nouns:
         raise SystemExit("taxonomy produced no usable verbs/objects")
 
-    # Sample verb-object pairs without replacement so no event repeats, and keep
-    # verbs balanced so the held-out-verb probe split has enough groups.
-    pairs = [(v, n) for v in verbs for n in nouns]
-    rng.shuffle(pairs)
-    seen, chosen = set(), []
-    for verb, noun in pairs:
-        key = (verb["gerund"], noun["noun"])
-        if key in seen:
-            continue
-        seen.add(key)
-        chosen.append((verb, noun))
-        if len(chosen) >= n_items:
-            break
+    # Stratify by verb rather than sampling verb-object pairs freely. Free
+    # sampling leaves some verbs with many items and others with almost none,
+    # which breaks the held-out-verb probe split and makes the by-aspectual-class
+    # analysis rest on unequal cell sizes.
+    per_verb = max(1, n_items // len(verbs))
+    chosen = []
+    for verb in verbs:
+        # Only objects the action can plausibly apply to. Skipping this yields
+        # items like "melting a scallion", which confound aspect with
+        # plausibility and cannot be rendered sensibly by any model.
+        usable = [n for n in nouns if is_compatible(verb["action_category"], n["object_sub"])]
+        if not usable:
+            raise SystemExit(f"no compatible objects for {verb['action_category']}; "
+                             "check ACTION_OBJECT_COMPATIBILITY")
+        picks = rng.sample(usable, min(per_verb, len(usable)))
+        chosen.extend((verb, noun) for noun in picks)
+    rng.shuffle(chosen)
+    chosen = chosen[:n_items]
+
+    # The generation subset is what actually gets turned into video, so it is
+    # balanced across verbs too -- every verb contributes, no verb dominates.
+    gen_per_verb = max(1, n_generate // len(verbs))
+    gen_ids, seen_counts = set(), {}
+    for idx, (verb, _) in enumerate(chosen):
+        g = verb["gerund"]
+        if seen_counts.get(g, 0) < gen_per_verb and len(gen_ids) < n_generate:
+            gen_ids.add(idx)
+            seen_counts[g] = seen_counts.get(g, 0) + 1
 
     records = []
     for idx, (verb, noun) in enumerate(chosen):
         subject = SUBJECTS[idx % len(SUBJECTS)]
         scene = SCENES[(idx // len(SUBJECTS)) % len(SCENES)]
-        # The upper-bound control swaps in a different verb from a *different*
-        # action category, so it is a genuinely different event rather than a
-        # near-synonym (e.g. slicing -> chopping would understate the bound).
-        alternatives = [v for v in verbs if v["action_category"] != verb["action_category"]]
-        other = rng.choice(alternatives)
+        # The different-event control swaps in a verb from a *different* action
+        # category, so it is a genuinely different event rather than a near
+        # synonym (slicing -> chopping would understate it).
+        # The control verb must also be plausible for this object, or the
+        # "different event" baseline becomes a "nonsense event" baseline.
+        alternatives = [v for v in verbs
+                        if v["action_category"] != verb["action_category"]
+                        and is_compatible(v["action_category"], noun["object_sub"])]
+        other = rng.choice(alternatives) if alternatives else rng.choice(verbs)
 
         item = {
             "item_id": idx,
             "gerund": verb["gerund"],
             "action_category": verb["action_category"],
+            "aspectual_class": VERB_ASPECTUAL_CLASS[verb["gerund"]],
             "noun": noun["noun"],
             "object_major": noun["object_major"],
             "object_sub": noun["object_sub"],
             "subject": subject,
             "scene": scene,
             "other_verb_gerund": other["gerund"],
+            "in_generation_subset": idx in gen_ids,
+            "human_verified": False,   # flipped by the review pass; see --review-out
             "texts": {},
         }
-        for cond in ASPECT_CONDITIONS + ["paraphrase_min", "paraphrase", "filler"]:
+        for cond in TARGET_CONDITIONS + ["paraphrase_min", "paraphrase", "filler"]:
             item["texts"][cond] = realize(cond, subject, verb["gerund"], noun["noun"], scene)
         item["texts"]["other_verb"] = realize(
             "prog", subject, other["gerund"], noun["noun"], scene
@@ -158,26 +217,68 @@ def build(taxonomy_dir, n_items, seed):
     return records
 
 
+def write_review_sheet(records, path, only_generation_subset=True):
+    """Export a sheet for the human verification pass.
+
+    Every prompt in an OSCBench-style benchmark goes through human review; this
+    is that step. One row per item so a reviewer sees all variants of an event
+    together and can judge them against each other, which is the only way to
+    catch a variant that is grammatical on its own but not a minimal pair.
+    """
+    rows = [r for r in records if r["in_generation_subset"] or not only_generation_subset]
+    conditions = TARGET_CONDITIONS + CONTROL_CONDITIONS
+    with path.open("w") as fh:
+        fh.write("\t".join(["item_id", "gerund", "aspectual_class", "noun",
+                            *conditions, "natural?", "minimal_pair?", "notes"]) + "\n")
+        for rec in rows:
+            fh.write("\t".join([
+                str(rec["item_id"]), rec["gerund"], rec["aspectual_class"], rec["noun"],
+                *[rec["texts"][c] for c in conditions], "", "", "",
+            ]) + "\n")
+    return len(rows)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--taxonomy", type=Path, default=Path(__file__).parent.parent / "action_object_taxonomy")
+    ap.add_argument("--taxonomy", type=Path,
+                    default=Path(__file__).parent.parent / "action_object_taxonomy")
     ap.add_argument("--out", type=Path, default=Path(__file__).parent / "stimuli.jsonl")
-    ap.add_argument("--n-items", type=int, default=200)
+    ap.add_argument("--n-items", type=int, default=200,
+                    help="items for the text-side analysis (free)")
+    ap.add_argument("--n-generate", type=int, default=60,
+                    help="items that get turned into video (the expensive subset)")
+    ap.add_argument("--review-out", type=Path, default=None,
+                    help="TSV for the human verification pass")
+    ap.add_argument("--review-all", action="store_true",
+                    help="review every item, not just the generation subset")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
-    records = build(args.taxonomy, args.n_items, args.seed)
+    records = build(args.taxonomy, args.n_items, args.n_generate, args.seed)
     with args.out.open("w") as fh:
         for rec in records:
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
-    n_texts = len(records) * (len(ASPECT_CONDITIONS) + len(CONTROL_CONDITIONS))
-    verbs = {r["gerund"] for r in records}
-    print(f"wrote {len(records)} items ({n_texts} texts) to {args.out}")
-    print(f"  distinct verbs: {len(verbs)}  distinct objects: {len({r['noun'] for r in records})}")
+    n_conditions = len(TARGET_CONDITIONS) + len(CONTROL_CONDITIONS)
+    n_gen = sum(r["in_generation_subset"] for r in records)
+    print(f"wrote {len(records)} items x {n_conditions} conditions "
+          f"= {len(records) * n_conditions} prompts to {args.out}")
+    print(f"  distinct verbs: {len({r['gerund'] for r in records})}  "
+          f"distinct objects: {len({r['noun'] for r in records})}")
+    print("  aspectual classes: " + ", ".join(
+        f"{k}={sum(1 for r in records if r['aspectual_class'] == k)}"
+        for k in ("incremental_theme", "degree_achievement", "activity")))
+    print(f"  generation subset: {n_gen} items x {n_conditions} = "
+          f"{n_gen * n_conditions} prompts  "
+          f"(x4 models = {n_gen * n_conditions * 4} videos)")
+
+    if args.review_out:
+        n = write_review_sheet(records, args.review_out, not args.review_all)
+        print(f"  review sheet: {n} items -> {args.review_out}")
+
     print("\nexample item:")
     for cond, text in records[0]["texts"].items():
-        print(f"  {cond:12s} {text}")
+        print(f"  {cond:15s} {text}")
 
 
 if __name__ == "__main__":

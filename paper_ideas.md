@@ -3,6 +3,14 @@
 本文档基于对 `OSCBench: Benchmarking Object State Change in Text-to-Video Generation`
 (ACL 2026, pp. 30867–30884) 的完整分析，给出可执行的后续选题方案。
 
+> **⚠️ 已被 `related_work_survey.md` 的调研结果修订（2026-08-03）。**
+> 调研发现 Idea 1 与 RecipeGen (ACM MM'25)、SeqBench、TC-Bench (ACL Findings'25)、
+> YoCausal 存在实质撞车，**原样做达不到 ACL main 标准**；Idea 3（转变完成度指标）
+> 已被 TC-Bench 占位；Idea 1 的不可逆性轴已被 YoCausal 占位；否定/反事实已被
+> NEGATE、T2VPhysBench 占位。
+> **修正后的推荐：主推 Idea 2（结果义类型学），把重构后的 Idea 1 降级为其中一条扰动轴。**
+> 详见 `related_work_survey.md` 第 3、5 节。
+
 ---
 
 ## 0. OSCBench 的可复用配方

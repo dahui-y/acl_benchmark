@@ -33,8 +33,7 @@ pip install transformers sentencepiece numpy scipy scikit-learn
 只想复跑分析、不重新编码的话，`numpy scipy scikit-learn` 就够，
 `torch` 与 `transformers` 仅 `encode.py` 需要。
 
-模型缓存与输出都要指到有空间的盘（umT5-XXL 权重约 11 GB，
-`--layers all` 的 `.npz` 约 700 MB）：
+模型缓存与输出都要指到有空间的盘。**注意下载量远大于显存占用**：
 
 ```bash
 export TMPROOT=/path/with/space          # 换成你自己的可写路径
@@ -46,6 +45,22 @@ mkdir -p "$HF_HOME"
 > 挂载盘未必可写（例如 OpenBayes 的 `/openbayes/input/...` 通常是只读数据集）。
 > 先验一下：`touch "$TMPROOT/.wtest" && rm "$TMPROOT/.wtest" && echo ok`
 > 不可写就换到工作区目录（OpenBayes 上一般是 `/openbayes/home`）。
+
+### 磁盘用量（容易低估）
+
+| 模型 | 下载量 | 加载进显存（bf16，仅 encoder） |
+|---|---|---|
+| `t5-base` | ~0.9 GB | < 1 GB |
+| `google/umt5-xxl` | **~52 GB** | ~11 GB |
+| `google/t5-v1_1-xxl` | **~45 GB** | ~9 GB |
+| `openai/clip-vit-large-patch14` | ~1.7 GB | < 1 GB |
+
+下载的是**完整 encoder-decoder 的 fp32 权重**（umT5-XXL 共约 13B 参数），
+而我们只用 encoder、且以 bf16 加载——所以 `--dtype bfloat16` 只降显存，**不降下载量**。
+
+跑之前先看空间：`df -h "$TMPROOT"`。
+两个 XXL 都要跑的话预留 100 GB 以上；空间紧张就先只跑 umT5-XXL
+（它才是 Wan 2.2 实际使用的编码器）。
 
 ## 跑
 
@@ -61,15 +76,15 @@ python analyze.py --emb emb_t5base.npz
 管线通了再上真正要看的编码器：
 
 ```bash
-# Wan 2.1 / 2.2 用的 umT5-XXL，bf16 约 11 GB 显存
+# Wan 2.1 / 2.2 用的 umT5-XXL（下载约 52 GB，显存约 11 GB）
 python encode.py --model google/umt5-xxl --device cuda --dtype bfloat16 \
                  --layers all --out "$TMPROOT/emb_umt5xxl.npz"
 python analyze.py --emb "$TMPROOT/emb_umt5xxl.npz" --all-layers \
                   --out "$TMPROOT/result_umt5xxl.json"
 
-# 多数扩散模型用的 T5-v1.1-XXL
+# 多数扩散模型用的 T5-v1.1-XXL（下载约 45 GB）
 python encode.py --model google/t5-v1_1-xxl --device cuda --dtype bfloat16 \
-                 --layers all --out emb_t5xxl.npz
+                 --layers all --out "$TMPROOT/emb_t5xxl.npz"
 
 # CLIP 文本塔，已知的 bag-of-words 参照系
 python encode.py --model openai/clip-vit-large-patch14 --device cuda --out emb_clip.npz

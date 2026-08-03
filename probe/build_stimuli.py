@@ -45,15 +45,27 @@ ASPECT_CONDITIONS = [
     "failed",       # A man tried to slice an apple in the kitchen but failed.
 ]
 
-# Axis B -- telicity, via the object's quantization.
+# Axis B -- telicity, via the object's quantization. This is the headline axis:
+# on umT5-XXL the telic/atelic pair came out statistically indistinguishable
+# from a meaning-preserving reword.
 #
-# `atelic` and `telic_plural` are BOTH plural. That is the point: comparing them
-# isolates telicity from plural morphology, which the bare-plural condition alone
-# confounds. `atelic` was the strongest cell in the pilot, so this contrast is
-# the one most worth getting right.
+# Thickened to five conditions so the axis supports a 2x2 rather than a single
+# pair. A single cross-telicity contrast cannot rule out the alternative that
+# the encoder is simply insensitive to determiners in general, which would make
+# the result about morphology rather than telicity. Adding pairs that differ in
+# determiner but agree in telicity separates the two:
+#
+#   cross-telicity pairs   large if telicity is represented
+#   within-telicity pairs  small if the effect is really about telicity
+#
+# If both sit at the floor, the honest conclusion is the broader one -- the
+# encoder is blind to determiner and number marking, telicity included.
 TELICITY_CONDITIONS = [
-    "atelic",        # A man is slicing apples in the kitchen.      (cumulative)
-    "telic_plural",  # A man is slicing the apples in the kitchen.  (quantized)
+    "atelic",           # is slicing apples          bare plural, cumulative  -> atelic
+    "atelic_some",      # is slicing some apples     vague quantity           -> atelic
+    "telic_plural",     # is slicing the apples      definite plural          -> telic
+    "telic_numeral",    # is slicing three apples    numeral                  -> telic
+    "telic_partitive",  # is slicing half an apple   measure                  -> telic
 ]
 
 # Axis C -- phase verbs. Aspectual operators that also carry presuppositions,
@@ -97,9 +109,15 @@ def _realize(condition, subject, gerund, noun, scene):
         return f"{subject} tried to {base} {obj} {scene} but failed."
     if condition == "atelic":
         return f"{subject} is {gerund} {pluralize(noun)} {scene}."
+    if condition == "atelic_some":
+        return f"{subject} is {gerund} some {pluralize(noun)} {scene}."
     if condition == "telic_plural":
         # Same plural morphology as `atelic`, but definite and therefore quantized.
         return f"{subject} is {gerund} the {pluralize(noun)} {scene}."
+    if condition == "telic_numeral":
+        return f"{subject} is {gerund} three {pluralize(noun)} {scene}."
+    if condition == "telic_partitive":
+        return f"{subject} is {gerund} half {obj} {scene}."
     if condition == "phase_begin":
         return f"{subject} began {gerund} {obj} {scene}."
     if condition == "phase_stop":

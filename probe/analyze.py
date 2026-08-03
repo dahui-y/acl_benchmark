@@ -179,10 +179,18 @@ def summarise_geometry(dists, stimuli):
 # the progressive reference and still be far from *each other*. Only the direct
 # distance answers whether the encoder separates them.
 DIRECT_CONTRASTS = [
-    ("atelic", "telic_plural", "telicity, differs only by the determiner"),
-    ("perf", "result", "perfective vs resultant state, differs by 'has'"),
-    ("prog", "prospective", "does the event happen at all"),
-    ("phase_begin", "phase_finish", "onset vs culmination"),
+    # cross-telicity: should be large if the encoder represents telicity
+    ("atelic", "telic_plural", "CROSS telicity: bare vs definite plural"),
+    ("atelic", "telic_numeral", "CROSS telicity: bare plural vs numeral"),
+    ("atelic_some", "telic_plural", "CROSS telicity: some vs the"),
+    # within-telicity: small either way. If these match the cross pairs, the
+    # effect is determiner-blindness in general, not telicity in particular.
+    ("telic_plural", "telic_numeral", "WITHIN telic: the vs three"),
+    ("atelic", "atelic_some", "WITHIN atelic: bare vs some"),
+    # other axes, for scale
+    ("perf", "result", "aspect: perfective vs resultant, differs by 'has'"),
+    ("prog", "prospective", "aspect: does the event happen at all"),
+    ("phase_begin", "phase_finish", "phase: onset vs culmination"),
 ]
 
 

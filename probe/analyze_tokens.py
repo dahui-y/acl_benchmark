@@ -36,7 +36,13 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import wilcoxon
 
-ASPECTS = ["prog", "perf", "result", "prospective", "failed", "atelic"]
+from build_stimuli import (  # noqa: E402
+    ASPECT_CONDITIONS,
+    PHASE_CONDITIONS,
+    TELICITY_CONDITIONS,
+)
+
+TARGETS = ASPECT_CONDITIONS + TELICITY_CONDITIONS + PHASE_CONDITIONS
 CONTROLS = ["paraphrase_min", "paraphrase", "other_verb"]
 REFERENCE = "prog"
 ANCHOR = "filler"
@@ -86,7 +92,7 @@ def load(emb_path, stimuli_path):
 
 def measure(table, stimuli):
     rows = {}
-    for cond in ASPECTS + CONTROLS + [ANCHOR]:
+    for cond in TARGETS + CONTROLS + [ANCHOR]:
         if cond == REFERENCE:
             continue
         ch, mx, mean_nov = [], [], []
@@ -119,7 +125,7 @@ def report(rows, pooled_sns=None):
     print(header)
 
     out = {}
-    for cond in ASPECTS + CONTROLS:
+    for cond in TARGETS + CONTROLS:
         if cond not in rows or cond == REFERENCE:
             continue
         ch = rows[cond]["chamfer"]
@@ -143,7 +149,7 @@ def report(rows, pooled_sns=None):
                      "max_novelty": float(mx.mean()), "sns_novelty": sns_nov,
                      "p_vs_filler": pval}
 
-    aspect = [out[c]["sns_token"] for c in ASPECTS if c in out]
+    aspect = [out[c]["sns_token"] for c in TARGETS if c in out]
     below = sum(1 for v in aspect if v < 1.0)
     mean_tok = float(np.mean(aspect))
     print(f"\n  mean token-level SNS over {len(aspect)} aspect conditions: {mean_tok:.2f}")
@@ -191,7 +197,7 @@ def main():
     if args.out:
         args.out.write_text(json.dumps({
             "model": str(data["model"]), "level": "token", "verdict": verdict,
-            "mean_sns_token": mean_tok, "conditions_below_filler": f"{below}/{len(ASPECTS) - 1}",
+            "mean_sns_token": mean_tok, "conditions_below_filler": f"{below}/{len(TARGETS) - 1}",
             "conditions": out,
         }, indent=2))
         print(f"\nwrote {args.out}")

@@ -51,7 +51,17 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GroupKFold
 from sklearn.preprocessing import StandardScaler
 
-ASPECTS = ["prog", "perf", "result", "prospective", "failed", "atelic"]
+# Single source of truth for the condition set, so adding an axis to the suite
+# does not silently leave it unmeasured here.
+from build_stimuli import (  # noqa: E402
+    ASPECT_CONDITIONS,
+    PHASE_CONDITIONS,
+    TELICITY_CONDITIONS,
+)
+
+AXES = [("aspect", ASPECT_CONDITIONS), ("telicity", TELICITY_CONDITIONS),
+        ("phase", PHASE_CONDITIONS)]
+TARGETS = [c for _, conds in AXES for c in conds]
 CONTROLS = ["paraphrase_min", "paraphrase", "other_verb"]
 REFERENCE = "prog"
 ANCHOR = "filler"
@@ -118,9 +128,15 @@ def summarise_geometry(dists, stimuli):
     print(f"{'condition':<15} {'d_cond':>9} {'d_filler':>9} {'SNS':>7} {'p(vs fill)':>11} {'edit':>6}")
 
     summary = {}
-    for cond in ASPECTS + CONTROLS:
+    ordered = ([(name, c) for name, conds in AXES for c in conds]
+               + [("control", c) for c in CONTROLS])
+    current_axis = None
+    for axis_name, cond in ordered:
         if cond == REFERENCE:
             continue
+        if axis_name != current_axis:
+            print(f"  -- {axis_name} --")
+            current_axis = axis_name
         d_c, d_f, edits = [], [], []
         for rec in stimuli:
             key, anchor_key = (rec["item_id"], cond), (rec["item_id"], ANCHOR)
@@ -137,18 +153,24 @@ def summarise_geometry(dists, stimuli):
         except ValueError:
             pval = float("nan")
 
-        marker = "   <- control" if cond in CONTROLS else ""
+        marker = "   <- control" if axis_name == "control" else ""
         print(f"{cond:<15} {d_c.mean():>9.4f} {d_f.mean():>9.4f} {sns:>7.2f} {pval:>11.2e} "
               f"{np.mean(edits):>6.3f}{marker}")
         summary[cond] = {"d_cond": float(d_c.mean()), "d_filler": float(d_f.mean()),
                          "sns": sns, "p_vs_filler": pval, "mean_edit": float(np.mean(edits))}
 
-    aspect_sns = [summary[c]["sns"] for c in ASPECTS if c in summary]
+    print()
+    for name, conds in AXES:
+        vals = [summary[c]["sns"] for c in conds if c in summary]
+        if vals:
+            print(f"  {name:<9} mean SNS {np.mean(vals):.2f}   "
+                  f"below filler {sum(1 for v in vals if v < 1.0)}/{len(vals)}")
+
+    aspect_sns = [summary[c]["sns"] for c in TARGETS if c in summary]
     overall = float(np.mean(aspect_sns))
     below = sum(1 for v in aspect_sns if v < 1.0)
-    print(f"\n  mean SNS over the {len(aspect_sns)} aspect conditions: {overall:.2f}")
-    print(f"  aspect conditions moving the vector LESS than inert filler tokens: "
-          f"{below}/{len(aspect_sns)}")
+    print(f"\n  overall: mean SNS {overall:.2f} over {len(aspect_sns)} target conditions, "
+          f"{below} below the filler anchor")
     return summary, overall, below, len(aspect_sns)
 
 
@@ -160,7 +182,7 @@ def probe(table, stimuli, group_key, seed=0, with_null=True):
     """
     X, y, groups = [], [], []
     for rec in stimuli:
-        for cond in ASPECTS:
+        for cond in TARGETS:
             key = (rec["item_id"], cond)
             if key in table:
                 X.append(table[key])
@@ -186,7 +208,7 @@ def probe(table, stimuli, group_key, seed=0, with_null=True):
 def bow_ceiling(stimuli, group_key):
     texts, y, groups = [], [], []
     for rec in stimuli:
-        for cond in ASPECTS:
+        for cond in TARGETS:
             texts.append(rec["texts"][cond])
             y.append(cond)
             groups.append(rec[group_key])
@@ -260,7 +282,9 @@ def main():
     r = surface_check(dists, stimuli)
     geo, mean_sns, below, n_aspects = summarise_geometry(dists, stimuli)
 
-    print("\n(b) LINEAR PROBE  — 6-way aspect classification, chance = 0.167")
+    n_classes = len(TARGETS)
+    print(f"\n(b) LINEAR PROBE  — {n_classes}-way condition classification, "
+          f"chance = {1 / n_classes:.3f}")
     results = {}
     for group_key, label in (("gerund", "held-out verbs"), ("noun", "held-out objects")):
         acc, sd, chance = probe(table, stimuli, group_key)

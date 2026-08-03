@@ -53,7 +53,7 @@ mkdir -p "$HF_HOME"
 cd probe
 python build_stimuli.py --n-items 200                  # -> stimuli.jsonl
 
-# 先冒烟测试，确认管线通（CPU，约 2 分钟）
+# 先冒烟测试，确认管线通（t5-base 很小，CPU 也就两分钟）
 python encode.py --model t5-base --out emb_t5base.npz
 python analyze.py --emb emb_t5base.npz
 ```
@@ -86,8 +86,13 @@ python encode.py --model google/umt5-xxl --device cpu --dtype float32 ...
 
 HunyuanVideo 用的是 MLLM（LLaVA 系）编码器，接口不同，需另写加载器——建议先跑上面三个。
 
-> 加载类是按名字分派的：umT5 走 `UMT5EncoderModel`（**不能**用 `T5EncoderModel`，
-> 架构不同会直接失败），CLIP 走 `CLIPTextModel`，其余 T5 走 `T5EncoderModel`。
+> **设备**：`--device` 默认 `auto`，检测到 GPU 就用 cuda，否则 cpu；
+> 也可显式写 `--device cuda` / `--device cuda:1` / `--device cpu`。
+> 用 GPU 时记得配 `--dtype bfloat16`（默认是 `float32`，大编码器会吃掉两倍显存）。
+>
+> **加载类**按 checkpoint 名字分派：umT5 走 `UMT5EncoderModel`
+> （**不能**用 `T5EncoderModel`，架构不同会直接失败），
+> CLIP 走 `CLIPTextModel`，其余 T5 走 `T5EncoderModel`。
 
 ---
 

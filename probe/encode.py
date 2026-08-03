@@ -13,6 +13,8 @@ on the full token sequence through cross-attention, not on a pooled vector. Mean
 pooling is a proxy. Pass --save-tokens to keep the per-token states if you want
 to redo the analysis without pooling.
 
+Device defaults to `auto`: cuda when a GPU is visible, cpu otherwise.
+
 Usage:
     python encode.py --model t5-base --out emb_t5base.npz
     python encode.py --model google/umt5-xxl --dtype bfloat16 --device cuda \
@@ -120,7 +122,8 @@ def main():
     ap.add_argument("--stimuli", type=Path, default=Path(__file__).parent / "stimuli.jsonl")
     ap.add_argument("--model", default="t5-base")
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--device", default="cpu")
+    ap.add_argument("--device", default="auto",
+                    help="auto (default; cuda when available), cuda, cuda:1, or cpu")
     ap.add_argument("--dtype", default="float32")
     ap.add_argument("--batch-size", type=int, default=32)
     ap.add_argument("--layers", choices=["last", "all"], default="last")
@@ -129,9 +132,14 @@ def main():
                     help="e.g. auto -- shard a large encoder across GPUs (needs accelerate)")
     args = ap.parse_args()
 
+    if args.device == "auto":
+        import torch
+
+        args.device = "cuda" if torch.cuda.is_available() else "cpu"
+
     records = load_stimuli(args.stimuli)
     texts, item_ids, conditions = flatten(records)
-    print(f"encoding {len(texts)} texts with {args.model} on {args.device}")
+    print(f"encoding {len(texts)} texts with {args.model} on {args.device} ({args.dtype})")
 
     tokenizer, model = build_encoder(args.model, args.device, args.dtype, args.device_map)
     arrays = encode(

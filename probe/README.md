@@ -33,12 +33,19 @@ pip install transformers sentencepiece numpy scipy scikit-learn
 只想复跑分析、不重新编码的话，`numpy scipy scikit-learn` 就够，
 `torch` 与 `transformers` 仅 `encode.py` 需要。
 
-模型缓存建议指到有空间的盘（umT5-XXL 约 11 GB）：
+模型缓存与输出都要指到有空间的盘（umT5-XXL 权重约 11 GB，
+`--layers all` 的 `.npz` 约 700 MB）：
 
 ```bash
-export HF_HOME=/data/hf_cache
-export HF_TOKEN=hf_xxx        # 可选，避免匿名下载限速
+export TMPROOT=/path/with/space          # 换成你自己的可写路径
+export HF_HOME="$TMPROOT/hf_cache"
+mkdir -p "$HF_HOME"
+# export HF_TOKEN=...                    # 可选，仅用于免除匿名下载限速
 ```
+
+> 挂载盘未必可写（例如 OpenBayes 的 `/openbayes/input/...` 通常是只读数据集）。
+> 先验一下：`touch "$TMPROOT/.wtest" && rm "$TMPROOT/.wtest" && echo ok`
+> 不可写就换到工作区目录（OpenBayes 上一般是 `/openbayes/home`）。
 
 ## 跑
 
@@ -56,8 +63,9 @@ python analyze.py --emb emb_t5base.npz
 ```bash
 # Wan 2.1 / 2.2 用的 umT5-XXL，bf16 约 11 GB 显存
 python encode.py --model google/umt5-xxl --device cuda --dtype bfloat16 \
-                 --layers all --out emb_umt5xxl.npz
-python analyze.py --emb emb_umt5xxl.npz --all-layers --out result_umt5xxl.json
+                 --layers all --out "$TMPROOT/emb_umt5xxl.npz"
+python analyze.py --emb "$TMPROOT/emb_umt5xxl.npz" --all-layers \
+                  --out "$TMPROOT/result_umt5xxl.json"
 
 # 多数扩散模型用的 T5-v1.1-XXL
 python encode.py --model google/t5-v1_1-xxl --device cuda --dtype bfloat16 \

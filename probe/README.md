@@ -66,21 +66,21 @@ HunyuanVideo 用的是 MLLM（LLaVA 系）编码器，接口不同，需另写�
 | `failed` | A man tried to crush a lime in the kitchen but failed. |
 | `atelic` | A man is crushing limes in the kitchen. |
 
-外加三个对照：
+外加四个对照：
 
 | 对照 | 例 | 作用 |
 |---|---|---|
-| `paraphrase_min` | A man is crushing a lime **inside** the kitchen. | **主噪声下界**：单 token 同义替换，意义与体貌均不变 |
+| `filler` | A man is crushing a lime in the kitchen**, as the footage shows**. | **锚点**：事件与体貌均不变，只加语义无关的词——量化"纯靠改字面能买到多少距离" |
+| `paraphrase_min` | A man is crushing a lime **inside** the kitchen. | 紧噪声下界：单 token 同义替换 |
 | `paraphrase` | **In the kitchen,** a man is crushing a lime. | 宽松下界，仅作参考 |
-| `other_verb` | A man is **rolling** a lime in the kitchen. | 上界：事件不同、体貌相同 |
+| `other_verb` | A man is **rolling** a lime in the kitchen. | 事件不同、体貌相同（**实测表明它不是上界**，见下） |
 
-**为什么下界必须用 `paraphrase_min` 而不是 `paraphrase`**：
-后者移动了大量 token，会**抬高**噪声下界，从而压低 ASI ——
-正好偏向我们期待的结论。用紧的下界才是对自己假设保守。
+两处对自己假设保守的设计：
 
-材料还有一层保守性：体貌条件的 token 编辑距离（0.21–0.47）**大于**下界（0.10）。
-也就是说体貌条件改动的 token 更多。若它们的嵌入距离仍与下界相当，
-就不能用"改动的字面更少"来解释——证据方向对我们不利，这是应该的。
+1. **下界用 `paraphrase_min` 而非 `paraphrase`**。后者移动大量 token，会抬高噪声下界、
+   压低体貌的相对显著性——正好偏向我们期待的结论。紧的下界才保守。
+2. **体貌条件的编辑距离（0.21–0.47）大于下界（0.10）**，即它们改动的 token 更多。
+   若嵌入距离仍与下界相当，就无法用"改的字面更少"来解释。
 
 物体只取可数名词（`lexicon.MASS_OR_GENERIC` 过滤掉 mass noun 与类别标签），
 否则 `atelic` 的光杆复数对立不成立。

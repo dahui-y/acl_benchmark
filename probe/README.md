@@ -201,6 +201,30 @@ SNS = d(prog, 体貌条件) / d(prog, filler)
 
 `--all-layers`，看区别在哪一层出现或消失。
 
+### (d) token 级复算（`analyze_tokens.py`）
+
+池化会把体貌标记（`has` / `tried` / `about to`）稀释进整句，
+而 cross-attention **可以直接注意到单个 token**。
+所以池化下的"低显著性"有可能只是测量方式造成的假象——
+这不是一条待补的 Limitation，是对主结论的**效度检验**。
+
+```bash
+python encode.py --model google/umt5-xxl --dtype bfloat16 \
+                 --save-tokens --out "$TMPROOT/emb_tok.npz"     # 不要加 --layers all
+python analyze_tokens.py --emb "$TMPROOT/emb_tok.npz" \
+                 --pooled-result "$TMPROOT/result_umt5xxl.json"
+```
+
+两个 token 级测量，锚点仍是 `filler`，因此可与池化 SNS 直接对比：
+
+| 测量 | 含义 |
+|---|---|
+| `chamfer` | 两个 token 集合的对称最近邻距离。与位置无关，天然处理句长差异 |
+| `maxNov` | 变体中**最与众不同的那个 token**（到参照句任一 token 的最佳余弦的补）。这正是 cross-attention 可以专门去注意的东西 |
+
+若 `SNS_tok` 仍低于 1.0，说明池化结论不是假象；若显著高于池化值，
+则主张需要重写——低池化显著性不代表生成器拿不到信号。
+
 ---
 
 ## 已知局限
@@ -208,8 +232,7 @@ SNS = d(prog, 体貌条件) / d(prog, filler)
 1. **池化是近似，而且对句长敏感**。扩散模型通过 cross-attention 使用**整个 token 序列**，
    不是池化向量。t5-base 的结果里 `other_verb`（换掉整个动词）距离仅 0.049、
    低于 filler 的 0.085，说明均值池化后的几何很大程度上由句长与表层重叠支配。
-   **几何这一节的结论必须以此为限**，`--save-tokens` 可保留逐 token 状态重做分析。
-   写论文时这一条必须进 Limitations。
+   → **用 `analyze_tokens.py` 在 token 层面复算**（见下），不要只报池化结果。
 2. **padding 已 mask**。`failed` 条件系统性更长，不 mask 会让句长伪装成条件效应。
    代码里已处理，改动时别破坏它。
 3. **探针不等于因果**。信息可线性解码 ≠ 生成器会使用它。
@@ -224,4 +247,5 @@ SNS = d(prog, 体貌条件) / d(prog, filler)
 | `lexicon.py` | 动词变位表、复数规则、mass noun 过滤、场景同义映射 |
 | `build_stimuli.py` | 从 `../action_object_taxonomy/` 生成 `stimuli.jsonl` |
 | `encode.py` | 加载 HF 文本编码器，输出 `.npz`（逐层池化向量） |
-| `analyze.py` | 三项测量 + 判定规则，`--out` 存 JSON |
+| `analyze.py` | 池化向量上的三项测量 + 判定规则，`--out` 存 JSON |
+| `analyze_tokens.py` | **token 序列**上重做显著性测量，检验池化结论是否为假象 |

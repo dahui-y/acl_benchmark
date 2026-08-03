@@ -3,7 +3,7 @@
 Only the text tower is loaded, so this runs in minutes and needs no video
 generation. Which encoder matters:
 
-  google/umt5-xxl        Wan 2.1 / 2.2                (~11 GB in bf16)
+  google/umt5-xxl        Wan 2.1 / 2.2                (~11 GB in bf16, needs UMT5EncoderModel)
   google/t5-v1_1-xxl     many diffusion models        (~11 GB in bf16)
   openai/clip-vit-large-patch14  CLIP text tower, 77 tokens, useful contrast
   t5-base                smoke test, runs on CPU
@@ -41,23 +41,41 @@ def flatten(records):
     return texts, np.array(item_ids), np.array(conditions)
 
 
-def build_encoder(model_name, device, dtype):
+def build_encoder(model_name, device, dtype, device_map=None):
+    """Pick the right encoder class for the checkpoint.
+
+    umT5 needs UMT5EncoderModel, not T5EncoderModel -- the architectures differ
+    and loading Wan's encoder with the T5 class fails.
+    """
     import torch
     from transformers import AutoTokenizer
 
     torch_dtype = getattr(torch, dtype)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
+    name = model_name.lower()
 
-    if "clip" in model_name.lower():
-        from transformers import CLIPTextModel
+    kwargs = {"dtype": torch_dtype}
+    if device_map:
+        kwargs["device_map"] = device_map
 
-        model = CLIPTextModel.from_pretrained(model_name, torch_dtype=torch_dtype)
+    if "umt5" in name:
+        from transformers import UMT5EncoderModel as Encoder
+    elif "clip" in name:
+        from transformers import CLIPTextModel as Encoder
+    elif "t5" in name:
+        from transformers import T5EncoderModel as Encoder
     else:
-        from transformers import T5EncoderModel
+        from transformers import AutoModel as Encoder
 
-        model = T5EncoderModel.from_pretrained(model_name, torch_dtype=torch_dtype)
+    try:
+        model = Encoder.from_pretrained(model_name, **kwargs)
+    except TypeError:  # older transformers use torch_dtype=
+        kwargs["torch_dtype"] = kwargs.pop("dtype")
+        model = Encoder.from_pretrained(model_name, **kwargs)
 
-    model.eval().to(device)
+    model.eval()
+    if not device_map:
+        model.to(device)
     return tokenizer, model
 
 
@@ -107,13 +125,15 @@ def main():
     ap.add_argument("--batch-size", type=int, default=32)
     ap.add_argument("--layers", choices=["last", "all"], default="last")
     ap.add_argument("--save-tokens", action="store_true")
+    ap.add_argument("--device-map", default=None,
+                    help="e.g. auto -- shard a large encoder across GPUs (needs accelerate)")
     args = ap.parse_args()
 
     records = load_stimuli(args.stimuli)
     texts, item_ids, conditions = flatten(records)
     print(f"encoding {len(texts)} texts with {args.model} on {args.device}")
 
-    tokenizer, model = build_encoder(args.model, args.device, args.dtype)
+    tokenizer, model = build_encoder(args.model, args.device, args.dtype, args.device_map)
     arrays = encode(
         texts, tokenizer, model, args.device, args.batch_size,
         want_layers=(args.layers == "all"), save_tokens=args.save_tokens,

@@ -15,41 +15,71 @@
 
 ---
 
-## 快速开始
-
-**先建 venv**，不要装进系统 Python：
+## 环境（conda）
 
 ```bash
-cd ..                      # 仓库根目录
-python3 -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r probe/requirements.txt
+conda create -n aspect python=3.11 -y
+conda activate aspect
 
+# torch 用 pip 装，conda 源里的版本经常滞后。
+# Linux 上 PyPI 的默认 wheel 自带 CUDA，通常直接装即可：
+pip install torch
+# 若需匹配特定 CUDA（先看 nvidia-smi 右上角的 CUDA Version）：
+# pip install torch --index-url https://download.pytorch.org/whl/cu124
+
+pip install transformers sentencepiece numpy scipy scikit-learn
+```
+
+只想复跑分析、不重新编码的话，`numpy scipy scikit-learn` 就够，
+`torch` 与 `transformers` 仅 `encode.py` 需要。
+
+模型缓存建议指到有空间的盘（umT5-XXL 约 11 GB）：
+
+```bash
+export HF_HOME=/data/hf_cache
+export HF_TOKEN=hf_xxx        # 可选，避免匿名下载限速
+```
+
+## 跑
+
+```bash
 cd probe
 python build_stimuli.py --n-items 200                  # -> stimuli.jsonl
-python encode.py --model t5-base --out emb_t5base.npz  # CPU 冒烟测试，约 2 分钟
+
+# 先冒烟测试，确认管线通（CPU，约 2 分钟）
+python encode.py --model t5-base --out emb_t5base.npz
 python analyze.py --emb emb_t5base.npz
 ```
 
-`torch` 与 `transformers` 只有 `encode.py` 需要；只想复跑分析的话装
-`numpy scipy scikit-learn` 就够。
-
-真正要看的编码器（需要 GPU）：
+管线通了再上真正要看的编码器：
 
 ```bash
-# Wan 2.1 / 2.2 用的 umT5-XXL，约 11 GB (bf16)
+# Wan 2.1 / 2.2 用的 umT5-XXL，bf16 约 11 GB 显存
 python encode.py --model google/umt5-xxl --device cuda --dtype bfloat16 \
                  --layers all --out emb_umt5xxl.npz
 python analyze.py --emb emb_umt5xxl.npz --all-layers --out result_umt5xxl.json
 
 # 多数扩散模型用的 T5-v1.1-XXL
-python encode.py --model google/t5-v1_1-xxl --device cuda --dtype bfloat16 --out emb_t5xxl.npz
+python encode.py --model google/t5-v1_1-xxl --device cuda --dtype bfloat16 \
+                 --layers all --out emb_t5xxl.npz
 
 # CLIP 文本塔，已知的 bag-of-words 参照系
 python encode.py --model openai/clip-vit-large-patch14 --device cuda --out emb_clip.npz
 ```
 
+**显存不够**时两条退路：
+
+```bash
+pip install accelerate
+python encode.py --model google/umt5-xxl --device-map auto --dtype bfloat16 ...  # 多卡切分
+# 或者干脆跑 CPU —— 只有 1800 条短句，慢但可行
+python encode.py --model google/umt5-xxl --device cpu --dtype float32 ...
+```
+
 HunyuanVideo 用的是 MLLM（LLaVA 系）编码器，接口不同，需另写加载器——建议先跑上面三个。
+
+> 加载类是按名字分派的：umT5 走 `UMT5EncoderModel`（**不能**用 `T5EncoderModel`，
+> 架构不同会直接失败），CLIP 走 `CLIPTextModel`，其余 T5 走 `T5EncoderModel`。
 
 ---
 

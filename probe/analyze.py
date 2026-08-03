@@ -174,6 +174,59 @@ def summarise_geometry(dists, stimuli):
     return summary, overall, below, len(aspect_sns)
 
 
+# Pairs whose two members differ by one grammatical feature. Measuring these
+# directly matters: two conditions can both sit near the noise floor relative to
+# the progressive reference and still be far from *each other*. Only the direct
+# distance answers whether the encoder separates them.
+DIRECT_CONTRASTS = [
+    ("atelic", "telic_plural", "telicity, differs only by the determiner"),
+    ("perf", "result", "perfective vs resultant state, differs by 'has'"),
+    ("prog", "prospective", "does the event happen at all"),
+    ("phase_begin", "phase_finish", "onset vs culmination"),
+]
+
+
+def direct_contrasts(dists_pairwise, stimuli):
+    """Distance within each minimal pair, read against the synonym-swap floor."""
+    print("\n(a2) DIRECT CONTRASTS  — distance between the two members of a pair")
+    print("     floor = d(prog, paraphrase_min), a reword with no meaning change")
+    print(f"{'pair':<28} {'d_pair':>9} {'floor':>9} {'ratio':>7} {'p':>11}  note")
+
+    floor = np.array([dists_pairwise[(r["item_id"], REFERENCE, "paraphrase_min")]
+                      for r in stimuli
+                      if (r["item_id"], REFERENCE, "paraphrase_min") in dists_pairwise])
+    out = {}
+    for a, b, note in DIRECT_CONTRASTS:
+        vals = [dists_pairwise[(r["item_id"], a, b)] for r in stimuli
+                if (r["item_id"], a, b) in dists_pairwise]
+        if not vals or not len(floor):
+            continue
+        vals = np.array(vals)
+        n = min(len(vals), len(floor))
+        ratio = float(vals.mean() / floor.mean()) if floor.mean() > 1e-9 else float("nan")
+        try:
+            pval = float(wilcoxon(vals[:n], floor[:n]).pvalue)
+        except ValueError:
+            pval = float("nan")
+        print(f"{a + ' vs ' + b:<28} {vals.mean():>9.4f} {floor.mean():>9.4f} "
+              f"{ratio:>7.2f} {pval:>11.2e}  {note}")
+        out[f"{a}|{b}"] = {"d_pair": float(vals.mean()), "floor": float(floor.mean()),
+                           "ratio": ratio, "p": pval, "note": note}
+    print("     ratio ~ 1 means the encoder separates the pair no more than a synonym swap")
+    return out
+
+
+def pairwise_distances(table, stimuli, wanted):
+    out = {}
+    for rec in stimuli:
+        item = rec["item_id"]
+        for a, b in wanted:
+            va, vb = table.get((item, a)), table.get((item, b))
+            if va is not None and vb is not None:
+                out[(item, a, b)] = cosine(va, vb)
+    return out
+
+
 def probe(table, stimuli, group_key, seed=0, with_null=True):
     """with_null=False skips the label-permutation baseline.
 
@@ -282,6 +335,9 @@ def main():
     r = surface_check(dists, stimuli)
     geo, mean_sns, below, n_aspects = summarise_geometry(dists, stimuli)
 
+    wanted = [(a, b) for a, b, _ in DIRECT_CONTRASTS] + [(REFERENCE, "paraphrase_min")]
+    contrasts = direct_contrasts(pairwise_distances(table, stimuli, wanted), stimuli)
+
     n_classes = len(TARGETS)
     print(f"\n(b) LINEAR PROBE  — {n_classes}-way condition classification, "
           f"chance = {1 / n_classes:.3f}")
@@ -308,7 +364,8 @@ def main():
         args.out.write_text(json.dumps({
             "model": str(data["model"]), "layer": layer, "verdict": head,
             "mean_sns": mean_sns, "conditions_below_filler": f"{below}/{n_aspects}",
-            "distance_vs_edit_r": r, "geometry": geo, "probe": results,
+            "distance_vs_edit_r": r, "geometry": geo,
+            "direct_contrasts": contrasts, "probe": results,
         }, indent=2))
         print(f"\nwrote {args.out}")
 

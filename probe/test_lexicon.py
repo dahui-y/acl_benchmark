@@ -56,6 +56,10 @@ MUST_REJECT = [
     ("grating", "capsicum", "grates to pulp, so the target state is undefined"),
     ("shredding", "tomato", "shred implies strands; tomato produces none"),
     ("grating", "scallion", "alliums are not grated"),
+    ("roasting", "egg", "eggs are fried or boiled, not dry-roasted"),
+    ("grilling", "egg", "same"),
+    ("browning", "egg", "same"),
+    ("sauteing", "egg", "same"),
 ]
 
 # Unusual but retained: the criterion is whether the target state is definable,
@@ -70,6 +74,7 @@ MUST_ALLOW = [
     ("mashing", "potato", "ordinary"),
     ("zesting", "lemon", "the canonical case"),
     ("whipping", "egg", "the canonical case"),
+    ("frying", "egg", "the one Heating verb that does take an egg"),
 ]
 
 MUST_BE_MASS = ["celery", "chive", "bean", "okra", "dill", "caramel", "butter"]

@@ -139,14 +139,20 @@ FINISHED_BAKED = {"bread", "biscuit", "cracker", "tortilla", "cooky", "oreo"}
 
 # Objects a specific verb cannot take even though the subcategory is allowed.
 # Hard-shelled or fibrous items pass the category rule but fail in the kitchen.
+# Heating reaches Eggs as a whole, but of its five verbs only frying takes an
+# egg idiomatically -- eggs are fried, boiled or scrambled, not dry-roasted.
+# Same shape as the Nuts_Seeds failure: the action category is coarser than the
+# verbs inside it, and the fix belongs at the verb level.
+DRY_HEAT_NOT_EGGS = {"egg"}
+
 VERB_OBJECT_BLOCK = {
     # Shaping and cooking verbs take the dough, not the finished item.
     "rolling": FINISHED_BAKED,
-    "roasting": FINISHED_BAKED,
-    "grilling": FINISHED_BAKED,
+    "roasting": FINISHED_BAKED | DRY_HEAT_NOT_EGGS,
+    "grilling": FINISHED_BAKED | DRY_HEAT_NOT_EGGS,
     "frying": FINISHED_BAKED,
-    "sauteing": FINISHED_BAKED,
-    "browning": FINISHED_BAKED,
+    "sauteing": FINISHED_BAKED | DRY_HEAT_NOT_EGGS,
+    "browning": FINISHED_BAKED | DRY_HEAT_NOT_EGGS,
     "mashing": {"coconut"},
     "squeezing": {"coconut", "pineapple"},
     "chopping": {"coconut"},

@@ -14,6 +14,7 @@
 | 第 2 轮 | 3/37（8%） | 加动词级覆盖、丢弃 `melting`、坚果移出 Heating |
 | 第 3 轮 | 3/37（8%） | 加动词—物体黑名单、`grating` 收紧 |
 | 第 4 轮 | 1/37（**3%**） | `celery` 入不可数表、`squeezing` 去掉香蕉、`grilling` 去掉糕点 |
+| 第 5 轮（人工） | 1/37（3%） | 干热动词去掉鸡蛋，见下 |
 
 ## 第 1 轮发现的四类系统性失败
 
@@ -81,15 +82,27 @@
 | `Carb_Foods` 把**面团阶段**（dough / batter / crust / pastry）与**成品**（bread / biscuit / cracker / tortilla）混在一个子类 | 新增 `FINISHED_BAKED`，从所有塑形与加热动词中屏蔽 |
 | `Fruiting` 子类过宽——番茄、甜椒、茄子、西葫芦、黄瓜、南瓜同列，而"擦丝""挤汁"只对其中一部分成立 | `shredding` / `grating` 去掉 `Fruiting`；`squeezing` 收到仅 `Citrus` |
 
-## 待人工确认清单（只需看这些）
+## 第 5 轮：唯一送去人工确认的一条，被否了
 
-第 5 轮后（37 个事件，动词分布 2/个、语义类 16/11/10）我只想标记一条：
+第 5 轮后（37 个事件，动词分布 2/个、语义类 16/11/10）我只标记了一条：
 
-| prompt | 疑问 |
-|---|---|
-| `A woman is roasting an egg at a market stall.` | 烤蛋存在但少见；烤箱蛋（baked egg）更常说。末态（蛋凝固）明确，**按判据应保留**，但值得母语确认 |
+| prompt | 我的判断 | 人工判断 |
+|---|---|---|
+| `A woman is roasting an egg at a market stall.` | 末态（蛋凝固）明确，**按判据应保留**，但措辞地道性我判断不了 | **太别扭，删** |
 
-**其余 36 个我判定可用。** 前几轮被我裁掉的组合已由规则屏蔽，不会再出现。
+判据没被推翻——它管的是末态，而这条坏在**措辞地道性**上，那是判据之外的一维，
+需要母语直觉。这正是把它单独拎出来的原因。
+
+**又是规则问题，不是坏条目。** `Heating` 类下 5 个动词
+（frying / sauteing / grilling / roasting / browning）全部继承 `Eggs`，
+而其中只有 frying 搭鸡蛋成立——鸡蛋是煎的、煮的、炒散的，不是干烤的。
+与坚果那次同型：**动作类的粒度比类内动词粗，修法在动词层**。
+
+修法：`DRY_HEAT_NOT_EGGS = {"egg"}`，从 roasting / grilling / sauteing / browning
+四个动词屏蔽，frying 保留。回归测试加 4 条必拒 + 1 条必留（`frying` × `egg`）。
+
+重建后生成子集仍是 37 个事件、动词分布 2/个、语义类 16/11/10——
+腾出的格子由其他物体补上，规模没有损失。
 
 ## 回归测试
 
@@ -98,11 +111,11 @@
 
 ```bash
 python test_lexicon.py
-# ok: 18 rejections, 8 retentions, 7 mass nouns, all 20 verbs classed
+# ok: 22 rejections, 9 retentions, 7 mass nouns, all 20 verbs classed
 ```
 
-内容为 18 条必须被拒的组合（各自注明是哪一轮、因何被拒）、
-8 条必须保留的组合（含 4 条"罕见但末态明确"的），以及不可数名词与动词分类的完整性检查。
+内容为 22 条必须被拒的组合（各自注明是哪一轮、因何被拒）、
+9 条必须保留的组合（含 4 条"罕见但末态明确"的），以及不可数名词与动词分类的完整性检查。
 已验证：把 `Fruiting` 放回 `shredding` 会立刻触发失败。
 
 ## 确认后的处理

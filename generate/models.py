@@ -87,6 +87,38 @@ MODELS = {
         "verified": False,
         "main_experiment": False,
     },
+    # ---- reduced-cost variants ---------------------------------------------
+    # Measured on one RTX 4090: TI2V-5B at its native 1280x704 runs 536 s/video,
+    # which is 268 GPU-hours for one model's 1800 videos. Denoising is 86% of
+    # that (50 steps at 9.25 s/it), so resolution and step count are the only
+    # levers -- peak VRAM was 14.55 of 24 GB, and nothing is gained by trading
+    # memory for time.
+    #
+    # Resolution is cut before step count because a lower resolution is a mode
+    # these models are built to run in, while fewer steps than the default is
+    # not a mode at all. Both degrade quality, and degraded quality is part of
+    # what we measure -- but it degrades every condition of an item equally, so
+    # the within-item contrast survives what the cross-model absolute scores
+    # would not. Either way the deviation gets stated in the paper.
+    #
+    # 832x480 keeps 16:9 and both sides divide by 32 (16x VAE spatial
+    # compression x patch size 2), which the transformer requires.
+    "wan2.2-ti2v-5b-480p": {
+        "repo_id": "Wan-AI/Wan2.2-TI2V-5B-Diffusers",
+        "pipeline_class": "WanPipeline",
+        "vae_class": "AutoencoderKLWan",
+        "vae_dtype": "float32",
+        "dtype": "bfloat16",
+        "height": 480,
+        "width": 832,
+        "num_frames": 121,   # duration is NOT cut: the question is whether a
+        "fps": 24,           # process reaches culmination, so time is the
+                             # construct, not a cost knob
+        "source": "TI2V-5B at reduced resolution -- deviation from the 720p "
+                  "default, taken to fit a single-GPU budget",
+        "verified": False,
+        "main_experiment": False,
+    },
     # ---- proprietary reference, subset only --------------------------------
     # Not run through this script: these are API models with no seed control we
     # can share across conditions, so they get their own driver and a smaller

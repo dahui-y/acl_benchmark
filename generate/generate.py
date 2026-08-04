@@ -41,7 +41,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "probe"))
 
 from build_stimuli import CONTROL_CONDITIONS, TARGET_CONDITIONS  # noqa: E402
-from models import MODELS, generation_kwargs, resolve  # noqa: E402
+from models import MODELS, generation_kwargs, resolve, resolved_defaults  # noqa: E402
 
 ALL_CONDITIONS = TARGET_CONDITIONS + CONTROL_CONDITIONS
 
@@ -154,6 +154,8 @@ class DiffusersBackend:
             "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
             "python": platform.python_version(),
         }
+        # What the pipeline defaults to for everything models.py leaves unset.
+        self.defaults = resolved_defaults(self.pipe)
 
     def generate(self, prompt, seed, out_path):
         from diffusers.utils import export_to_video  # noqa: PLC0415
@@ -196,8 +198,11 @@ def write_settings(path, cfg, backend, seeds, conditions, n_items):
         "num_frames": cfg["num_frames"],
         "fps": cfg["fps"],
         "duration_s": round(cfg["num_frames"] / cfg["fps"], 2),
-        "num_inference_steps": cfg["num_inference_steps"],
-        "guidance_scale": cfg["guidance_scale"],
+        # Set by us where models.py pins a value, otherwise read back from the
+        # pipeline signature so "we used the default" is a recorded number.
+        "num_inference_steps": cfg.get("num_inference_steps"),
+        "guidance_scale": cfg.get("guidance_scale"),
+        "pipeline_defaults": getattr(backend, "defaults", {}),
         "negative_prompt": cfg["negative_prompt"] or "(none)",
         "extra": cfg.get("extra", {}),
         "seeds": seeds,
@@ -248,10 +253,12 @@ def cmd_list(args):
     print(f"diffusers {version}")
     for name, cfg in MODELS.items():
         ok = "ok " if cfg["pipeline_class"] in available else "MISSING"
-        print(f"  [{ok}] {name:20s} {cfg['pipeline_class']:26s} "
+        role = "main" if cfg.get("main_experiment", True) else "----"
+        steps = cfg.get("num_inference_steps")
+        print(f"  [{ok}] [{role}] {name:20s} {cfg['pipeline_class']:26s} "
               f"{cfg['width']}x{cfg['height']} {cfg['num_frames']}f@{cfg['fps']} "
-              f"{cfg['num_inference_steps']} steps")
-        print(f"           {cfg['source']}")
+              f"{f'{steps} steps' if steps else 'default steps'}")
+        print(f"                {cfg['source']}")
 
 
 def cmd_run(args):

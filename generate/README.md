@@ -4,7 +4,7 @@
 
 | 文件 | 作用 |
 |---|---|
-| `models.py` | 模型注册表。分辨率/帧数/步数/引导强度/negative prompt 全在这里，命令行改不了 |
+| `models.py` | 模型注册表。分辨率/帧数/FPS/negative prompt 全在这里，命令行改不了 |
 | `generate.py` | 主驱动。排程、断点续跑、manifest、settings.json |
 | `extract_frames.py` | 抽帧，抽样公式与仓库根目录 OSCBench 的 `extract_frames.py` 完全一致 |
 
@@ -31,12 +31,30 @@
 **迭代顺序 item → seed → condition**，所以中断后留下的是完整的 (item, seed) 块。
 块是可分析的最小单位，半块没有价值。`--shard i/n` 也按 item 切，理由相同。
 
-## 设置为何不可调
+## 模型与设置：对齐 OSCBench Table 6
 
-`models.py` 里的数值是各模型自己的默认值，不是我们调出来的；调参会让跨模型比较
-变成比我们的调参水平。同一模型内，这些值对所有条件严格相同——一旦随条件变化，
-`prog` 与 `result` 的差异就不再能归因于 prompt。实际用了什么由 `settings.json`
-从运行现场记录，论文的设置表从它生成，而不是从我们的意图生成。
+OSCBench 的 Appendix B 只说一句"we follow the official and default
+implementations"，Table 6 只给分辨率/帧数/FPS/时长，**不给步数和引导强度**——
+意思就是跑的是 pipeline 自己的默认值。我们照办：
+
+| | OSCBench Table 6 | `models.py` |
+|---|---|---|
+| Wan-2.2 | 1280×720, 81f, 16fps | `wan2.2-t2v-a14b` 逐格相同 |
+| HunyuanVideo-1.5 | 1280×720, 121f, 24fps | `hunyuanvideo-1.5` 逐格相同 |
+
+注意他们那行 Wan-2.2 是 **81 帧 @16fps，这是 A14B 的配置**，TI2V-5B 是 121f@24。
+要跟他们可比就得用 A14B。`wan2.2-ti2v-5b` 留在注册表里只作冒烟测试、
+确定性检查和测速用，`--list` 会把它标成 `[----]`，它不在 Table 6 里，
+用它生成的东西不能跟他们的 Wan-2.2 并排报。
+
+步数和引导强度在 `models.py` 里**故意不填**，不传给 pipeline，
+让官方默认生效；`generate.py` 再从 pipeline 签名把实际默认值读回来写进
+`settings.json` 的 `pipeline_defaults`。这样"我们用的是默认值"是一个被记录下来的
+数字，而不是一句一年后无法核实的话。
+
+同一模型内，这些值对所有条件严格相同——一旦随条件变化，
+`prog` 与 `result` 的差异就不再能归因于 prompt。论文的设置表从 `settings.json`
+生成，也就是从运行现场生成，而不是从我们的意图生成。
 
 **negative prompt 默认为空，这是刻意偏离默认值的一处。** Wan 官方 negative prompt 里
 含"静止不动的画面"等项，而我们有若干条件（`perf`、`result`、`phase_finish`）描述的
@@ -60,27 +78,31 @@
 python generate.py --list
 
 # 干跑：只排程和写 settings.dry-run.json，不碰模型、不写 manifest
-python generate.py --model wan2.2-ti2v-5b --dry-run
+python generate.py --model wan2.2-t2v-a14b --dry-run
 
-# 先烧 5 个测速，脚本会打印 s/video 和 ETA
+# 先用小模型烧 5 个测速和验证流程，脚本会打印 s/video 和 ETA
 python generate.py --model wan2.2-ti2v-5b --out-dir /data/videos --limit 5
 
 # 正式跑（可随时 Ctrl-C，重跑自动续）
-python generate.py --model wan2.2-ti2v-5b --out-dir /data/videos
+python generate.py --model wan2.2-t2v-a14b --out-dir /data/videos
+python generate.py --model hunyuanvideo-1.5 --out-dir /data/videos
+
+# 显存不够时
+python generate.py --model wan2.2-t2v-a14b --out-dir /data/videos --offload
 
 # 多卡：按 item 切分，每张卡一个 shard
-CUDA_VISIBLE_DEVICES=0 python generate.py --model wan2.2-ti2v-5b --shard 0/4 --out-dir /data/videos &
-CUDA_VISIBLE_DEVICES=1 python generate.py --model wan2.2-ti2v-5b --shard 1/4 --out-dir /data/videos &
+CUDA_VISIBLE_DEVICES=0 python generate.py --model wan2.2-t2v-a14b --shard 0/4 --out-dir /data/videos &
+CUDA_VISIBLE_DEVICES=1 python generate.py --model wan2.2-t2v-a14b --shard 1/4 --out-dir /data/videos &
 
 # 抽帧：标注只覆盖一个种子，另外两个种子只进 MLLM 自动评测
-python extract_frames.py --videos /data/videos/wan2.2-ti2v-5b \
-                         --out /data/frames/wan2.2-ti2v-5b --seeds 42
+python extract_frames.py --videos /data/videos/wan2.2-t2v-a14b \
+                         --out /data/frames/wan2.2-t2v-a14b --seeds 42
 ```
 
 ### 正式跑之前做一次
 
 ```bash
-python generate.py --model wan2.2-ti2v-5b --out-dir /data/videos --determinism-check --limit 1
+python generate.py --model wan2.2-t2v-a14b --out-dir /data/videos --determinism-check --limit 1
 ```
 
 同一个 (prompt, seed) 生成两次比像素。可识别性的前提是"种子 + prompt 固定视频"，
@@ -94,7 +116,7 @@ python generate.py --model wan2.2-ti2v-5b --out-dir /data/videos --determinism-c
 | | |
 |---|---|
 | 生成子集 | 37 items × 15 conditions × 3 seeds = **1665 视频/模型** |
-| 开源主实验 | 2 个模型 = **3330 视频** |
+| 开源主实验 | Wan-2.2-A14B + HunyuanVideo-1.5 = **3330 视频** |
 | 磁盘（视频，5s 720p） | ≈ 25–35 GB |
 | 人工标注覆盖 | 只标 seed 42：555 × 2 模型 = 1110 视频 |
 | 标注判断数 | 1110 × 2 个二元问题 × 3 名标注者 ≈ **6.7k**（OSCBench ≈ 20k） |
@@ -109,22 +131,25 @@ python generate.py --model wan2.2-ti2v-5b --out-dir /data/videos --determinism-c
 
 ## 注册表状态
 
-`models.py` 里三项的 `verified` 都还是 `False`，`source` 写明数值出处。
-**订 GPU 之前先跑 `python generate.py --list`**：它会报当前 diffusers 版本下
-哪个 pipeline 类不存在。HunyuanVideo-1.5 的类名与 repo id 尤其依赖 diffusers 版本，
-Wan2.2-A14B 是双专家 MoE、可能还有第二个 guidance scale——这两项都要对着实际
-checkout 核一遍，核完把值写回 `models.py` 并把 `verified` 改成 `True`。
+三项的 `verified` 都还是 `False`——`--list` 报 `ok` 只说明类名在当前 diffusers 里
+存在，不代表 repo id 对、权重能下、能跑通。真正的核验是第一次 `--limit 5` 跑通，
+跑通后把 `settings.json` 里 `pipeline_defaults` 读到的值抄回 `models.py` 的注释、
+把 `verified` 改成 `True`。
+
+A14B 是双专家 MoE，diffusers 可能还有第二个 guidance scale（`guidance_scale_2`），
+它会出现在 `settings.json` 的 `pipeline_defaults` 里——第一次跑完看一眼，
+确认默认值是我们想要的，不是的话再决定要不要在 `extra` 里显式钉住。
 
 ## 产物
 
 ```
-/data/videos/wan2.2-ti2v-5b/
+/data/videos/wan2.2-t2v-a14b/
     settings.json                    # 论文设置表的唯一来源
     manifest.jsonl                   # 每个视频一行：prompt、seed、全部生成参数、耗时、状态
     item0000/prog__seed42.mp4
             /perf__seed42.mp4
             ...
-/data/frames/wan2.2-ti2v-5b/
+/data/frames/wan2.2-t2v-a14b/
     frames_index.jsonl
     item0000/prog__seed42/frame_001.jpg ... frame_020.jpg
 ```

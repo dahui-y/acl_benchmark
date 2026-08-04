@@ -1,4 +1,5 @@
 stimuli.jsonl
 *.npz
 result_*.json
+review.tsv
 __pycache__/

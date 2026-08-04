@@ -7,6 +7,7 @@
 | `models.py` | 模型注册表。分辨率/帧数/FPS/negative prompt 全在这里，命令行改不了 |
 | `generate.py` | 主驱动。排程、断点续跑、manifest、settings.json |
 | `extract_frames.py` | 抽帧，抽样公式与仓库根目录 OSCBench 的 `extract_frames.py` 完全一致 |
+| `contact_sheet.py` | 把一个 item 的多个条件排成"行=条件、列=时间"的拼图（OSCBench Fig. 4 版式）|
 | `BUDGET.md` | 实测速度、算力约束、每项设置偏离及其代价。论文设置表与 limitation 从这里取材 |
 
 ---
@@ -64,11 +65,19 @@ implementations"，Table 6 只给分辨率/帧数/FPS/时长，**不给步数和
 
 ## 生成哪些条件
 
-默认 15 条 = 14 条目标条件 + `other_verb`。文本侧的三个控制
-（`paraphrase_min`、`paraphrase`、`filler`）只用于校准编码器距离，
-视频侧没有对应的标注问题，生成它们要多花 ~20% 的账单却问不出问题。
-`other_verb` 留着，作为"模型到底认不认这个事件"的下限检查。
-要全部 18 条：`--conditions all`。
+默认 16 条 = 14 条目标条件 + **两个锚点**：
+
+| 锚点 | 预期 | 作用 |
+|---|---|---|
+| `other_verb`（换动词） | 视频**必须**变 | 上锚。不变就说明模型根本没在读事件描述 |
+| `paraphrase_min`（换一个同义词） | 视频**不该**变 | 下锚。变了就说明模型对任何改词都敏感，体态效应无从谈起 |
+
+两个锚点把所有体态效应**夹在中间**。这不是锦上添花——它决定了结论的形式：
+有了双锚，"模型做不到"就变成"**模型对词汇内容有反应，却唯独对体态形态盲**"。
+**选择性缺陷不会被"你模型太小"解释掉，笼统的失败会。**
+
+`paraphrase`（语序重排）与 `filler`（长度配平）仍只在文本侧，
+它们是用来校准编码器距离的，视频侧没有对应的标注问题。要全部 18 条：`--conditions all`。
 
 ---
 
@@ -98,6 +107,11 @@ CUDA_VISIBLE_DEVICES=1 python generate.py --model wan2.2-t2v-a14b --shard 1/4 --
 # 抽帧：标注只覆盖一个种子，另外两个种子只进 MLLM 自动评测
 python extract_frames.py --videos /data/videos/wan2.2-t2v-a14b \
                          --out /data/frames/wan2.2-t2v-a14b --seeds 42
+
+# 定性检查 / 论文定性图：一个 item 的各条件排成 Fig.4 那样的拼图
+python contact_sheet.py --videos /data/videos/wan2.2-ti2v-5b-480p --item 0
+python contact_sheet.py --videos /data/videos/wan2.2-ti2v-5b-480p --all-items \
+                        --conditions prog perf result other_verb paraphrase_min
 ```
 
 ## 显存
@@ -134,11 +148,10 @@ python generate.py --model wan2.2-t2v-a14b --out-dir /data/videos --determinism-
 
 | | |
 |---|---|
-| 生成子集 | 37 items × 15 conditions × 3 seeds = **1665 视频/模型** |
-| 开源主实验 | Wan-2.2-A14B + HunyuanVideo-1.5 = **3330 视频** |
-| 磁盘（视频，5s 720p） | ≈ 25–35 GB |
-| 人工标注覆盖 | 只标 seed 42：555 × 2 模型 = 1110 视频 |
-| 标注判断数 | 1110 × 2 个二元问题 × 3 名标注者 ≈ **6.7k**（OSCBench ≈ 20k） |
+| 生成子集 | 37 items × 16 conditions × 3 seeds = **1776 视频/模型** |
+| 开源主实验 | 两个 480p 模型 = **3552 视频**，≈ 8 天（实测 208 s/视频） |
+| 人工标注覆盖 | 只标 seed 42：592 × 2 模型 = 1184 视频 |
+| 标注判断数 | 1184 × 2 个二元问题 × 3 名标注者 ≈ **7.1k**（OSCBench ≈ 20k） |
 | 另两个种子 | 只进 MLLM 自动评测，作稳定性检查 |
 
 **上表是设计规模，不是可执行计划。** 单张 4090 实测 536 s/视频（720p 官方设置），

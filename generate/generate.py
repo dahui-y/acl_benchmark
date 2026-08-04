@@ -55,12 +55,18 @@ ALL_CONDITIONS = TARGET_CONDITIONS + CONTROL_CONDITIONS
 # factor for nothing.
 DEFAULT_SEEDS = [42, 43, 44]
 
-# The three controls that are not needed on the video side. `paraphrase_min`,
-# `paraphrase` and `filler` exist to calibrate the text-encoder distances; on the
-# video side only `other_verb` earns its cost, as a check that the model responds
-# to the event at all. Generating the other three would add ~17% to the bill for
-# no annotation question. Override with --conditions all.
-VIDEO_CONDITIONS = TARGET_CONDITIONS + ["other_verb"]
+# The video side needs both anchors, not just one. `other_verb` is the upper
+# anchor -- swapping the verb must change the video, or the model is not
+# responding to the event description at all. `paraphrase_min` is the lower
+# anchor -- a one-token synonym must NOT change it. Together they bracket every
+# aspect effect, which is what turns "the model failed" into "the model responds
+# to lexical content but is selectively blind to aspect morphology". A selective
+# deficit is not explained away by model scale; a flat failure is.
+#
+# `paraphrase` (reordering) and `filler` (length matching) stay text-only: they
+# exist to calibrate encoder distances and have no annotation question here.
+# Override with --conditions all.
+VIDEO_CONDITIONS = TARGET_CONDITIONS + ["other_verb", "paraphrase_min"]
 
 
 def load_items(stimuli_path, all_items=False):

@@ -40,6 +40,10 @@ MODELS = {
     # runs 121 frames at 24 FPS. Matching them means A14B.
     "wan2.2-t2v-a14b": {
         "repo_id": "Wan-AI/Wan2.2-T2V-A14B-Diffusers",
+        # 27B parameters, 50GB+ of bf16 weights. Sequential offload might squeeze
+        # it onto a 24GB card but not at a speed that finishes. Kept as the
+        # Table 6 reference row; not runnable on the hardware available.
+        "main_experiment": False,
         "pipeline_class": "WanPipeline",
         # Wan ships a bespoke VAE that diffusers loads separately and keeps in
         # fp32; loading it at the pipeline dtype produces black frames.
@@ -59,6 +63,10 @@ MODELS = {
     "hunyuanvideo-1.5": {
         "repo_id": "tencent/HunyuanVideo-1.5",
         "pipeline_class": "HunyuanVideo15Pipeline",
+        # Kept as the Table 6 reference row. 720p is affordable here only in
+        # principle: 1665 videos at the 720p rate is 10 days for this model
+        # alone. The 480p variant below is what actually runs.
+        "main_experiment": False,
         "dtype": "bfloat16",
         "height": 720,
         "width": 1280,
@@ -116,8 +124,27 @@ MODELS = {
                              # construct, not a cost knob
         "source": "TI2V-5B at reduced resolution -- deviation from the 720p "
                   "default, taken to fit a single-GPU budget",
+        # Measured: 208 s/video, peak 11.66GB, 2.58x faster than 720p. This is
+        # the configuration that actually runs, so it is the main experiment --
+        # a [main] mark pointing at a model that cannot finish is worse than no
+        # mark at all.
+        "verified": True,
+    },
+    "hunyuanvideo-1.5-480p": {
+        "repo_id": "tencent/HunyuanVideo-1.5",
+        "pipeline_class": "HunyuanVideo15Pipeline",
+        "dtype": "bfloat16",
+        # Same 832x480 as the Wan entry, deliberately: holding resolution equal
+        # across our two models keeps the cross-model comparison clean, and 480p
+        # is one of HunyuanVideo-1.5's own supported modes rather than something
+        # we invented.
+        "height": 480,
+        "width": 832,
+        "num_frames": 121,
+        "fps": 24,
+        "source": "HunyuanVideo-1.5 at its 480p mode; frames/FPS from "
+                  "OSCBench Table 6",
         "verified": False,
-        "main_experiment": False,
     },
     # ---- proprietary reference, subset only --------------------------------
     # Not run through this script: these are API models with no seed control we

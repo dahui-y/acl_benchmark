@@ -7,6 +7,7 @@
 | `models.py` | 模型注册表。分辨率/帧数/FPS/negative prompt 全在这里，命令行改不了 |
 | `generate.py` | 主驱动。排程、断点续跑、manifest、settings.json |
 | `extract_frames.py` | 抽帧，抽样公式与仓库根目录 OSCBench 的 `extract_frames.py` 完全一致 |
+| `BUDGET.md` | 实测速度、算力约束、每项设置偏离及其代价。论文设置表与 limitation 从这里取材 |
 
 ---
 
@@ -140,7 +141,10 @@ python generate.py --model wan2.2-t2v-a14b --out-dir /data/videos --determinism-
 | 标注判断数 | 1110 × 2 个二元问题 × 3 名标注者 ≈ **6.7k**（OSCBench ≈ 20k） |
 | 另两个种子 | 只进 MLLM 自动评测，作稳定性检查 |
 
-单视频耗时随卡而定，用 `--limit 5` 实测，脚本会报 s/video 与整批 ETA。
+**上表是设计规模，不是可执行计划。** 单张 4090 实测 536 s/视频（720p 官方设置），
+两个模型要 20 天不间断，跑不下来。降配的优先级、各项代价和实测数据都在
+`BUDGET.md`，配置定稿前以那份为准。
+
 算力紧张时退到 2 个种子，**但不要退到 1 个**——退到 1 个就同时失去误差棒
 和方差分解，而这两样正是这个设计相对 OSCBench 的增量。
 

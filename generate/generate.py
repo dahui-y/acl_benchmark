@@ -215,26 +215,36 @@ def write_settings(path, cfg, backend, seeds, conditions, n_items):
     }, indent=2, ensure_ascii=False) + "\n")
 
 
-def determinism_check(backend, job, tolerance=1e-3):
-    """Regenerate one job and compare. The identification argument assumes that
-    a seed fixes the video given the prompt; non-deterministic attention kernels
-    can break that, and if they do, a within-item condition difference is partly
-    noise. Cheap to check once, expensive to discover later."""
+def determinism_check(backend, job, check_dir, tolerance=1e-3):
+    """Regenerate one job twice and compare. The identification argument assumes
+    that a seed fixes the video given the prompt; non-deterministic attention
+    kernels can break that, and if they do, a within-item condition difference
+    is partly sampler noise. Cheap to check once, expensive to discover later.
+
+    Both copies go to a directory outside the item tree: anything that lands in
+    videos/<model>/item*/ has to carry a parseable condition and seed, or the
+    frame extractor trips over it."""
     import numpy as np  # noqa: PLC0415
 
-    a = backend.generate(job["prompt"], job["seed"], Path(job["path"]))
-    b = backend.generate(job["prompt"], job["seed"],
-                         Path(job["path"]).with_name("_determinism_check.mp4"))
-    if a is None or b is None:
+    check_dir.mkdir(parents=True, exist_ok=True)
+    frames = [backend.generate(job["prompt"], job["seed"], check_dir / f"run{i}.mp4")
+              for i in (1, 2)]
+    if any(f is None for f in frames):
         return None
-    a, b = np.asarray(a, dtype=np.float32), np.asarray(b, dtype=np.float32)
+    a, b = (np.asarray(f, dtype=np.float32) for f in frames)
     delta = float(np.abs(a - b).max())
-    verdict = "deterministic" if delta <= tolerance else "NOT deterministic"
-    print(f"  determinism check: max |Δpixel| = {delta:.6f}  -> {verdict}")
-    if delta > tolerance:
+    ok = delta <= tolerance
+    print(f"  determinism check: max |Δpixel| = {delta:.6f}  -> "
+          f"{'deterministic' if ok else 'NOT deterministic'}")
+    if not ok:
         print("  a seed no longer pins the video; within-item contrasts carry "
               "sampler noise. Report this, or fix it (deterministic attention "
               "backend, fixed batch size) before the main run.")
+    (check_dir / "determinism.json").write_text(json.dumps({
+        "prompt": job["prompt"], "seed": job["seed"],
+        "max_abs_pixel_delta": delta, "tolerance": tolerance,
+        "deterministic": ok,
+    }, indent=2, ensure_ascii=False) + "\n")
     return delta
 
 
@@ -310,8 +320,9 @@ def cmd_run(args):
                    args.seeds, conditions, len(items))
 
     if args.determinism_check and todo:
-        determinism_check(backend, todo[0])
-        todo = todo[1:]
+        # Does not consume a job: the check writes elsewhere, so todo[0] still
+        # has to be generated for real and recorded in the manifest.
+        determinism_check(backend, todo[0], out_dir / args.model / "_checks")
 
     t_start = time.time()
     with manifest.open("a") as fh:

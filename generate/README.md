@@ -1,0 +1,133 @@
+# 视频生成
+
+把 `probe/stimuli.jsonl` 的生成子集变成视频。三个文件：
+
+| 文件 | 作用 |
+|---|---|
+| `models.py` | 模型注册表。分辨率/帧数/步数/引导强度/negative prompt 全在这里，命令行改不了 |
+| `generate.py` | 主驱动。排程、断点续跑、manifest、settings.json |
+| `extract_frames.py` | 抽帧，抽样公式与仓库根目录 OSCBench 的 `extract_frames.py` 完全一致 |
+
+---
+
+## 设计：为什么种子这样安排
+
+**item 内共用一个种子。** 每个事件 15 个视频条件只在"语言如何编码终结"上不同。
+科学主张是**同一 item 内两个条件之差**，所以 item 内除 prompt 外一切必须固定，
+而最容易压倒一切的就是初始噪声——种子基本决定了画面里是谁、机位在哪、台面长什么样。
+不同种子的两个视频同时因两个原因不同，效应无法归因。共用种子后，
+分辨率与帧数是模型常量 ⇒ 潜变量形状相同 ⇒ **初始噪声逐位相同**，剩下唯一的差异源就是文本条件。
+
+**每个 item 三个种子。** 单个种子只是模型分布里的一次抽样：有的种子会遮住宾语，
+有的根本没渲染出状态变化。三个种子买到的是误差棒、条件差异的稳定性，
+以及把 item 方差和种子方差分开（item × seed 交叉随机效应）。
+
+**种子在 item 之间也共用**（42/43/44 全局固定）。若每个 item 用不同种子，
+"item 7 的 seed 42"与"item 8 的 seed 42"不可比，交叉设计白白丢掉一个因子。
+
+这对终结性轴另有一层用处：那条轴的预期是视频**不该**有差别。
+共用噪声把这条软预期变成硬预期——相同噪声 + 几乎相同的条件，就该给出几乎相同的视频。
+
+**迭代顺序 item → seed → condition**，所以中断后留下的是完整的 (item, seed) 块。
+块是可分析的最小单位，半块没有价值。`--shard i/n` 也按 item 切，理由相同。
+
+## 设置为何不可调
+
+`models.py` 里的数值是各模型自己的默认值，不是我们调出来的；调参会让跨模型比较
+变成比我们的调参水平。同一模型内，这些值对所有条件严格相同——一旦随条件变化，
+`prog` 与 `result` 的差异就不再能归因于 prompt。实际用了什么由 `settings.json`
+从运行现场记录，论文的设置表从它生成，而不是从我们的意图生成。
+
+**negative prompt 默认为空，这是刻意偏离默认值的一处。** Wan 官方 negative prompt 里
+含"静止不动的画面"等项，而我们有若干条件（`perf`、`result`、`phase_finish`）描述的
+正是状态而非持续动作——用官方 negative prompt 等于把混淆直接写进数据。
+论文里要写明这一处偏离。
+
+## 生成哪些条件
+
+默认 15 条 = 14 条目标条件 + `other_verb`。文本侧的三个控制
+（`paraphrase_min`、`paraphrase`、`filler`）只用于校准编码器距离，
+视频侧没有对应的标注问题，生成它们要多花 ~20% 的账单却问不出问题。
+`other_verb` 留着，作为"模型到底认不认这个事件"的下限检查。
+要全部 18 条：`--conditions all`。
+
+---
+
+## 用法
+
+```bash
+# 先看清单：多少视频、注册表哪几项在当前 diffusers 下能解析
+python generate.py --list
+
+# 干跑：只排程和写 settings.dry-run.json，不碰模型、不写 manifest
+python generate.py --model wan2.2-ti2v-5b --dry-run
+
+# 先烧 5 个测速，脚本会打印 s/video 和 ETA
+python generate.py --model wan2.2-ti2v-5b --out-dir /data/videos --limit 5
+
+# 正式跑（可随时 Ctrl-C，重跑自动续）
+python generate.py --model wan2.2-ti2v-5b --out-dir /data/videos
+
+# 多卡：按 item 切分，每张卡一个 shard
+CUDA_VISIBLE_DEVICES=0 python generate.py --model wan2.2-ti2v-5b --shard 0/4 --out-dir /data/videos &
+CUDA_VISIBLE_DEVICES=1 python generate.py --model wan2.2-ti2v-5b --shard 1/4 --out-dir /data/videos &
+
+# 抽帧：标注只覆盖一个种子，另外两个种子只进 MLLM 自动评测
+python extract_frames.py --videos /data/videos/wan2.2-ti2v-5b \
+                         --out /data/frames/wan2.2-ti2v-5b --seeds 42
+```
+
+### 正式跑之前做一次
+
+```bash
+python generate.py --model wan2.2-ti2v-5b --out-dir /data/videos --determinism-check --limit 1
+```
+
+同一个 (prompt, seed) 生成两次比像素。可识别性的前提是"种子 + prompt 固定视频"，
+而非确定性的 attention kernel 会破坏这个前提——真被破坏了，item 内条件差异里
+就掺着采样噪声。这件事早查五分钟，晚查就是整批数据的解释权。
+
+---
+
+## 规模与开销
+
+| | |
+|---|---|
+| 生成子集 | 37 items × 15 conditions × 3 seeds = **1665 视频/模型** |
+| 开源主实验 | 2 个模型 = **3330 视频** |
+| 磁盘（视频，5s 720p） | ≈ 25–35 GB |
+| 人工标注覆盖 | 只标 seed 42：555 × 2 模型 = 1110 视频 |
+| 标注判断数 | 1110 × 2 个二元问题 × 3 名标注者 ≈ **6.7k**（OSCBench ≈ 20k） |
+| 另两个种子 | 只进 MLLM 自动评测，作稳定性检查 |
+
+单视频耗时随卡而定，用 `--limit 5` 实测，脚本会报 s/video 与整批 ETA。
+算力紧张时退到 2 个种子，**但不要退到 1 个**——退到 1 个就同时失去误差棒
+和方差分解，而这两样正是这个设计相对 OSCBench 的增量。
+
+闭源参照模型（Kling / Veo）不走这个脚本：API 模型没有我们能在条件间共用的种子控制，
+所以它们用单独的驱动、更小的子集，只作参照，不参与 item 内对比的主分析。
+
+## 注册表状态
+
+`models.py` 里三项的 `verified` 都还是 `False`，`source` 写明数值出处。
+**订 GPU 之前先跑 `python generate.py --list`**：它会报当前 diffusers 版本下
+哪个 pipeline 类不存在。HunyuanVideo-1.5 的类名与 repo id 尤其依赖 diffusers 版本，
+Wan2.2-A14B 是双专家 MoE、可能还有第二个 guidance scale——这两项都要对着实际
+checkout 核一遍，核完把值写回 `models.py` 并把 `verified` 改成 `True`。
+
+## 产物
+
+```
+/data/videos/wan2.2-ti2v-5b/
+    settings.json                    # 论文设置表的唯一来源
+    manifest.jsonl                   # 每个视频一行：prompt、seed、全部生成参数、耗时、状态
+    item0000/prog__seed42.mp4
+            /perf__seed42.mp4
+            ...
+/data/frames/wan2.2-ti2v-5b/
+    frames_index.jsonl
+    item0000/prog__seed42/frame_001.jpg ... frame_020.jpg
+```
+
+manifest 每行都带 `status`；出错的格子不会中断整批，续跑时会重试。
+写视频走 `.part.mp4` 再原子改名，所以被 kill 不会留下半截文件被误判为已完成。

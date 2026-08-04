@@ -38,6 +38,11 @@ import sys
 import time
 from pathlib import Path
 
+# Must be set before torch initialises its allocator. Video diffusion allocates
+# in very uneven block sizes across the denoising loop and the VAE decode, and
+# the default allocator fragments badly enough to OOM with GBs nominally free.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "probe"))
 
 from build_stimuli import CONTROL_CONDITIONS, TARGET_CONDITIONS  # noqa: E402
@@ -114,7 +119,8 @@ def done_keys(manifest_path):
 
 
 class DiffusersBackend:
-    def __init__(self, cfg, offload=False, device="cuda"):
+    def __init__(self, cfg, offload=False, device="cuda", vae_tiling=True,
+                 sequential_offload=False):
         import torch  # noqa: PLC0415
         import diffusers  # noqa: PLC0415
 
@@ -143,10 +149,26 @@ class DiffusersBackend:
             )
         self.pipe = pipe_cls.from_pretrained(cfg["repo_id"], **kwargs)
 
-        if offload:
+        # On a 24GB card the whole pipeline resident at once leaves nothing for
+        # activations -- the text encoder, the transformer and the VAE together
+        # fill the card before the first denoising step. Offloading keeps one
+        # component on the GPU at a time at the cost of PCIe transfers.
+        if sequential_offload:
+            self.pipe.enable_sequential_cpu_offload()
+        elif offload:
             self.pipe.enable_model_cpu_offload()
         else:
             self.pipe.to(device)
+
+        # The decode is the other peak: 121 frames at 720p in one tensor. Tiling
+        # decodes in patches, which costs a little time and can leave faint seams,
+        # but the seams are identical across conditions of an item, so they
+        # cancel in exactly the comparison this design makes.
+        if vae_tiling and hasattr(self.pipe, "vae"):
+            if hasattr(self.pipe.vae, "enable_tiling"):
+                self.pipe.vae.enable_tiling()
+            if hasattr(self.pipe.vae, "enable_slicing"):
+                self.pipe.vae.enable_slicing()
 
         self.versions = {
             "torch": torch.__version__,
@@ -156,6 +178,19 @@ class DiffusersBackend:
         }
         # What the pipeline defaults to for everything models.py leaves unset.
         self.defaults = resolved_defaults(self.pipe)
+        self.memory = {
+            "offload": "sequential" if sequential_offload else bool(offload),
+            "vae_tiling": bool(vae_tiling),
+            "alloc_conf": os.environ.get("PYTORCH_CUDA_ALLOC_CONF"),
+        }
+        if torch.cuda.is_available():
+            self.memory["vram_total_gb"] = round(
+                torch.cuda.get_device_properties(0).total_memory / 2**30, 1)
+
+    def peak_vram_gb(self):
+        if not self.torch.cuda.is_available():
+            return None
+        return round(self.torch.cuda.max_memory_allocated() / 2**30, 2)
 
     def generate(self, prompt, seed, out_path):
         from diffusers.utils import export_to_video  # noqa: PLC0415
@@ -212,6 +247,7 @@ def write_settings(path, cfg, backend, seeds, conditions, n_items):
         "conditions": conditions,
         "settings_source": cfg["source"],
         "environment": getattr(backend, "versions", {}),
+        "memory": getattr(backend, "memory", {}),
     }, indent=2, ensure_ascii=False) + "\n")
 
 
@@ -313,7 +349,9 @@ def cmd_run(args):
 
     print(f"loading {cfg['repo_id']} ...")
     t0 = time.time()
-    backend = DiffusersBackend(cfg, offload=args.offload, device=args.device)
+    backend = DiffusersBackend(cfg, offload=args.offload, device=args.device,
+                               vae_tiling=not args.no_vae_tiling,
+                               sequential_offload=args.sequential_offload)
     print(f"loaded in {time.time() - t0:.0f}s  {backend.versions}")
 
     write_settings(out_dir / args.model / "settings.json", cfg, backend,
@@ -340,11 +378,13 @@ def cmd_run(args):
                        **generation_kwargs(cfg))
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
             fh.flush()
-            if n % 10 == 0 or n == len(todo):
+            if n % 10 == 0 or n == len(todo) or n == 1:
                 elapsed = time.time() - t_start
                 rate = elapsed / n
+                peak = backend.peak_vram_gb()
                 print(f"  {n}/{len(todo)}  {rate:.1f}s/video  "
-                      f"eta {(len(todo) - n) * rate / 3600:.1f}h")
+                      f"eta {(len(todo) - n) * rate / 3600:.1f}h"
+                      + (f"  peak {peak}GB" if peak else ""))
 
     print(f"done. manifest: {manifest}")
 
@@ -365,7 +405,13 @@ def main():
                     help="ignore in_generation_subset and render every item")
     ap.add_argument("--shard", help="i/n, split by item across GPUs")
     ap.add_argument("--limit", type=int, help="stop after N videos (smoke test)")
-    ap.add_argument("--offload", action="store_true", help="model CPU offload")
+    ap.add_argument("--offload", action="store_true",
+                    help="keep one component on the GPU at a time; needed "
+                         "below roughly 40GB of VRAM")
+    ap.add_argument("--sequential-offload", action="store_true",
+                    help="per-layer offload: fits almost anything, much slower")
+    ap.add_argument("--no-vae-tiling", action="store_true",
+                    help="decode the whole video at once (needs the headroom)")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--determinism-check", action="store_true",
                     help="generate the first job twice and compare pixels")

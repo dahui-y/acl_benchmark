@@ -99,6 +99,24 @@ python extract_frames.py --videos /data/videos/wan2.2-t2v-a14b \
                          --out /data/frames/wan2.2-t2v-a14b --seeds 42
 ```
 
+## 显存
+
+24GB 卡（4090）上，整条 pipeline 常驻会在第一个去噪步之前就把卡填满——
+文本编码器 + transformer + VAE 加起来就没给激活值留位置。必须加 `--offload`：
+
+| 开关 | 作用 | 代价 |
+|---|---|---|
+| `--offload` | 一次只把一个组件放在 GPU 上 | PCIe 传输，每个视频多几十秒 |
+| `--sequential-offload` | 逐层换入换出，几乎什么卡都能跑 | 慢很多，最后手段 |
+| VAE tiling | **默认开**，分块解码，避开 121 帧 720p 一次性解码的峰值 | 略慢，可能有极淡的拼缝 |
+| `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` | 脚本自动设，防碎片化 | 无 |
+
+VAE tiling 的拼缝值得说一句：它对同一个 item 的所有条件是完全相同的，
+所以在本设计唯一做的那种比较（item 内条件差）里会抵消。真正在意画质时用
+`--no-vae-tiling`，但要有显存。
+
+实际峰值显存记在 `settings.json` 的 `memory` 字段里，进度行也会打印 `peak NNGB`。
+
 ### 正式跑之前做一次
 
 ```bash

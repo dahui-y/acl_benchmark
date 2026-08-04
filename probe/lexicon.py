@@ -73,9 +73,12 @@ ACTION_OBJECT_COMPATIBILITY = {
                 "Mushroom", "Citrus", "Berries", "Tropical_Melon", "Pome", "Stone",
                 "Meat", "Processed_Meat", "Seafood", "Plant", "Cheeses",
                 "Carb_Foods", "Herbs_Spices"},
+    # Nuts deliberately excluded: they are cooked in the plural or mass sense, so
+    # "roasting an almond" is systematically odd -- and the singular indefinite is
+    # the reference cell of every item.
     "Heating": {"Leafy", "Root", "Bulb", "Stem_Stalk", "Fruiting", "Cruciferous",
                 "Mushroom", "Meat", "Processed_Meat", "Seafood", "Plant", "Eggs",
-                "Carb_Foods", "Grains", "Nuts_Seeds"},
+                "Carb_Foods", "Grains"},
     "Pressing": {"Root", "Bulb", "Fruiting", "Citrus", "Berries", "Tropical_Melon",
                  "Pome", "Stone", "Plant", "Nuts_Seeds", "Herbs_Spices"},
     "Grating": {"Root", "Bulb", "Fruiting", "Cruciferous", "Citrus", "Cheeses",
@@ -92,7 +95,58 @@ ACTION_OBJECT_COMPATIBILITY = {
 }
 
 
-def is_compatible(action_category: str, object_sub: str) -> bool:
+# Some verbs need constraints tighter than their action category. Triaging the
+# first review sheet turned up four systematic failures that category-level
+# compatibility cannot express:
+#
+#   zesting   inherits all of Grating and yields "zesting a carrot"; zest is
+#             citrus peel only
+#   melting   everything that melts -- butter, cheese, chocolate, sugar -- is a
+#             mass noun, and mass nouns are excluded because the telicity axis
+#             needs the a/the/bare-plural alternation. What remains are count
+#             nouns that do not melt ("melting a cake"), so the verb is
+#             incompatible with this design and is dropped rather than patched.
+#   whipping  inherits Mixing and yields "whipping a coconut"
+#   mashing / squeezing  inherit Pressing and reach nuts
+#
+# Verbs absent from this table fall back to their action category.
+VERB_OBJECT_OVERRIDE = {
+    "zesting": {"Citrus"},
+    "melting": set(),                       # dropped: see above
+    "whipping": {"Eggs"},
+    "blending": {"Berries", "Tropical_Melon", "Fruiting", "Pome"},
+    "mashing": {"Root", "Tropical_Melon", "Plant", "Pome"},
+    "squeezing": {"Citrus", "Fruiting"},   # not bananas
+    "shredding": {"Root", "Fruiting", "Cruciferous"},
+    "crushing": {"Bulb", "Fruiting", "Nuts_Seeds", "Herbs_Spices", "Berries"},
+    "rolling": {"Carb_Foods"},
+    # Grating alliums and herbs is not a thing; the second triage pass produced
+    # "grating a scallion".
+    "grating": {"Root", "Fruiting", "Cruciferous", "Citrus", "Cheeses"},
+    # Grilling pastry is not a thing; baking and frying are.
+    "grilling": {"Leafy", "Root", "Bulb", "Stem_Stalk", "Fruiting", "Cruciferous",
+                 "Mushroom", "Meat", "Processed_Meat", "Seafood", "Plant"},
+}
+
+# Objects a specific verb cannot take even though the subcategory is allowed.
+# Hard-shelled or fibrous items pass the category rule but fail in the kitchen.
+VERB_OBJECT_BLOCK = {
+    "mashing": {"coconut"},
+    "squeezing": {"coconut", "pineapple"},
+    "chopping": {"coconut"},
+    "crushing": {"eggplant"},
+    "coating": {"cucumber", "capsicum"},
+}
+
+
+def is_compatible(action_category: str, object_sub: str, gerund: str = None,
+                  noun: str = None) -> bool:
+    """Verb-level override when present, otherwise the action-category rule."""
+    if gerund is not None and noun is not None:
+        if noun in VERB_OBJECT_BLOCK.get(gerund, set()):
+            return False
+    if gerund is not None and gerund in VERB_OBJECT_OVERRIDE:
+        return object_sub in VERB_OBJECT_OVERRIDE[gerund]
     return object_sub in ACTION_OBJECT_COMPATIBILITY.get(action_category, set())
 
 
@@ -130,6 +184,9 @@ MASS_OR_GENERIC = {
     "sauce", "ice", "clay",
     # already-plural or awkward forms
     "corn", "ginger", "garlic", "asparagus", "broccoli", "cauliflower", "shrimp",
+    "okra",     # "an okra" is odd; okra is used as a mass noun
+    "chive", "bean", "chickpea", "oat",   # used in the plural in cooking
+    "celery",   # mass; the count form is "a stalk of celery"
 }
 
 IRREGULAR_PLURALS = {

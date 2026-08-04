@@ -173,15 +173,19 @@ def build(taxonomy_dir, n_items, n_generate, seed):
     # which breaks the held-out-verb probe split and makes the by-aspectual-class
     # analysis rest on unequal cell sizes.
     per_verb = max(1, n_items // len(verbs))
-    chosen = []
+    chosen, dropped = [], []
     for verb in verbs:
         # Only objects the action can plausibly apply to. Skipping this yields
         # items like "melting a scallion", which confound aspect with
         # plausibility and cannot be rendered sensibly by any model.
-        usable = [n for n in nouns if is_compatible(verb["action_category"], n["object_sub"])]
+        usable = [n for n in nouns
+                  if is_compatible(verb["action_category"], n["object_sub"],
+                                   verb["gerund"], n["noun"])]
         if not usable:
-            raise SystemExit(f"no compatible objects for {verb['action_category']}; "
-                             "check ACTION_OBJECT_COMPATIBILITY")
+            # A verb whose plausible objects are all mass nouns cannot take part in
+            # the telicity alternation. Drop it rather than force bad items.
+            dropped.append(verb["gerund"])
+            continue
         picks = rng.sample(usable, min(per_verb, len(usable)))
         chosen.extend((verb, noun) for noun in picks)
     rng.shuffle(chosen)
@@ -208,7 +212,8 @@ def build(taxonomy_dir, n_items, n_generate, seed):
         # "different event" baseline becomes a "nonsense event" baseline.
         alternatives = [v for v in verbs
                         if v["action_category"] != verb["action_category"]
-                        and is_compatible(v["action_category"], noun["object_sub"])]
+                        and is_compatible(v["action_category"], noun["object_sub"],
+                                          v["gerund"], noun["noun"])]
         other = rng.choice(alternatives) if alternatives else rng.choice(verbs)
 
         item = {
@@ -232,6 +237,8 @@ def build(taxonomy_dir, n_items, n_generate, seed):
             "prog", subject, other["gerund"], noun["noun"], scene
         )
         records.append(item)
+    if dropped:
+        print(f"  dropped verbs (no count-noun objects): {', '.join(sorted(set(dropped)))}")
     return records
 
 

@@ -38,27 +38,58 @@
 
 ---
 
+## 判据：不是"常不常见"，而是"末态定不定义得出来"
+
+想清楚那 7 个边缘条目时才明确下来的，比逐条裁决更有用：
+
+> 评分问的是**"物体有没有到达目标末态"**。
+> 因此**罕见但末态明确**的组合可用；**常见但末态说不清**的组合不可用。
+
+两条支撑：
+
+1. **同 item 内比较**。每个事件的 18 个变体共享同一个动作—物体对，
+   合理性对全部条件影响相同，在组内对比中抵消。**本设计对条目合理性天然稳健**，
+   只要它可被渲染。
+2. **末态未定义则无法打分**。`grating a capsicum` 擦出来是浆不是丝，
+   "擦好了"是什么状态说不出来——这类必须删，即使动作本身可以被渲染。
+
+## 第 4 轮 7 个边缘条目的裁决
+
+**删（3）**
+
+| 条目 | 理由 |
+|---|---|
+| `rolling a biscuit` | `biscuit` 指**成品**，擀的是面团 |
+| `grating a capsicum` | 甜椒壁薄多汁，擦出来是浆不是丝，**末态无定义** |
+| `shredding a tomato` | 同上。番茄可擦泥，但 shred 蕴含成丝，番茄不产生丝状物 |
+
+**留（4）**
+
+| 条目 | 理由 |
+|---|---|
+| `peeling a radish` | 萝卜通常不削皮，但削了就是削了，**末态明确且视觉清楚**。只是低频 |
+| `mincing a pumpkin` | 通常切丁，但 mince 的末态（极碎小块）定义清晰 |
+| `frying a cucumber` | **是真菜**——美国南方炸黄瓜、中式炒黄瓜。activity 类动词，末态为"熟/上色" |
+| `crushing a cucumber` | 拍黄瓜是真实技法（英文菜单作 smashed cucumber），末态视觉极明显 |
+
+## 由这 7 条反推出的两个结构性 bug
+
+`rolling a biscuit` 与 `roasting a cracker` **不是两个坏例子，是同一个 bug**：
+
+| bug | 修法 |
+|---|---|
+| `Carb_Foods` 把**面团阶段**（dough / batter / crust / pastry）与**成品**（bread / biscuit / cracker / tortilla）混在一个子类 | 新增 `FINISHED_BAKED`，从所有塑形与加热动词中屏蔽 |
+| `Fruiting` 子类过宽——番茄、甜椒、茄子、西葫芦、黄瓜、南瓜同列，而"擦丝""挤汁"只对其中一部分成立 | `shredding` / `grating` 去掉 `Fruiting`；`squeezing` 收到仅 `Citrus` |
+
 ## 待人工确认清单（只需看这些）
 
-**明显该删（1）**
+第 5 轮后（37 个事件，动词分布 2/个、语义类 16/11/10）我只想标记一条：
 
-| item | prompt | 问题 |
-|---|---|---|
-| 16 | `A man is roasting a cracker in the kitchen.` | 饼干不烤制，已成品 |
+| prompt | 疑问 |
+|---|---|
+| `A woman is roasting an egg at a market stall.` | 烤蛋存在但少见；烤箱蛋（baked egg）更常说。末态（蛋凝固）明确，**按判据应保留**，但值得母语确认 |
 
-**需要母语判断（7）** —— 我的判断可能有偏，请确认是否保留
-
-| item | prompt | 疑问 |
-|---|---|---|
-| 9 | `rolling a biscuit` | 擀的是饼干**面团**，成品饼干不擀 |
-| 12 | `peeling a radish` | 萝卜通常不削皮 |
-| 18 | `grating a capsicum` | 甜椒质地是否适合擦丝 |
-| 20 | `shredding a tomato` | 番茄常见的是擦泥，不是擦丝 |
-| 31 | `mincing a pumpkin` | 南瓜通常切丁，不剁末 |
-| 82 | `frying a cucumber` | 黄瓜下锅煎炸是否成立 |
-| 4 | `crushing a cucumber` | 拍黄瓜在中餐成立，英语语境是否自然 |
-
-**其余 29 个事件我判定无问题。**
+**其余 36 个我判定可用。** 前几轮被我裁掉的组合已由规则屏蔽，不会再出现。
 
 ## 确认后的处理
 

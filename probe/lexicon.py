@@ -116,21 +116,37 @@ VERB_OBJECT_OVERRIDE = {
     "whipping": {"Eggs"},
     "blending": {"Berries", "Tropical_Melon", "Fruiting", "Pome"},
     "mashing": {"Root", "Tropical_Melon", "Plant", "Pome"},
-    "squeezing": {"Citrus", "Fruiting"},   # not bananas
-    "shredding": {"Root", "Fruiting", "Cruciferous"},
+    # Fruiting is too broad for this verb -- it holds squash, capsicum and
+    # eggplant alongside tomato. Squeezing needs something juicy, so citrus only.
+    "squeezing": {"Citrus"},
+    # Fruiting flesh (capsicum, tomato) grates to pulp rather than shreds, so the
+    # target state the annotation asks about is undefined.
+    "shredding": {"Root", "Cruciferous"},
     "crushing": {"Bulb", "Fruiting", "Nuts_Seeds", "Herbs_Spices", "Berries"},
     "rolling": {"Carb_Foods"},
     # Grating alliums and herbs is not a thing; the second triage pass produced
     # "grating a scallion".
-    "grating": {"Root", "Fruiting", "Cruciferous", "Citrus", "Cheeses"},
+    "grating": {"Root", "Cruciferous", "Citrus", "Cheeses"},
     # Grilling pastry is not a thing; baking and frying are.
     "grilling": {"Leafy", "Root", "Bulb", "Stem_Stalk", "Fruiting", "Cruciferous",
                  "Mushroom", "Meat", "Processed_Meat", "Seafood", "Plant"},
 }
 
+# Carb_Foods mixes dough-stage items with finished baked goods, and shaping or
+# cooking verbs only apply to the former. Triage turned up "rolling a biscuit"
+# and "roasting a cracker" as instances of this one bug, not two bad items.
+FINISHED_BAKED = {"bread", "biscuit", "cracker", "tortilla", "cooky", "oreo"}
+
 # Objects a specific verb cannot take even though the subcategory is allowed.
 # Hard-shelled or fibrous items pass the category rule but fail in the kitchen.
 VERB_OBJECT_BLOCK = {
+    # Shaping and cooking verbs take the dough, not the finished item.
+    "rolling": FINISHED_BAKED,
+    "roasting": FINISHED_BAKED,
+    "grilling": FINISHED_BAKED,
+    "frying": FINISHED_BAKED,
+    "sauteing": FINISHED_BAKED,
+    "browning": FINISHED_BAKED,
     "mashing": {"coconut"},
     "squeezing": {"coconut", "pineapple"},
     "chopping": {"coconut"},

@@ -230,6 +230,9 @@ def build(taxonomy_dir, n_items, n_generate, seed):
             "subject": subject,
             "scene": scene,
             "other_verb_gerund": other["gerund"],
+            # Needed for the known-negative probe: this video cannot have
+            # reached the other verb's target state.
+            "other_verb_base": VERB_FORMS[other["gerund"]][0],
             "in_generation_subset": idx in gen_ids,
             "human_verified": False,   # flipped by the review pass; see --review-out
             "texts": {},

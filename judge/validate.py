@@ -1,28 +1,27 @@
-"""Establish the judge's reliability without a single human label.
+"""What can be established about this evaluator with no human labels, and what cannot.
 
-The trick is that some of our conditions have answers that follow from what the
-sentences mean. `paraphrase_min` swaps one preposition; `filler` appends a
-clause about the footage. Neither says anything different about the object, so
-whatever is true of `prog` is true of them. Nobody has to be asked.
+Four numbers, and they are not all the same kind of number:
 
-That gives an agreement rate -- but a raw agreement rate confounds two things:
+  1. RELIABILITY   the same video judged twice. Pure judge property.
+  2. SPECIFICITY   videos judged against a target state they cannot have
+                   reached. The answer is 'no' by construction, so this is a
+                   real accuracy measurement -- with no labels, because the
+                   ground truth comes from having chosen the wrong verb.
+  3. INSTABILITY   control conditions that mean the same thing. NOT a judge
+                   check: those are different videos, and the pilot showed one
+                   preposition visibly moving the scene, so disagreement may be
+                   the judge being right. Once judge noise is subtracted this
+                   measures the VIDEO MODEL, and it sets the floor every aspect
+                   effect has to clear.
+  4. ACTION RATE   the first-level result: is the event rendered at all.
 
-    disagreement(prog, paraphrase_min) = judge noise + video-model instability
-
-The pilot already showed the second term is not zero: one preposition visibly
-moved the scene. So the judge is run twice over the same videos, and the
-test-retest disagreement isolates the first term:
-
-    judge noise            = disagreement(pass 1, pass 2) on identical videos
-    model instability      = control disagreement - judge noise
-
-Both numbers are reportable results. The first is the validity section that
-human evaluation would otherwise have to provide; the second is a finding about
-the models, and it sets the floor every aspect effect has to clear.
-
-`MUST_DIFFER` guards the other direction: a judge that answers "yes" to
-everything would score perfectly on agreement. `other_verb` shows a different
-action, so the item's target state cannot have been reached.
+  SENSITIVITY is missing, and cannot be had this way. Nothing in the design
+  certifies that a given video does reach its target state, so there is no
+  source of known positives. What follows is that the defensible claims are
+  about differences between conditions under a judge of known reliability and
+  specificity -- not about absolute achievement rates. A manually verified
+  subsample is the cheapest way to close that gap; it is a paragraph of work,
+  not an annotation effort.
 
 Usage:
     python validate.py --judgments /data/frames/wan2.2-ti2v-5b-480p/judgments.jsonl
@@ -41,18 +40,30 @@ from criteria import MUST_AGREE, MUST_DIFFER, QUESTIONS  # noqa: E402
 QUESTION_IDS = tuple(QUESTIONS)
 
 
-def load(path):
+def load(path, probe="target"):
     """(item, condition, seed, pass) -> {question: answer}, ok rows only."""
     out = {}
     for line in path.read_text().splitlines():
         if not line.strip():
             continue
         r = json.loads(line)
-        if r.get("status") != "ok":
+        if r.get("status") != "ok" or r.get("probe", "target") != probe:
             continue
         key = (r["item_id"], r["condition"], r["seed"], r["pass"])
         out[key] = {q: r[q]["answer"] for q in QUESTION_IDS if q in r}
     return out
+
+
+def specificity(negatives):
+    """Known negatives: every one of these should answer 'no' on `final`."""
+    correct = total = unclear = 0
+    for answers in negatives.values():
+        if "final" not in answers:
+            continue
+        total += 1
+        correct += answers["final"] == "no"
+        unclear += answers["final"] == "unclear"
+    return correct, unclear, total
 
 
 def rate(matches, total):
@@ -109,10 +120,12 @@ def main():
     args = ap.parse_args()
 
     judged = load(args.judgments)
+    negatives = load(args.judgments, probe="known_negative")
     if not judged:
         raise SystemExit(f"no successful judgments in {args.judgments}")
     passes = sorted({k[3] for k in judged})
-    print(f"{len(judged)} judgments, passes {passes}\n")
+    print(f"{len(judged)} judgments, passes {passes}, "
+          f"{len(negatives)} known-negative probes\n")
 
     print("=" * 66)
     print("1. judge noise -- same video judged twice")
@@ -151,6 +164,22 @@ def main():
                 instability = (1 - m / t) - noise[q]
                 line += f"   -> model instability {max(instability, 0):.3f}"
             print(line)
+
+    print()
+    print("=" * 66)
+    print("2b. specificity -- videos judged against a state they cannot reach")
+    print("=" * 66)
+    if not negatives:
+        print("  not measured: run judge.py with --known-negative")
+    else:
+        correct, unclear, total = specificity(negatives)
+        print(f"  answered 'no' on final: {rate(correct, total)}"
+              f"   ({unclear} 'unclear')")
+        print("  Ground truth here is known in advance -- the video shows a "
+              "different action.\n  This is the one accuracy number obtainable "
+              "without labels. Sensitivity\n  is not: there are no known "
+              "positives, so absolute achievement rates stay\n  uncalibrated "
+              "and only between-condition differences are safe to claim.")
 
     print()
     print("=" * 66)

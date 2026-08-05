@@ -76,12 +76,18 @@ def parse_answer(raw):
     return out
 
 
-def judge_one(client, model, job, item, max_frames, max_tokens):
+def judge_one(client, model, job, item, max_frames, max_tokens,
+              known_negative=False):
     frames = sorted(job["frames"].glob("frame_*.jpg"))[:max_frames]
     if not frames:
         raise FileNotFoundError(f"no frames in {job['frames']}")
 
-    prompt = build_prompt(item["verb_base"], item["noun"], len(frames))
+    # The known-negative probe asks the same video about the OTHER verb's target
+    # state. A grating video has not been "cut into very fine pieces", so the
+    # answer is no in advance -- for every video already on disk, which is what
+    # makes specificity measurable without labelling anything.
+    verb = item["other_verb_base"] if known_negative else item["verb_base"]
+    prompt = build_prompt(verb, item["noun"], len(frames))
 
     content = [{"type": "text", "text": prompt}]
     content += [{"type": "image_url", "image_url": {"url": encode(f)}} for f in frames]
@@ -93,18 +99,18 @@ def judge_one(client, model, job, item, max_frames, max_tokens):
         max_completion_tokens=max_tokens,
     )
     text = resp.choices[0].message.content
-    return parse_answer(json.loads(text)), len(frames), resp
+    return parse_answer(json.loads(text)), len(frames), verb, resp
 
 
-def done_keys(out_path):
-    """(item, condition, seed, pass) already judged."""
+def done_keys(out_path, probe):
+    """(item, condition, seed, pass) already judged under this probe."""
     done = set()
     if not out_path.exists():
         return done
     for line in out_path.read_text().splitlines():
         if line.strip():
             r = json.loads(line)
-            if r.get("status") == "ok":
+            if r.get("status") == "ok" and r.get("probe", "target") == probe:
                 done.add((r["item_id"], r["condition"], r["seed"], r["pass"]))
     return done
 
@@ -127,6 +133,10 @@ def main():
                     help="judge every video N times; pass 2 to measure "
                          "test-retest reliability, which is what separates "
                          "judge noise from video-model instability")
+    ap.add_argument("--known-negative", action="store_true",
+                    help="judge each video against the OTHER verb's target "
+                         "state, whose answer is 'no' by construction. This is "
+                         "how specificity is measured without any labels")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--base-url", default=os.environ.get("JUDGE_BASE_URL"))
     ap.add_argument("--dry-run", action="store_true",
@@ -139,8 +149,9 @@ def main():
         raise SystemExit(f"no frame folders under {args.frames}")
     jobs = [j for j in jobs if j["item_id"] in items]
 
+    probe = "known_negative" if args.known_negative else "target"
     out_path = args.out or args.frames / "judgments.jsonl"
-    already = done_keys(out_path)
+    already = done_keys(out_path, probe)
     todo = [dict(j, **{"pass": p}) for j in jobs for p in range(1, args.repeat + 1)
             if (j["item_id"], j["condition"], j["seed"], p) not in already]
     if args.limit:
@@ -155,7 +166,8 @@ def main():
         n = len(list(j["frames"].glob("frame_*.jpg"))[:args.max_frames])
         print(f"\n--- prompt for item{j['item_id']:04d} {j['condition']} "
               f"({n} frames) ---")
-        print(build_prompt(item["verb_base"], item["noun"], n))
+        verb = item["other_verb_base"] if args.known_negative else item["verb_base"]
+        print(build_prompt(verb, item["noun"], n))
         return
 
     from openai import OpenAI  # noqa: PLC0415
@@ -167,15 +179,17 @@ def main():
         for n, job in enumerate(todo, 1):
             item = items[job["item_id"]]
             rec = {"item_id": job["item_id"], "condition": job["condition"],
-                   "seed": job["seed"], "pass": job["pass"],
+                   "seed": job["seed"], "pass": job["pass"], "probe": probe,
                    "gerund": item["gerund"], "noun": item["noun"],
                    "aspectual_class": item["aspectual_class"],
                    "judge_model": args.model}
             try:
-                answers, n_frames, resp = judge_one(
-                    client, args.model, job, item, args.max_frames, args.max_tokens)
+                answers, n_frames, verb, resp = judge_one(
+                    client, args.model, job, item, args.max_frames,
+                    args.max_tokens, args.known_negative)
                 usage = getattr(resp, "usage", None)
-                rec.update(status="ok", n_frames=n_frames, **answers)
+                rec.update(status="ok", n_frames=n_frames, judged_verb=verb,
+                           **answers)
                 if usage is not None:
                     rec["usage"] = usage.model_dump()
             except Exception as exc:  # one bad video must not kill the batch

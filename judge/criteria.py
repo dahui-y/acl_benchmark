@@ -13,10 +13,14 @@ be, because our conditions differ precisely in the prompt.
 
 **The questions are binary and anchored to a stated end state.** Not a 1-5
 Likert on eight dimensions -- three yes/no questions against a written
-definition of what "done" looks like for this verb. That is what lets the
-control conditions carry ground truth: `paraphrase_min` must get the same
-answers as `prog`, and any judge that disagrees with itself there is measurably
-unreliable, with no annotator involved.
+definition of what "done" looks like for this verb. Two Likert scores "ought to
+match" is not a checkable claim; two yes/no answers are, which is what lets
+conditions carry answers derived from meaning rather than from annotators.
+
+What this establishes, and what it does not: reliability (the same video judged
+twice) and specificity (a video judged against a target state it cannot have
+reached) are both measurable with no labels at all. Sensitivity is not -- see
+KNOWN_NEGATIVE at the bottom of this file.
 """
 
 # The state the object is in once the event culminates. Written to be checkable
@@ -110,11 +114,16 @@ def build_prompt(verb_base, noun, n_frames):
     )
 
 
-# Pairs of conditions whose judgments MUST match, and why. This is where the
-# ground truth comes from: it is derived from what the sentences mean, not from
-# what anyone was asked. A judge that answers these pairs differently is
-# unreliable by construction -- but so is a video model that renders them
-# differently, so the two have to be separated (see validate.py).
+# Pairs of conditions whose judgments MUST match, and why -- derived from what
+# the sentences mean rather than from what anyone was asked.
+#
+# Careful about what this measures. These are different videos: the pilot showed
+# one preposition visibly moving the scene. So when the judge answers them
+# differently it may be answering correctly. What this rate measures is
+# therefore VIDEO-MODEL INSTABILITY, once judge noise (test-retest) is
+# subtracted -- it is not a validity check on the judge. Judge validity comes
+# from test-retest (reliability) and from the known negatives below
+# (specificity).
 MUST_AGREE = [
     ("prog", "paraphrase_min", "one preposition swapped; truth-conditionally identical"),
     ("prog", "filler", "a length-matched clause added; says nothing about the object"),
@@ -129,3 +138,22 @@ MUST_AGREE = [
 MUST_DIFFER = [
     ("prog", "other_verb", "final", "a different action cannot reach this target state"),
 ]
+
+# Known negatives, and the honest limit of what this design can establish.
+#
+# Ask a video about a target state it cannot have reached -- a grating video
+# judged against "cut into very fine pieces" -- and the answer is no, known in
+# advance, for every video we already have. That turns specificity into a
+# measurement over dozens of cells instead of the single MUST_DIFFER cell, at
+# the cost of one extra call per video and no extra generation.
+#
+# The asymmetry is real and belongs in the limitations: there is no source of
+# known POSITIVES here. Nothing in the design certifies that a particular video
+# does reach its target state, so sensitivity cannot be established without
+# either external labelled video or a manually verified subsample. What follows
+# is that the defensible claims are about differences between conditions under a
+# judge of known reliability and specificity -- not about absolute rates.
+KNOWN_NEGATIVE = (
+    "judge each video against the OTHER verb's target state; the answer is "
+    "no by construction"
+)

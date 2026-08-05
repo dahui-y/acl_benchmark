@@ -173,6 +173,13 @@ def pairwise(judged, cond_a, cond_b, judge_pass=1):
     return per_q, pairs
 
 
+def disagreement_on(judged, cond_a, cond_b, question, restrict, judge_pass=1):
+    """disagreement() over a restricted item set."""
+    d = per_item_disagreement(judged, cond_a, cond_b, question, judge_pass,
+                              restrict=restrict)
+    return (sum(d.values()) / len(d), len(d)) if d else (None, 0)
+
+
 def disagreement(judged, cond_a, cond_b, question, judge_pass=1):
     """Fraction of items where the two conditions get different answers."""
     per_q, _ = pairwise(judged, cond_a, cond_b, judge_pass)
@@ -180,11 +187,27 @@ def disagreement(judged, cond_a, cond_b, question, judge_pass=1):
     return (1 - m / t, t) if t else (None, 0)
 
 
-def per_item_disagreement(judged, cond_a, cond_b, question, judge_pass=1):
+def executed_items(judged, judge_pass=1, condition="prog"):
+    """Items where the baseline condition actually shows the action.
+
+    The culmination question is only askable where there is a process: an item
+    whose `prog` video never performs the action carries no information about
+    whether the event reaches its endpoint. Averaging the aspect effect over
+    those items dilutes the informative ones with noise, and at a 24% execution
+    rate that is most of the sample."""
+    return {item for (item, cond, _seed, p), answers in judged.items()
+            if cond == condition and p == judge_pass
+            and answers.get("action") == "yes"}
+
+
+def per_item_disagreement(judged, cond_a, cond_b, question, judge_pass=1,
+                          restrict=None):
     """item -> 1 if the two conditions disagree on this question, else 0."""
     out = {}
     for (item, cond, seed, p), answers in judged.items():
         if cond != cond_a or p != judge_pass or question not in answers:
+            continue
+        if restrict is not None and item not in restrict:
             continue
         other = judged.get((item, cond_b, seed, p))
         if other is None or question not in other:
@@ -193,7 +216,8 @@ def per_item_disagreement(judged, cond_a, cond_b, question, judge_pass=1):
     return out
 
 
-def ratio_ci(judged, condition, floor_condition, question, n_boot=4000, seed=0):
+def ratio_ci(judged, condition, floor_condition, question, n_boot=4000, seed=0,
+             restrict=None):
     """Bootstrap CI for effect/floor, resampling ITEMS.
 
     A point ratio of 1.4 is not a result. The two disagreement rates are
@@ -203,8 +227,8 @@ def ratio_ci(judged, condition, floor_condition, question, n_boot=4000, seed=0):
     not been shown to move the video more than a meaning-preserving reword."""
     import random  # noqa: PLC0415
 
-    eff = per_item_disagreement(judged, "prog", condition, question)
-    flo = per_item_disagreement(judged, "prog", floor_condition, question)
+    eff = per_item_disagreement(judged, "prog", condition, question, restrict=restrict)
+    flo = per_item_disagreement(judged, "prog", floor_condition, question, restrict=restrict)
     items = sorted(set(eff) & set(flo))
     if len(items) < 5:
         return None
@@ -394,6 +418,38 @@ def main():
               "detectable aspect effect.\n  Read the interval, not the point "
               "estimate: with a few dozen items a\n  ratio of 1.4 is entirely "
               "compatible with 1.")
+
+    executed = executed_items(judged)
+    if executed and any_rows:
+        print()
+        print("=" * 66)
+        print(f"4c. same, restricted to the {len(executed)} items whose `prog` "
+              f"shows the action")
+        print("=" * 66)
+        print("  Where the action never happens there is no process, so nothing "
+              "for an\n  endpoint to be the end of. Those items can only dilute "
+              "the effect.")
+        for q in QUESTION_IDS:
+            floor, n_floor = disagreement_on(judged, "prog", "paraphrase_min",
+                                             q, executed)
+            if floor is None:
+                continue
+            print(f"  {q}   floor = {floor:.3f} (n={n_floor})")
+            for cond in sorted({k[1] for k in judged} - {"prog", "paraphrase_min"}):
+                effect, n = disagreement_on(judged, "prog", cond, q, executed)
+                if effect is None or not floor:
+                    continue
+                line = (f"    prog vs {cond:16s} {effect:.3f} (n={n})"
+                        f"   ratio {effect / floor:.2f}")
+                ci = ratio_ci(judged, cond, "paraphrase_min", q, restrict=executed)
+                if ci:
+                    lo, hi, _ = ci
+                    line += f"  95% CI [{lo:.2f}, {hi:.2f}]"
+                print(line)
+        print("\n  With this few items the intervals will be wide. The point is "
+              "the\n  direction and whether it justifies raising the execution "
+              "rate, which is\n  what dropping the market-stall scene and "
+              "screening the full suite do.")
 
     if len(models) > 1:
         print()

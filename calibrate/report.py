@@ -65,18 +65,27 @@ def counts_at(rows, thr):
 
 
 def sweep(rows, thresholds):
+    """Pick the operating threshold by N-vs-1 separation, not exact match.
+
+    Separation is the declared primary criterion, and the two do not peak at the
+    same place: exact match rewards getting the absolute number right, while the
+    benchmark only ever needs the distributive reading's count to come out above
+    the collective one's. Choosing by exact match would hand the route a worse
+    operating point than the one it actually runs at.
+    """
     print(f"{'thr':>6}{'exact':>8}{'±1':>8}{'kappa':>9}{'kappa_w':>9}"
-          f"{'mean err':>10}")
+          f"{'mean err':>10}{'N-vs-1':>9}")
     best = None
     for t in thresholds:
         pairs = counts_at(rows, t)
         exact = sum(a == b for a, b in pairs) / len(pairs)
         near = sum(abs(a - b) <= 1 for a, b in pairs) / len(pairs)
         bias = sum(b - a for a, b in pairs) / len(pairs)
+        sep = discrimination(rows, t, quiet=True)
         print(f"{t:>6.2f}{exact:>8.3f}{near:>8.3f}{kappa(pairs):>9.3f}"
-              f"{kappa(pairs, True):>9.3f}{bias:>+10.2f}")
-        if best is None or exact > best[1]:
-            best = (t, exact)
+              f"{kappa(pairs, True):>9.3f}{bias:>+10.2f}{sep:>9.3f}")
+        if best is None or sep > best[1]:
+            best = (t, sep)
     return best[0]
 
 
@@ -95,7 +104,7 @@ def by_band(rows, thr, key, label, min_n=1):
         print(f"{str(k):<15}{len(pairs):>5}{exact:>8.3f}{near:>8.3f}{mean:>11.2f}")
 
 
-def discrimination(rows, thr):
+def discrimination(rows, thr, quiet=False, classes=None, bands=None):
     """The decision the benchmark actually makes: is this image's count N or 1?
 
     Every distributive item pairs an entailed count of N against a collective
@@ -107,17 +116,20 @@ def discrimination(rows, thr):
     """
     by_class = defaultdict(lambda: defaultdict(list))
     for r, (g, p) in zip(rows, counts_at(rows, thr)):
+        if classes and r["class"] not in classes:
+            continue
         by_class[r["class"]][g].append(p)
 
-    print(f"\nN-vs-1 separation at thr={thr:.2f}  "
-          f"(ordered / tied / reversed, ties count against us)")
-    print(f"{'N':>3}{'pairs':>8}{'ordered':>10}{'tied':>8}{'reversed':>10}")
+    if not quiet:
+        print(f"\nN-vs-1 separation at thr={thr:.2f}  "
+              f"(ordered / tied / reversed, ties count against us)")
+        print(f"{'N':>3}{'pairs':>8}{'ordered':>10}{'tied':>8}{'reversed':>10}")
     totals = defaultdict(lambda: [0, 0, 0])
-    for n in range(2, 7):
+    for n in sorted(bands or range(2, 7)):
         ok = tie = rev = 0
-        for cls, bands in by_class.items():
-            for hi in bands.get(n, []):
-                for lo in bands.get(1, []):
+        for counts in by_class.values():
+            for hi in counts.get(n, []):
+                for lo in counts.get(1, []):
                     if hi > lo:
                         ok += 1
                     elif hi == lo:
@@ -128,13 +140,42 @@ def discrimination(rows, thr):
         if not tot:
             continue
         totals[n] = [ok, tie, rev]
-        print(f"{n:>3}{tot:>8}{ok / tot:>10.3f}{tie / tot:>8.3f}{rev / tot:>10.3f}")
+        if not quiet:
+            print(f"{n:>3}{tot:>8}{ok / tot:>10.3f}{tie / tot:>8.3f}"
+                  f"{rev / tot:>10.3f}")
     grand = [sum(v[i] for v in totals.values()) for i in range(3)]
     tot = sum(grand)
-    if tot:
+    if tot and not quiet:
         print(f"{'all':>3}{tot:>8}{grand[0] / tot:>10.3f}"
               f"{grand[1] / tot:>8.3f}{grand[2] / tot:>10.3f}")
     return grand[0] / tot if tot else float("nan")
+
+
+def per_class_screen(rows, thr, bands, floor):
+    """Which classes separate N from 1 well enough to be usable.
+
+    Post-hoc, and labelled as such wherever it is reported. The pre-registered
+    criterion is the pooled number; this only says what a screened suite would
+    look like, and a screen chosen on the same data it is evaluated on is
+    optimistic by construction. Whether the classes it keeps survive on a fresh
+    sample is a separate question that this cannot answer.
+    """
+    names = sorted({r["class"] for r in rows})
+    kept = []
+    print(f"\nper-class N-vs-1 at thr={thr:.2f}, N in {sorted(bands)}"
+          f"  (POST-HOC screen, floor {floor:.2f})")
+    for name in names:
+        sep = discrimination(rows, thr, quiet=True, classes={name}, bands=bands)
+        if sep == sep:  # not nan
+            mark = "keep" if sep >= floor else ""
+            print(f"  {name:<15}{sep:>7.3f}  {mark}")
+            if sep >= floor:
+                kept.append(name)
+    pooled = discrimination(rows, thr, quiet=True, classes=set(kept),
+                            bands=bands)
+    print(f"\n  {len(kept)}/{len(names)} classes kept; pooled separation over "
+          f"the kept set: {pooled:.3f}  (POST-HOC)")
+    return kept, pooled
 
 
 def confusion(rows, thr, cap=6):
@@ -150,6 +191,84 @@ def confusion(rows, thr, cap=6):
         print(f"{g:>4}: " + "".join(f"{m[g][c]:>6}" for c in cols))
 
 
+def bootstrap(rows, thr, bands=None, iters=2000, seed=0):
+    """Cluster bootstrap over CELLS for the separation rate and for kappa.
+
+    Resampling pairs would badly understate the uncertainty: each cell enters
+    many pairs, so the 624 pairs come from 415 cells and are nowhere near
+    independent. Cells are the unit that was sampled from COCO, so cells are the
+    unit resampled here.
+
+    Worth the trouble because the pre-registered cut-off sits within a hundredth
+    of the point estimate, and a decision that close should not be made on a
+    number without an interval around it.
+    """
+    import random  # noqa: PLC0415
+    rng = random.Random(seed)
+    sep, kap, exact = [], [], []
+    for _ in range(iters):
+        draw = [rows[rng.randrange(len(rows))] for _ in range(len(rows))]
+        s = discrimination(draw, thr, quiet=True, bands=bands)
+        if s == s:
+            sep.append(s)
+        pairs = counts_at(draw, thr)
+        kap.append(kappa(pairs, True))
+        exact.append(sum(a == b for a, b in pairs) / len(pairs))
+
+    def ci(xs):
+        xs = sorted(x for x in xs if x == x)
+        return xs[int(0.025 * len(xs))], xs[int(0.975 * len(xs))]
+
+    band_txt = f"N in {sorted(bands)}" if bands else "N in 2..5"
+    print(f"\nbootstrap over cells at thr={thr:.2f}, {band_txt}, "
+          f"{iters} resamples")
+    for name, xs, point in (("N-vs-1 separation", sep,
+                             discrimination(rows, thr, quiet=True, bands=bands)),
+                            ("kappa (weighted)", kap,
+                             kappa(counts_at(rows, thr), True)),
+                            ("exact match", exact,
+                             sum(a == b for a, b in counts_at(rows, thr))
+                             / len(rows))):
+        lo, hi = ci(xs)
+        print(f"  {name:<20}{point:.3f}   95% CI [{lo:.3f}, {hi:.3f}]")
+    return ci(sep)
+
+
+def held_out_screen(rows, thr, bands, floor):
+    """Screen classes on one half of the cells, score separation on the other.
+
+    The in-sample screen reports 1.000 and means nothing: with a handful of
+    pairs per class, picking the classes that scored well and then scoring those
+    same pairs measures only that the selection worked on the data it selected
+    from. Splitting first gives a number that can actually be believed -- the
+    classes are chosen without ever seeing the cells they are judged on.
+
+    The split alternates within each (class, count) group, so both halves keep
+    the same class and count composition and neither ends up with a class's easy
+    images only.
+    """
+    groups = defaultdict(list)
+    for r in rows:
+        groups[(r["class"], r["gold"])].append(r)
+    a, b = [], []
+    for key in sorted(groups):
+        for i, r in enumerate(sorted(groups[key], key=lambda x: x["image_id"])):
+            (a if i % 2 == 0 else b).append(r)
+
+    names = sorted({r["class"] for r in rows})
+    kept = [n for n in names
+            if (discrimination(a, thr, quiet=True, classes={n}, bands=bands)
+                or 0) >= floor]
+    scored = discrimination(b, thr, quiet=True, classes=set(kept), bands=bands)
+    unscreened = discrimination(b, thr, quiet=True, bands=bands)
+    print(f"\nheld-out screen at thr={thr:.2f}, N in {sorted(bands)}, "
+          f"floor {floor:.2f}")
+    print(f"  classes chosen on half A: {len(kept)}/{len(names)}")
+    print(f"  separation on half B, screened  : {scored:.3f}")
+    print(f"  separation on half B, unscreened: {unscreened:.3f}")
+    return kept, scored
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pred", type=Path, nargs="+", required=True)
@@ -157,6 +276,10 @@ def main():
                     default=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95])
     ap.add_argument("--thr", type=float, default=None,
                     help="report at this threshold instead of the sweep's best")
+    ap.add_argument("--screen", action="store_true",
+                    help="add the post-hoc per-class screen")
+    ap.add_argument("--screen-bands", type=int, nargs="+", default=[3, 4, 5])
+    ap.add_argument("--screen-floor", type=float, default=0.95)
     args = ap.parse_args()
 
     for path in args.pred:
@@ -170,11 +293,18 @@ def main():
         best = sweep(rows, args.thresholds)
         thr = args.thr if args.thr is not None else best
         print(f"\noperating threshold: {thr:.2f}"
-              + ("" if args.thr is not None else "  (best exact-match)"))
+              + ("" if args.thr is not None else "  (best N-vs-1 separation)"))
         confusion(rows, thr)
         by_band(rows, thr, "gold", "gold count")
         by_band(rows, thr, "class", "class", min_n=5)
         discrimination(rows, thr)
+        bootstrap(rows, thr)
+        bootstrap(rows, thr, bands={3, 4, 5})
+        if args.screen:
+            per_class_screen(rows, thr, set(args.screen_bands),
+                             args.screen_floor)
+            held_out_screen(rows, thr, set(args.screen_bands),
+                            args.screen_floor)
 
 
 if __name__ == "__main__":

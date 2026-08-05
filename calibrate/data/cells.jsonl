@@ -1,0 +1,415 @@
+{"image_id": 2149, "file_name": "000000002149.jpg", "class": "apple", "gold": 1}
+{"image_id": 2587, "file_name": "000000002587.jpg", "class": "banana", "gold": 1}
+{"image_id": 632, "file_name": "000000000632.jpg", "class": "bed", "gold": 1}
+{"image_id": 32811, "file_name": "000000032811.jpg", "class": "bird", "gold": 1}
+{"image_id": 22371, "file_name": "000000022371.jpg", "class": "book", "gold": 1}
+{"image_id": 26564, "file_name": "000000026564.jpg", "class": "bottle", "gold": 1}
+{"image_id": 1425, "file_name": "000000001425.jpg", "class": "bowl", "gold": 1}
+{"image_id": 15278, "file_name": "000000015278.jpg", "class": "broccoli", "gold": 1}
+{"image_id": 2157, "file_name": "000000002157.jpg", "class": "cake", "gold": 1}
+{"image_id": 7991, "file_name": "000000007991.jpg", "class": "carrot", "gold": 1}
+{"image_id": 1675, "file_name": "000000001675.jpg", "class": "cat", "gold": 1}
+{"image_id": 1296, "file_name": "000000001296.jpg", "class": "cell phone", "gold": 1}
+{"image_id": 632, "file_name": "000000000632.jpg", "class": "chair", "gold": 1}
+{"image_id": 31749, "file_name": "000000031749.jpg", "class": "clock", "gold": 1}
+{"image_id": 3934, "file_name": "000000003934.jpg", "class": "couch", "gold": 1}
+{"image_id": 14888, "file_name": "000000014888.jpg", "class": "cow", "gold": 1}
+{"image_id": 2592, "file_name": "000000002592.jpg", "class": "cup", "gold": 1}
+{"image_id": 139, "file_name": "000000000139.jpg", "class": "dining table", "gold": 1}
+{"image_id": 7386, "file_name": "000000007386.jpg", "class": "dog", "gold": 1}
+{"image_id": 2587, "file_name": "000000002587.jpg", "class": "donut", "gold": 1}
+{"image_id": 6894, "file_name": "000000006894.jpg", "class": "elephant", "gold": 1}
+{"image_id": 3845, "file_name": "000000003845.jpg", "class": "fork", "gold": 1}
+{"image_id": 9378, "file_name": "000000009378.jpg", "class": "frisbee", "gold": 1}
+{"image_id": 17031, "file_name": "000000017031.jpg", "class": "giraffe", "gold": 1}
+{"image_id": 12748, "file_name": "000000012748.jpg", "class": "horse", "gold": 1}
+{"image_id": 9914, "file_name": "000000009914.jpg", "class": "hot dog", "gold": 1}
+{"image_id": 7784, "file_name": "000000007784.jpg", "class": "kite", "gold": 1}
+{"image_id": 2592, "file_name": "000000002592.jpg", "class": "knife", "gold": 1}
+{"image_id": 1503, "file_name": "000000001503.jpg", "class": "laptop", "gold": 1}
+{"image_id": 15497, "file_name": "000000015497.jpg", "class": "mouse", "gold": 1}
+{"image_id": 6614, "file_name": "000000006614.jpg", "class": "orange", "gold": 1}
+{"image_id": 785, "file_name": "000000000785.jpg", "class": "person", "gold": 1}
+{"image_id": 17714, "file_name": "000000017714.jpg", "class": "pizza", "gold": 1}
+{"image_id": 14038, "file_name": "000000014038.jpg", "class": "potted plant", "gold": 1}
+{"image_id": 21503, "file_name": "000000021503.jpg", "class": "remote", "gold": 1}
+{"image_id": 1425, "file_name": "000000001425.jpg", "class": "sandwich", "gold": 1}
+{"image_id": 154213, "file_name": "000000154213.jpg", "class": "scissors", "gold": 1}
+{"image_id": 8690, "file_name": "000000008690.jpg", "class": "sheep", "gold": 1}
+{"image_id": 3845, "file_name": "000000003845.jpg", "class": "spoon", "gold": 1}
+{"image_id": 12062, "file_name": "000000012062.jpg", "class": "sports ball", "gold": 1}
+{"image_id": 12670, "file_name": "000000012670.jpg", "class": "teddy bear", "gold": 1}
+{"image_id": 160666, "file_name": "000000160666.jpg", "class": "toothbrush", "gold": 1}
+{"image_id": 1503, "file_name": "000000001503.jpg", "class": "tv", "gold": 1}
+{"image_id": 7088, "file_name": "000000007088.jpg", "class": "umbrella", "gold": 1}
+{"image_id": 7818, "file_name": "000000007818.jpg", "class": "vase", "gold": 1}
+{"image_id": 2431, "file_name": "000000002431.jpg", "class": "wine glass", "gold": 1}
+{"image_id": 125211, "file_name": "000000125211.jpg", "class": "zebra", "gold": 1}
+{"image_id": 6614, "file_name": "000000006614.jpg", "class": "apple", "gold": 1}
+{"image_id": 3661, "file_name": "000000003661.jpg", "class": "banana", "gold": 1}
+{"image_id": 776, "file_name": "000000000776.jpg", "class": "bed", "gold": 1}
+{"image_id": 46378, "file_name": "000000046378.jpg", "class": "bird", "gold": 1}
+{"image_id": 25603, "file_name": "000000025603.jpg", "class": "book", "gold": 1}
+{"image_id": 27620, "file_name": "000000027620.jpg", "class": "bottle", "gold": 1}
+{"image_id": 2149, "file_name": "000000002149.jpg", "class": "bowl", "gold": 1}
+{"image_id": 19221, "file_name": "000000019221.jpg", "class": "broccoli", "gold": 1}
+{"image_id": 13597, "file_name": "000000013597.jpg", "class": "cake", "gold": 1}
+{"image_id": 105014, "file_name": "000000105014.jpg", "class": "carrot", "gold": 1}
+{"image_id": 4795, "file_name": "000000004795.jpg", "class": "cat", "gold": 1}
+{"image_id": 16598, "file_name": "000000016598.jpg", "class": "cell phone", "gold": 1}
+{"image_id": 4495, "file_name": "000000004495.jpg", "class": "chair", "gold": 1}
+{"image_id": 36494, "file_name": "000000036494.jpg", "class": "clock", "gold": 1}
+{"image_id": 4495, "file_name": "000000004495.jpg", "class": "couch", "gold": 1}
+{"image_id": 52565, "file_name": "000000052565.jpg", "class": "cow", "gold": 1}
+{"image_id": 3661, "file_name": "000000003661.jpg", "class": "cup", "gold": 1}
+{"image_id": 1993, "file_name": "000000001993.jpg", "class": "dining table", "gold": 1}
+{"image_id": 17029, "file_name": "000000017029.jpg", "class": "dog", "gold": 1}
+{"image_id": 38678, "file_name": "000000038678.jpg", "class": "donut", "gold": 1}
+{"image_id": 21903, "file_name": "000000021903.jpg", "class": "elephant", "gold": 1}
+{"image_id": 8277, "file_name": "000000008277.jpg", "class": "fork", "gold": 1}
+{"image_id": 17029, "file_name": "000000017029.jpg", "class": "frisbee", "gold": 1}
+{"image_id": 55072, "file_name": "000000055072.jpg", "class": "giraffe", "gold": 1}
+{"image_id": 15956, "file_name": "000000015956.jpg", "class": "horse", "gold": 1}
+{"image_id": 17899, "file_name": "000000017899.jpg", "class": "hot dog", "gold": 1}
+{"image_id": 14439, "file_name": "000000014439.jpg", "class": "kite", "gold": 1}
+{"image_id": 9914, "file_name": "000000009914.jpg", "class": "knife", "gold": 1}
+{"image_id": 4795, "file_name": "000000004795.jpg", "class": "laptop", "gold": 1}
+{"image_id": 21503, "file_name": "000000021503.jpg", "class": "mouse", "gold": 1}
+{"image_id": 45472, "file_name": "000000045472.jpg", "class": "orange", "gold": 1}
+{"image_id": 1490, "file_name": "000000001490.jpg", "class": "person", "gold": 1}
+{"image_id": 19402, "file_name": "000000019402.jpg", "class": "pizza", "gold": 1}
+{"image_id": 22892, "file_name": "000000022892.jpg", "class": "potted plant", "gold": 1}
+{"image_id": 26465, "file_name": "000000026465.jpg", "class": "remote", "gold": 1}
+{"image_id": 18575, "file_name": "000000018575.jpg", "class": "sandwich", "gold": 1}
+{"image_id": 161008, "file_name": "000000161008.jpg", "class": "scissors", "gold": 1}
+{"image_id": 16502, "file_name": "000000016502.jpg", "class": "sheep", "gold": 1}
+{"image_id": 5600, "file_name": "000000005600.jpg", "class": "spoon", "gold": 1}
+{"image_id": 22935, "file_name": "000000022935.jpg", "class": "sports ball", "gold": 1}
+{"image_id": 42889, "file_name": "000000042889.jpg", "class": "teddy bear", "gold": 1}
+{"image_id": 175251, "file_name": "000000175251.jpg", "class": "toothbrush", "gold": 1}
+{"image_id": 4495, "file_name": "000000004495.jpg", "class": "tv", "gold": 1}
+{"image_id": 60855, "file_name": "000000060855.jpg", "class": "apple", "gold": 2}
+{"image_id": 6012, "file_name": "000000006012.jpg", "class": "banana", "gold": 2}
+{"image_id": 7795, "file_name": "000000007795.jpg", "class": "bed", "gold": 2}
+{"image_id": 98261, "file_name": "000000098261.jpg", "class": "bird", "gold": 2}
+{"image_id": 35279, "file_name": "000000035279.jpg", "class": "book", "gold": 2}
+{"image_id": 83531, "file_name": "000000083531.jpg", "class": "bottle", "gold": 2}
+{"image_id": 5600, "file_name": "000000005600.jpg", "class": "bowl", "gold": 2}
+{"image_id": 3501, "file_name": "000000003501.jpg", "class": "broccoli", "gold": 2}
+{"image_id": 180878, "file_name": "000000180878.jpg", "class": "cake", "gold": 2}
+{"image_id": 130613, "file_name": "000000130613.jpg", "class": "carrot", "gold": 2}
+{"image_id": 39769, "file_name": "000000039769.jpg", "class": "cat", "gold": 2}
+{"image_id": 35279, "file_name": "000000035279.jpg", "class": "cell phone", "gold": 2}
+{"image_id": 1993, "file_name": "000000001993.jpg", "class": "chair", "gold": 2}
+{"image_id": 7888, "file_name": "000000007888.jpg", "class": "clock", "gold": 2}
+{"image_id": 10707, "file_name": "000000010707.jpg", "class": "couch", "gold": 2}
+{"image_id": 118594, "file_name": "000000118594.jpg", "class": "cow", "gold": 2}
+{"image_id": 2157, "file_name": "000000002157.jpg", "class": "cup", "gold": 2}
+{"image_id": 47112, "file_name": "000000047112.jpg", "class": "dining table", "gold": 2}
+{"image_id": 71226, "file_name": "000000071226.jpg", "class": "dog", "gold": 2}
+{"image_id": 341973, "file_name": "000000341973.jpg", "class": "donut", "gold": 2}
+{"image_id": 24919, "file_name": "000000024919.jpg", "class": "elephant", "gold": 2}
+{"image_id": 17714, "file_name": "000000017714.jpg", "class": "fork", "gold": 2}
+{"image_id": 6954, "file_name": "000000006954.jpg", "class": "frisbee", "gold": 2}
+{"image_id": 22969, "file_name": "000000022969.jpg", "class": "giraffe", "gold": 2}
+{"image_id": 7281, "file_name": "000000007281.jpg", "class": "horse", "gold": 2}
+{"image_id": 179898, "file_name": "000000179898.jpg", "class": "hot dog", "gold": 2}
+{"image_id": 47740, "file_name": "000000047740.jpg", "class": "kite", "gold": 2}
+{"image_id": 7991, "file_name": "000000007991.jpg", "class": "knife", "gold": 2}
+{"image_id": 13659, "file_name": "000000013659.jpg", "class": "laptop", "gold": 2}
+{"image_id": 46031, "file_name": "000000046031.jpg", "class": "mouse", "gold": 2}
+{"image_id": 110999, "file_name": "000000110999.jpg", "class": "orange", "gold": 2}
+{"image_id": 872, "file_name": "000000000872.jpg", "class": "person", "gold": 2}
+{"image_id": 74733, "file_name": "000000074733.jpg", "class": "pizza", "gold": 2}
+{"image_id": 632, "file_name": "000000000632.jpg", "class": "potted plant", "gold": 2}
+{"image_id": 39769, "file_name": "000000039769.jpg", "class": "remote", "gold": 2}
+{"image_id": 9914, "file_name": "000000009914.jpg", "class": "sandwich", "gold": 2}
+{"image_id": 340930, "file_name": "000000340930.jpg", "class": "scissors", "gold": 2}
+{"image_id": 22589, "file_name": "000000022589.jpg", "class": "sheep", "gold": 2}
+{"image_id": 66817, "file_name": "000000066817.jpg", "class": "spoon", "gold": 2}
+{"image_id": 257624, "file_name": "000000257624.jpg", "class": "sports ball", "gold": 2}
+{"image_id": 35963, "file_name": "000000035963.jpg", "class": "teddy bear", "gold": 2}
+{"image_id": 139, "file_name": "000000000139.jpg", "class": "tv", "gold": 2}
+{"image_id": 143961, "file_name": "000000143961.jpg", "class": "umbrella", "gold": 2}
+{"image_id": 95786, "file_name": "000000095786.jpg", "class": "vase", "gold": 2}
+{"image_id": 47112, "file_name": "000000047112.jpg", "class": "wine glass", "gold": 2}
+{"image_id": 1818, "file_name": "000000001818.jpg", "class": "zebra", "gold": 2}
+{"image_id": 113589, "file_name": "000000113589.jpg", "class": "apple", "gold": 2}
+{"image_id": 79651, "file_name": "000000079651.jpg", "class": "banana", "gold": 2}
+{"image_id": 218439, "file_name": "000000218439.jpg", "class": "bed", "gold": 2}
+{"image_id": 122927, "file_name": "000000122927.jpg", "class": "bird", "gold": 2}
+{"image_id": 71226, "file_name": "000000071226.jpg", "class": "book", "gold": 2}
+{"image_id": 88040, "file_name": "000000088040.jpg", "class": "bottle", "gold": 2}
+{"image_id": 8277, "file_name": "000000008277.jpg", "class": "bowl", "gold": 2}
+{"image_id": 50331, "file_name": "000000050331.jpg", "class": "broccoli", "gold": 2}
+{"image_id": 182417, "file_name": "000000182417.jpg", "class": "cake", "gold": 2}
+{"image_id": 196009, "file_name": "000000196009.jpg", "class": "carrot", "gold": 2}
+{"image_id": 49810, "file_name": "000000049810.jpg", "class": "cat", "gold": 2}
+{"image_id": 213035, "file_name": "000000213035.jpg", "class": "cell phone", "gold": 2}
+{"image_id": 10092, "file_name": "000000010092.jpg", "class": "chair", "gold": 2}
+{"image_id": 154339, "file_name": "000000154339.jpg", "class": "clock", "gold": 2}
+{"image_id": 27186, "file_name": "000000027186.jpg", "class": "couch", "gold": 2}
+{"image_id": 125806, "file_name": "000000125806.jpg", "class": "cow", "gold": 2}
+{"image_id": 2431, "file_name": "000000002431.jpg", "class": "cup", "gold": 2}
+{"image_id": 64084, "file_name": "000000064084.jpg", "class": "dining table", "gold": 2}
+{"image_id": 89880, "file_name": "000000089880.jpg", "class": "dog", "gold": 2}
+{"image_id": 405432, "file_name": "000000405432.jpg", "class": "donut", "gold": 2}
+{"image_id": 48504, "file_name": "000000048504.jpg", "class": "elephant", "gold": 2}
+{"image_id": 54605, "file_name": "000000054605.jpg", "class": "fork", "gold": 2}
+{"image_id": 33707, "file_name": "000000033707.jpg", "class": "giraffe", "gold": 2}
+{"image_id": 23034, "file_name": "000000023034.jpg", "class": "horse", "gold": 2}
+{"image_id": 226130, "file_name": "000000226130.jpg", "class": "hot dog", "gold": 2}
+{"image_id": 224675, "file_name": "000000224675.jpg", "class": "kite", "gold": 2}
+{"image_id": 181796, "file_name": "000000181796.jpg", "class": "knife", "gold": 2}
+{"image_id": 198641, "file_name": "000000198641.jpg", "class": "laptop", "gold": 2}
+{"image_id": 371677, "file_name": "000000371677.jpg", "class": "mouse", "gold": 2}
+{"image_id": 119452, "file_name": "000000119452.jpg", "class": "orange", "gold": 2}
+{"image_id": 1296, "file_name": "000000001296.jpg", "class": "person", "gold": 2}
+{"image_id": 99039, "file_name": "000000099039.jpg", "class": "pizza", "gold": 2}
+{"image_id": 31735, "file_name": "000000031735.jpg", "class": "potted plant", "gold": 2}
+{"image_id": 55528, "file_name": "000000055528.jpg", "class": "remote", "gold": 2}
+{"image_id": 10583, "file_name": "000000010583.jpg", "class": "sandwich", "gold": 2}
+{"image_id": 550322, "file_name": "000000550322.jpg", "class": "scissors", "gold": 2}
+{"image_id": 66561, "file_name": "000000066561.jpg", "class": "sheep", "gold": 2}
+{"image_id": 88040, "file_name": "000000088040.jpg", "class": "spoon", "gold": 2}
+{"image_id": 50844, "file_name": "000000050844.jpg", "class": "teddy bear", "gold": 2}
+{"image_id": 36844, "file_name": "000000036844.jpg", "class": "tv", "gold": 2}
+{"image_id": 228214, "file_name": "000000228214.jpg", "class": "umbrella", "gold": 2}
+{"image_id": 154431, "file_name": "000000154431.jpg", "class": "vase", "gold": 2}
+{"image_id": 70739, "file_name": "000000070739.jpg", "class": "wine glass", "gold": 2}
+{"image_id": 17115, "file_name": "000000017115.jpg", "class": "zebra", "gold": 2}
+{"image_id": 110999, "file_name": "000000110999.jpg", "class": "apple", "gold": 3}
+{"image_id": 139260, "file_name": "000000139260.jpg", "class": "banana", "gold": 3}
+{"image_id": 61960, "file_name": "000000061960.jpg", "class": "bed", "gold": 3}
+{"image_id": 41888, "file_name": "000000041888.jpg", "class": "bird", "gold": 3}
+{"image_id": 222299, "file_name": "000000222299.jpg", "class": "book", "gold": 3}
+{"image_id": 18575, "file_name": "000000018575.jpg", "class": "bottle", "gold": 3}
+{"image_id": 13923, "file_name": "000000013923.jpg", "class": "bowl", "gold": 3}
+{"image_id": 3845, "file_name": "000000003845.jpg", "class": "broccoli", "gold": 3}
+{"image_id": 162092, "file_name": "000000162092.jpg", "class": "cake", "gold": 3}
+{"image_id": 221872, "file_name": "000000221872.jpg", "class": "carrot", "gold": 3}
+{"image_id": 99428, "file_name": "000000099428.jpg", "class": "cell phone", "gold": 3}
+{"image_id": 16958, "file_name": "000000016958.jpg", "class": "chair", "gold": 3}
+{"image_id": 115870, "file_name": "000000115870.jpg", "class": "couch", "gold": 3}
+{"image_id": 60823, "file_name": "000000060823.jpg", "class": "cow", "gold": 3}
+{"image_id": 131138, "file_name": "000000131138.jpg", "class": "cup", "gold": 3}
+{"image_id": 54628, "file_name": "000000054628.jpg", "class": "dining table", "gold": 3}
+{"image_id": 81766, "file_name": "000000081766.jpg", "class": "dog", "gold": 3}
+{"image_id": 109798, "file_name": "000000109798.jpg", "class": "donut", "gold": 3}
+{"image_id": 110638, "file_name": "000000110638.jpg", "class": "elephant", "gold": 3}
+{"image_id": 173371, "file_name": "000000173371.jpg", "class": "fork", "gold": 3}
+{"image_id": 100238, "file_name": "000000100238.jpg", "class": "frisbee", "gold": 3}
+{"image_id": 47010, "file_name": "000000047010.jpg", "class": "giraffe", "gold": 3}
+{"image_id": 234807, "file_name": "000000234807.jpg", "class": "horse", "gold": 3}
+{"image_id": 29675, "file_name": "000000029675.jpg", "class": "hot dog", "gold": 3}
+{"image_id": 143068, "file_name": "000000143068.jpg", "class": "kite", "gold": 3}
+{"image_id": 2157, "file_name": "000000002157.jpg", "class": "knife", "gold": 3}
+{"image_id": 97994, "file_name": "000000097994.jpg", "class": "laptop", "gold": 3}
+{"image_id": 185599, "file_name": "000000185599.jpg", "class": "orange", "gold": 3}
+{"image_id": 6763, "file_name": "000000006763.jpg", "class": "person", "gold": 3}
+{"image_id": 12576, "file_name": "000000012576.jpg", "class": "pizza", "gold": 3}
+{"image_id": 31248, "file_name": "000000031248.jpg", "class": "potted plant", "gold": 3}
+{"image_id": 371749, "file_name": "000000371749.jpg", "class": "remote", "gold": 3}
+{"image_id": 226147, "file_name": "000000226147.jpg", "class": "sandwich", "gold": 3}
+{"image_id": 419098, "file_name": "000000419098.jpg", "class": "scissors", "gold": 3}
+{"image_id": 12062, "file_name": "000000012062.jpg", "class": "sheep", "gold": 3}
+{"image_id": 42296, "file_name": "000000042296.jpg", "class": "sports ball", "gold": 3}
+{"image_id": 776, "file_name": "000000000776.jpg", "class": "teddy bear", "gold": 3}
+{"image_id": 172595, "file_name": "000000172595.jpg", "class": "tv", "gold": 3}
+{"image_id": 275198, "file_name": "000000275198.jpg", "class": "umbrella", "gold": 3}
+{"image_id": 395343, "file_name": "000000395343.jpg", "class": "vase", "gold": 3}
+{"image_id": 7818, "file_name": "000000007818.jpg", "class": "wine glass", "gold": 3}
+{"image_id": 11760, "file_name": "000000011760.jpg", "class": "zebra", "gold": 3}
+{"image_id": 185599, "file_name": "000000185599.jpg", "class": "apple", "gold": 3}
+{"image_id": 189078, "file_name": "000000189078.jpg", "class": "banana", "gold": 3}
+{"image_id": 393569, "file_name": "000000393569.jpg", "class": "bed", "gold": 3}
+{"image_id": 104119, "file_name": "000000104119.jpg", "class": "bird", "gold": 3}
+{"image_id": 379842, "file_name": "000000379842.jpg", "class": "book", "gold": 3}
+{"image_id": 64084, "file_name": "000000064084.jpg", "class": "bottle", "gold": 3}
+{"image_id": 15254, "file_name": "000000015254.jpg", "class": "bowl", "gold": 3}
+{"image_id": 34205, "file_name": "000000034205.jpg", "class": "broccoli", "gold": 3}
+{"image_id": 276434, "file_name": "000000276434.jpg", "class": "cake", "gold": 3}
+{"image_id": 223090, "file_name": "000000223090.jpg", "class": "carrot", "gold": 3}
+{"image_id": 334977, "file_name": "000000334977.jpg", "class": "cell phone", "gold": 3}
+{"image_id": 25386, "file_name": "000000025386.jpg", "class": "chair", "gold": 3}
+{"image_id": 194832, "file_name": "000000194832.jpg", "class": "couch", "gold": 3}
+{"image_id": 119038, "file_name": "000000119038.jpg", "class": "cow", "gold": 3}
+{"image_id": 166277, "file_name": "000000166277.jpg", "class": "cup", "gold": 3}
+{"image_id": 129062, "file_name": "000000129062.jpg", "class": "dining table", "gold": 3}
+{"image_id": 107226, "file_name": "000000107226.jpg", "class": "dog", "gold": 3}
+{"image_id": 449312, "file_name": "000000449312.jpg", "class": "donut", "gold": 3}
+{"image_id": 167128, "file_name": "000000167128.jpg", "class": "elephant", "gold": 3}
+{"image_id": 62353, "file_name": "000000062353.jpg", "class": "giraffe", "gold": 3}
+{"image_id": 303653, "file_name": "000000303653.jpg", "class": "horse", "gold": 3}
+{"image_id": 91779, "file_name": "000000091779.jpg", "class": "hot dog", "gold": 3}
+{"image_id": 337498, "file_name": "000000337498.jpg", "class": "knife", "gold": 3}
+{"image_id": 516916, "file_name": "000000516916.jpg", "class": "laptop", "gold": 3}
+{"image_id": 189078, "file_name": "000000189078.jpg", "class": "orange", "gold": 3}
+{"image_id": 8021, "file_name": "000000008021.jpg", "class": "person", "gold": 3}
+{"image_id": 194724, "file_name": "000000194724.jpg", "class": "pizza", "gold": 3}
+{"image_id": 65288, "file_name": "000000065288.jpg", "class": "potted plant", "gold": 3}
+{"image_id": 430286, "file_name": "000000430286.jpg", "class": "remote", "gold": 3}
+{"image_id": 244181, "file_name": "000000244181.jpg", "class": "sandwich", "gold": 3}
+{"image_id": 198960, "file_name": "000000198960.jpg", "class": "sheep", "gold": 3}
+{"image_id": 113403, "file_name": "000000113403.jpg", "class": "teddy bear", "gold": 3}
+{"image_id": 190236, "file_name": "000000190236.jpg", "class": "tv", "gold": 3}
+{"image_id": 278848, "file_name": "000000278848.jpg", "class": "umbrella", "gold": 3}
+{"image_id": 244750, "file_name": "000000244750.jpg", "class": "wine glass", "gold": 3}
+{"image_id": 31269, "file_name": "000000031269.jpg", "class": "zebra", "gold": 3}
+{"image_id": 213935, "file_name": "000000213935.jpg", "class": "apple", "gold": 3}
+{"image_id": 389812, "file_name": "000000389812.jpg", "class": "banana", "gold": 3}
+{"image_id": 518326, "file_name": "000000518326.jpg", "class": "bed", "gold": 3}
+{"image_id": 535253, "file_name": "000000535253.jpg", "class": "book", "gold": 3}
+{"image_id": 79651, "file_name": "000000079651.jpg", "class": "bottle", "gold": 3}
+{"image_id": 62554, "file_name": "000000062554.jpg", "class": "bowl", "gold": 3}
+{"image_id": 452784, "file_name": "000000452784.jpg", "class": "broccoli", "gold": 3}
+{"image_id": 346703, "file_name": "000000346703.jpg", "class": "cake", "gold": 3}
+{"image_id": 485972, "file_name": "000000485972.jpg", "class": "carrot", "gold": 3}
+{"image_id": 31248, "file_name": "000000031248.jpg", "class": "chair", "gold": 3}
+{"image_id": 322895, "file_name": "000000322895.jpg", "class": "couch", "gold": 3}
+{"image_id": 124636, "file_name": "000000124636.jpg", "class": "cow", "gold": 3}
+{"image_id": 8844, "file_name": "000000008844.jpg", "class": "banana", "gold": 4}
+{"image_id": 166259, "file_name": "000000166259.jpg", "class": "bird", "gold": 4}
+{"image_id": 231831, "file_name": "000000231831.jpg", "class": "book", "gold": 4}
+{"image_id": 116208, "file_name": "000000116208.jpg", "class": "bottle", "gold": 4}
+{"image_id": 170670, "file_name": "000000170670.jpg", "class": "bowl", "gold": 4}
+{"image_id": 29640, "file_name": "000000029640.jpg", "class": "broccoli", "gold": 4}
+{"image_id": 54628, "file_name": "000000054628.jpg", "class": "cake", "gold": 4}
+{"image_id": 15254, "file_name": "000000015254.jpg", "class": "carrot", "gold": 4}
+{"image_id": 36660, "file_name": "000000036660.jpg", "class": "cell phone", "gold": 4}
+{"image_id": 14226, "file_name": "000000014226.jpg", "class": "chair", "gold": 4}
+{"image_id": 205514, "file_name": "000000205514.jpg", "class": "couch", "gold": 4}
+{"image_id": 41635, "file_name": "000000041635.jpg", "class": "cow", "gold": 4}
+{"image_id": 9400, "file_name": "000000009400.jpg", "class": "cup", "gold": 4}
+{"image_id": 286908, "file_name": "000000286908.jpg", "class": "dining table", "gold": 4}
+{"image_id": 262938, "file_name": "000000262938.jpg", "class": "dog", "gold": 4}
+{"image_id": 419379, "file_name": "000000419379.jpg", "class": "donut", "gold": 4}
+{"image_id": 57027, "file_name": "000000057027.jpg", "class": "elephant", "gold": 4}
+{"image_id": 75393, "file_name": "000000075393.jpg", "class": "fork", "gold": 4}
+{"image_id": 13291, "file_name": "000000013291.jpg", "class": "frisbee", "gold": 4}
+{"image_id": 64359, "file_name": "000000064359.jpg", "class": "giraffe", "gold": 4}
+{"image_id": 51309, "file_name": "000000051309.jpg", "class": "horse", "gold": 4}
+{"image_id": 398237, "file_name": "000000398237.jpg", "class": "kite", "gold": 4}
+{"image_id": 248980, "file_name": "000000248980.jpg", "class": "orange", "gold": 4}
+{"image_id": 1268, "file_name": "000000001268.jpg", "class": "person", "gold": 4}
+{"image_id": 173004, "file_name": "000000173004.jpg", "class": "pizza", "gold": 4}
+{"image_id": 86582, "file_name": "000000086582.jpg", "class": "potted plant", "gold": 4}
+{"image_id": 400161, "file_name": "000000400161.jpg", "class": "remote", "gold": 4}
+{"image_id": 369370, "file_name": "000000369370.jpg", "class": "sandwich", "gold": 4}
+{"image_id": 44699, "file_name": "000000044699.jpg", "class": "sheep", "gold": 4}
+{"image_id": 125062, "file_name": "000000125062.jpg", "class": "teddy bear", "gold": 4}
+{"image_id": 66038, "file_name": "000000066038.jpg", "class": "umbrella", "gold": 4}
+{"image_id": 429530, "file_name": "000000429530.jpg", "class": "vase", "gold": 4}
+{"image_id": 85089, "file_name": "000000085089.jpg", "class": "wine glass", "gold": 4}
+{"image_id": 49761, "file_name": "000000049761.jpg", "class": "zebra", "gold": 4}
+{"image_id": 28809, "file_name": "000000028809.jpg", "class": "banana", "gold": 4}
+{"image_id": 277051, "file_name": "000000277051.jpg", "class": "bird", "gold": 4}
+{"image_id": 132329, "file_name": "000000132329.jpg", "class": "bottle", "gold": 4}
+{"image_id": 314182, "file_name": "000000314182.jpg", "class": "bowl", "gold": 4}
+{"image_id": 559707, "file_name": "000000559707.jpg", "class": "broccoli", "gold": 4}
+{"image_id": 95707, "file_name": "000000095707.jpg", "class": "cake", "gold": 4}
+{"image_id": 424721, "file_name": "000000424721.jpg", "class": "carrot", "gold": 4}
+{"image_id": 74209, "file_name": "000000074209.jpg", "class": "chair", "gold": 4}
+{"image_id": 206135, "file_name": "000000206135.jpg", "class": "cow", "gold": 4}
+{"image_id": 12576, "file_name": "000000012576.jpg", "class": "cup", "gold": 4}
+{"image_id": 381587, "file_name": "000000381587.jpg", "class": "dining table", "gold": 4}
+{"image_id": 547502, "file_name": "000000547502.jpg", "class": "dog", "gold": 4}
+{"image_id": 572388, "file_name": "000000572388.jpg", "class": "donut", "gold": 4}
+{"image_id": 126216, "file_name": "000000126216.jpg", "class": "elephant", "gold": 4}
+{"image_id": 101780, "file_name": "000000101780.jpg", "class": "giraffe", "gold": 4}
+{"image_id": 80659, "file_name": "000000080659.jpg", "class": "horse", "gold": 4}
+{"image_id": 2153, "file_name": "000000002153.jpg", "class": "person", "gold": 4}
+{"image_id": 173371, "file_name": "000000173371.jpg", "class": "pizza", "gold": 4}
+{"image_id": 94871, "file_name": "000000094871.jpg", "class": "sheep", "gold": 4}
+{"image_id": 145020, "file_name": "000000145020.jpg", "class": "teddy bear", "gold": 4}
+{"image_id": 116208, "file_name": "000000116208.jpg", "class": "wine glass", "gold": 4}
+{"image_id": 69106, "file_name": "000000069106.jpg", "class": "zebra", "gold": 4}
+{"image_id": 193926, "file_name": "000000193926.jpg", "class": "banana", "gold": 4}
+{"image_id": 170670, "file_name": "000000170670.jpg", "class": "bottle", "gold": 4}
+{"image_id": 410735, "file_name": "000000410735.jpg", "class": "bowl", "gold": 4}
+{"image_id": 242060, "file_name": "000000242060.jpg", "class": "cake", "gold": 4}
+{"image_id": 465585, "file_name": "000000465585.jpg", "class": "carrot", "gold": 4}
+{"image_id": 233033, "file_name": "000000233033.jpg", "class": "chair", "gold": 4}
+{"image_id": 329447, "file_name": "000000329447.jpg", "class": "cow", "gold": 4}
+{"image_id": 66771, "file_name": "000000066771.jpg", "class": "cup", "gold": 4}
+{"image_id": 389109, "file_name": "000000389109.jpg", "class": "dining table", "gold": 4}
+{"image_id": 272364, "file_name": "000000272364.jpg", "class": "giraffe", "gold": 4}
+{"image_id": 348488, "file_name": "000000348488.jpg", "class": "horse", "gold": 4}
+{"image_id": 8690, "file_name": "000000008690.jpg", "class": "person", "gold": 4}
+{"image_id": 256916, "file_name": "000000256916.jpg", "class": "pizza", "gold": 4}
+{"image_id": 459437, "file_name": "000000459437.jpg", "class": "sheep", "gold": 4}
+{"image_id": 207585, "file_name": "000000207585.jpg", "class": "teddy bear", "gold": 4}
+{"image_id": 513041, "file_name": "000000513041.jpg", "class": "wine glass", "gold": 4}
+{"image_id": 218424, "file_name": "000000218424.jpg", "class": "zebra", "gold": 4}
+{"image_id": 206027, "file_name": "000000206027.jpg", "class": "bottle", "gold": 4}
+{"image_id": 571804, "file_name": "000000571804.jpg", "class": "bowl", "gold": 4}
+{"image_id": 329542, "file_name": "000000329542.jpg", "class": "cake", "gold": 4}
+{"image_id": 255536, "file_name": "000000255536.jpg", "class": "chair", "gold": 4}
+{"image_id": 389451, "file_name": "000000389451.jpg", "class": "cow", "gold": 4}
+{"image_id": 170670, "file_name": "000000170670.jpg", "class": "cup", "gold": 4}
+{"image_id": 286849, "file_name": "000000286849.jpg", "class": "giraffe", "gold": 4}
+{"image_id": 456015, "file_name": "000000456015.jpg", "class": "horse", "gold": 4}
+{"image_id": 11511, "file_name": "000000011511.jpg", "class": "person", "gold": 4}
+{"image_id": 369757, "file_name": "000000369757.jpg", "class": "pizza", "gold": 4}
+{"image_id": 474881, "file_name": "000000474881.jpg", "class": "sheep", "gold": 4}
+{"image_id": 211120, "file_name": "000000211120.jpg", "class": "teddy bear", "gold": 4}
+{"image_id": 268729, "file_name": "000000268729.jpg", "class": "zebra", "gold": 4}
+{"image_id": 541773, "file_name": "000000541773.jpg", "class": "bottle", "gold": 4}
+{"image_id": 578871, "file_name": "000000578871.jpg", "class": "bowl", "gold": 4}
+{"image_id": 331817, "file_name": "000000331817.jpg", "class": "cake", "gold": 4}
+{"image_id": 298396, "file_name": "000000298396.jpg", "class": "chair", "gold": 4}
+{"image_id": 548506, "file_name": "000000548506.jpg", "class": "apple", "gold": 5}
+{"image_id": 165351, "file_name": "000000165351.jpg", "class": "banana", "gold": 5}
+{"image_id": 123585, "file_name": "000000123585.jpg", "class": "bird", "gold": 5}
+{"image_id": 506310, "file_name": "000000506310.jpg", "class": "bottle", "gold": 5}
+{"image_id": 286182, "file_name": "000000286182.jpg", "class": "bowl", "gold": 5}
+{"image_id": 132116, "file_name": "000000132116.jpg", "class": "broccoli", "gold": 5}
+{"image_id": 261116, "file_name": "000000261116.jpg", "class": "cake", "gold": 5}
+{"image_id": 3845, "file_name": "000000003845.jpg", "class": "carrot", "gold": 5}
+{"image_id": 13923, "file_name": "000000013923.jpg", "class": "chair", "gold": 5}
+{"image_id": 156292, "file_name": "000000156292.jpg", "class": "clock", "gold": 5}
+{"image_id": 258911, "file_name": "000000258911.jpg", "class": "cow", "gold": 5}
+{"image_id": 45472, "file_name": "000000045472.jpg", "class": "cup", "gold": 5}
+{"image_id": 7108, "file_name": "000000007108.jpg", "class": "elephant", "gold": 5}
+{"image_id": 180011, "file_name": "000000180011.jpg", "class": "giraffe", "gold": 5}
+{"image_id": 492282, "file_name": "000000492282.jpg", "class": "horse", "gold": 5}
+{"image_id": 60855, "file_name": "000000060855.jpg", "class": "orange", "gold": 5}
+{"image_id": 6954, "file_name": "000000006954.jpg", "class": "person", "gold": 5}
+{"image_id": 108253, "file_name": "000000108253.jpg", "class": "pizza", "gold": 5}
+{"image_id": 136355, "file_name": "000000136355.jpg", "class": "potted plant", "gold": 5}
+{"image_id": 21503, "file_name": "000000021503.jpg", "class": "sandwich", "gold": 5}
+{"image_id": 5992, "file_name": "000000005992.jpg", "class": "sheep", "gold": 5}
+{"image_id": 66841, "file_name": "000000066841.jpg", "class": "spoon", "gold": 5}
+{"image_id": 328030, "file_name": "000000328030.jpg", "class": "teddy bear", "gold": 5}
+{"image_id": 281759, "file_name": "000000281759.jpg", "class": "umbrella", "gold": 5}
+{"image_id": 473974, "file_name": "000000473974.jpg", "class": "zebra", "gold": 5}
+{"image_id": 271471, "file_name": "000000271471.jpg", "class": "banana", "gold": 5}
+{"image_id": 229997, "file_name": "000000229997.jpg", "class": "bird", "gold": 5}
+{"image_id": 331817, "file_name": "000000331817.jpg", "class": "bowl", "gold": 5}
+{"image_id": 153510, "file_name": "000000153510.jpg", "class": "broccoli", "gold": 5}
+{"image_id": 143998, "file_name": "000000143998.jpg", "class": "carrot", "gold": 5}
+{"image_id": 140076, "file_name": "000000140076.jpg", "class": "chair", "gold": 5}
+{"image_id": 239627, "file_name": "000000239627.jpg", "class": "cup", "gold": 5}
+{"image_id": 28449, "file_name": "000000028449.jpg", "class": "elephant", "gold": 5}
+{"image_id": 192871, "file_name": "000000192871.jpg", "class": "orange", "gold": 5}
+{"image_id": 13659, "file_name": "000000013659.jpg", "class": "person", "gold": 5}
+{"image_id": 181816, "file_name": "000000181816.jpg", "class": "potted plant", "gold": 5}
+{"image_id": 269196, "file_name": "000000269196.jpg", "class": "sheep", "gold": 5}
+{"image_id": 551660, "file_name": "000000551660.jpg", "class": "broccoli", "gold": 5}
+{"image_id": 205514, "file_name": "000000205514.jpg", "class": "chair", "gold": 5}
+{"image_id": 231527, "file_name": "000000231527.jpg", "class": "orange", "gold": 5}
+{"image_id": 16249, "file_name": "000000016249.jpg", "class": "person", "gold": 5}
+{"image_id": 484893, "file_name": "000000484893.jpg", "class": "sheep", "gold": 5}
+{"image_id": 325838, "file_name": "000000325838.jpg", "class": "chair", "gold": 5}
+{"image_id": 283070, "file_name": "000000283070.jpg", "class": "orange", "gold": 5}
+{"image_id": 31817, "file_name": "000000031817.jpg", "class": "person", "gold": 5}
+{"image_id": 363666, "file_name": "000000363666.jpg", "class": "chair", "gold": 5}
+{"image_id": 32901, "file_name": "000000032901.jpg", "class": "person", "gold": 5}
+{"image_id": 467315, "file_name": "000000467315.jpg", "class": "chair", "gold": 5}
+{"image_id": 42628, "file_name": "000000042628.jpg", "class": "person", "gold": 5}
+{"image_id": 504074, "file_name": "000000504074.jpg", "class": "chair", "gold": 5}
+{"image_id": 81988, "file_name": "000000081988.jpg", "class": "person", "gold": 5}
+{"image_id": 564336, "file_name": "000000564336.jpg", "class": "chair", "gold": 5}
+{"image_id": 88848, "file_name": "000000088848.jpg", "class": "person", "gold": 5}
+{"image_id": 90891, "file_name": "000000090891.jpg", "class": "person", "gold": 5}
+{"image_id": 113720, "file_name": "000000113720.jpg", "class": "person", "gold": 5}

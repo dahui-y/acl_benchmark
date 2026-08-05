@@ -1,0 +1,62 @@
+{"image_id": 2149, "file_name": "000000002149.jpg", "class": "apple", "gold": 1, "detector": "mask2former", "scores": [0.979898, 0.223976, 0.106365], "status": "ok"}
+{"image_id": 2587, "file_name": "000000002587.jpg", "class": "banana", "gold": 1, "detector": "mask2former", "scores": [0.967674], "status": "ok"}
+{"image_id": 632, "file_name": "000000000632.jpg", "class": "bed", "gold": 1, "detector": "mask2former", "scores": [0.969206], "status": "ok"}
+{"image_id": 32811, "file_name": "000000032811.jpg", "class": "bird", "gold": 1, "detector": "mask2former", "scores": [0.970056], "status": "ok"}
+{"image_id": 22371, "file_name": "000000022371.jpg", "class": "book", "gold": 1, "detector": "mask2former", "scores": [0.859276, 0.483537], "status": "ok"}
+{"image_id": 26564, "file_name": "000000026564.jpg", "class": "bottle", "gold": 1, "detector": "mask2former", "scores": [0.916533], "status": "ok"}
+{"image_id": 1425, "file_name": "000000001425.jpg", "class": "bowl", "gold": 1, "detector": "mask2former", "scores": [0.947411, 0.064496], "status": "ok"}
+{"image_id": 15278, "file_name": "000000015278.jpg", "class": "broccoli", "gold": 1, "detector": "mask2former", "scores": [0.847963, 0.844104, 0.840011, 0.779528, 0.697198, 0.653406, 0.613554, 0.594167, 0.531932, 0.335294, 0.298572, 0.244429, 0.200188, 0.148539, 0.130955, 0.129911, 0.110446, 0.104464, 0.081881, 0.07554, 0.070883, 0.053448], "status": "ok"}
+{"image_id": 2157, "file_name": "000000002157.jpg", "class": "cake", "gold": 1, "detector": "mask2former", "scores": [0.97263, 0.136066], "status": "ok"}
+{"image_id": 7991, "file_name": "000000007991.jpg", "class": "carrot", "gold": 1, "detector": "mask2former", "scores": [0.966478, 0.525851, 0.525124, 0.367986, 0.345536, 0.32918, 0.310587, 0.288331, 0.254572, 0.245339, 0.242826, 0.213365, 0.197346, 0.179639, 0.170544, 0.150957, 0.148709, 0.146861, 0.141878, 0.133317, 0.128464, 0.114388, 0.110883, 0.108848, 0.108205, 0.102307, 0.100939, 0.097953, 0.091484, 0.084215, 0.083493, 0.083286, 0.08142, 0.081378, 0.077372, 0.074221, 0.070684, 0.069192, 0.06678, 0.051243, 0.050719], "status": "ok"}
+{"image_id": 1675, "file_name": "000000001675.jpg", "class": "cat", "gold": 1, "detector": "mask2former", "scores": [0.971365], "status": "ok"}
+{"image_id": 1296, "file_name": "000000001296.jpg", "class": "cell phone", "gold": 1, "detector": "mask2former", "scores": [0.981334, 0.774504, 0.066068], "status": "ok"}
+{"image_id": 632, "file_name": "000000000632.jpg", "class": "chair", "gold": 1, "detector": "mask2former", "scores": [0.296801], "status": "ok"}
+{"image_id": 31749, "file_name": "000000031749.jpg", "class": "clock", "gold": 1, "detector": "mask2former", "scores": [0.971308, 0.147875], "status": "ok"}
+{"image_id": 3934, "file_name": "000000003934.jpg", "class": "couch", "gold": 1, "detector": "mask2former", "scores": [], "status": "ok"}
+{"image_id": 14888, "file_name": "000000014888.jpg", "class": "cow", "gold": 1, "detector": "mask2former", "scores": [0.960411], "status": "ok"}
+{"image_id": 2592, "file_name": "000000002592.jpg", "class": "cup", "gold": 1, "detector": "mask2former", "scores": [0.983846], "status": "ok"}
+{"image_id": 139, "file_name": "000000000139.jpg", "class": "dining table", "gold": 1, "detector": "mask2former", "scores": [], "status": "ok"}
+{"image_id": 7386, "file_name": "000000007386.jpg", "class": "dog", "gold": 1, "detector": "mask2former", "scores": [0.941943], "status": "ok"}
+{"image_id": 2587, "file_name": "000000002587.jpg", "class": "donut", "gold": 1, "detector": "mask2former", "scores": [0.97397], "status": "ok"}
+{"image_id": 6894, "file_name": "000000006894.jpg", "class": "elephant", "gold": 1, "detector": "mask2former", "scores": [0.951969, 0.926436, 0.872437, 0.556763, 0.270766], "status": "ok"}
+{"image_id": 3845, "file_name": "000000003845.jpg", "class": "fork", "gold": 1, "detector": "mask2former", "scores": [0.945941], "status": "ok"}
+{"image_id": 9378, "file_name": "000000009378.jpg", "class": "frisbee", "gold": 1, "detector": "mask2former", "scores": [0.983436], "status": "ok"}
+{"image_id": 17031, "file_name": "000000017031.jpg", "class": "giraffe", "gold": 1, "detector": "mask2former", "scores": [0.970397], "status": "ok"}
+{"image_id": 12748, "file_name": "000000012748.jpg", "class": "horse", "gold": 1, "detector": "mask2former", "scores": [0.976953], "status": "ok"}
+{"image_id": 9914, "file_name": "000000009914.jpg", "class": "hot dog", "gold": 1, "detector": "mask2former", "scores": [], "status": "ok"}
+{"image_id": 7784, "file_name": "000000007784.jpg", "class": "kite", "gold": 1, "detector": "mask2former", "scores": [0.980944], "status": "ok"}
+{"image_id": 2592, "file_name": "000000002592.jpg", "class": "knife", "gold": 1, "detector": "mask2former", "scores": [0.980711], "status": "ok"}
+{"image_id": 1503, "file_name": "000000001503.jpg", "class": "laptop", "gold": 1, "detector": "mask2former", "scores": [0.983816], "status": "ok"}
+{"image_id": 15497, "file_name": "000000015497.jpg", "class": "mouse", "gold": 1, "detector": "mask2former", "scores": [0.988156], "status": "ok"}
+{"image_id": 6614, "file_name": "000000006614.jpg", "class": "orange", "gold": 1, "detector": "mask2former", "scores": [0.982196], "status": "ok"}
+{"image_id": 785, "file_name": "000000000785.jpg", "class": "person", "gold": 1, "detector": "mask2former", "scores": [0.945081], "status": "ok"}
+{"image_id": 17714, "file_name": "000000017714.jpg", "class": "pizza", "gold": 1, "detector": "mask2former", "scores": [], "status": "ok"}
+{"image_id": 14038, "file_name": "000000014038.jpg", "class": "potted plant", "gold": 1, "detector": "mask2former", "scores": [], "status": "ok"}
+{"image_id": 21503, "file_name": "000000021503.jpg", "class": "remote", "gold": 1, "detector": "mask2former", "scores": [0.202521], "status": "ok"}
+{"image_id": 1425, "file_name": "000000001425.jpg", "class": "sandwich", "gold": 1, "detector": "mask2former", "scores": [0.971462], "status": "ok"}
+{"image_id": 154213, "file_name": "000000154213.jpg", "class": "scissors", "gold": 1, "detector": "mask2former", "scores": [0.973633], "status": "ok"}
+{"image_id": 8690, "file_name": "000000008690.jpg", "class": "sheep", "gold": 1, "detector": "mask2former", "scores": [0.967823, 0.935993], "status": "ok"}
+{"image_id": 3845, "file_name": "000000003845.jpg", "class": "spoon", "gold": 1, "detector": "mask2former", "scores": [0.776624], "status": "ok"}
+{"image_id": 12062, "file_name": "000000012062.jpg", "class": "sports ball", "gold": 1, "detector": "mask2former", "scores": [0.242377], "status": "ok"}
+{"image_id": 12670, "file_name": "000000012670.jpg", "class": "teddy bear", "gold": 1, "detector": "mask2former", "scores": [0.942561, 0.094607], "status": "ok"}
+{"image_id": 160666, "file_name": "000000160666.jpg", "class": "toothbrush", "gold": 1, "detector": "mask2former", "scores": [0.979283, 0.081289], "status": "ok"}
+{"image_id": 1503, "file_name": "000000001503.jpg", "class": "tv", "gold": 1, "detector": "mask2former", "scores": [], "status": "ok"}
+{"image_id": 7088, "file_name": "000000007088.jpg", "class": "umbrella", "gold": 1, "detector": "mask2former", "scores": [0.975052], "status": "ok"}
+{"image_id": 7818, "file_name": "000000007818.jpg", "class": "vase", "gold": 1, "detector": "mask2former", "scores": [0.966006, 0.640723, 0.491922, 0.260422], "status": "ok"}
+{"image_id": 2431, "file_name": "000000002431.jpg", "class": "wine glass", "gold": 1, "detector": "mask2former", "scores": [0.974061], "status": "ok"}
+{"image_id": 125211, "file_name": "000000125211.jpg", "class": "zebra", "gold": 1, "detector": "mask2former", "scores": [0.978112], "status": "ok"}
+{"image_id": 6614, "file_name": "000000006614.jpg", "class": "apple", "gold": 1, "detector": "mask2former", "scores": [0.955416, 0.341019, 0.103967], "status": "ok"}
+{"image_id": 3661, "file_name": "000000003661.jpg", "class": "banana", "gold": 1, "detector": "mask2former", "scores": [0.921999, 0.895904, 0.861839, 0.848492, 0.078523], "status": "ok"}
+{"image_id": 776, "file_name": "000000000776.jpg", "class": "bed", "gold": 1, "detector": "mask2former", "scores": [0.117443], "status": "ok"}
+{"image_id": 46378, "file_name": "000000046378.jpg", "class": "bird", "gold": 1, "detector": "mask2former", "scores": [0.945755], "status": "ok"}
+{"image_id": 25603, "file_name": "000000025603.jpg", "class": "book", "gold": 1, "detector": "mask2former", "scores": [0.950388, 0.237826, 0.060546], "status": "ok"}
+{"image_id": 27620, "file_name": "000000027620.jpg", "class": "bottle", "gold": 1, "detector": "mask2former", "scores": [0.946038], "status": "ok"}
+{"image_id": 2149, "file_name": "000000002149.jpg", "class": "bowl", "gold": 1, "detector": "mask2former", "scores": [0.962852, 0.915947], "status": "ok"}
+{"image_id": 19221, "file_name": "000000019221.jpg", "class": "broccoli", "gold": 1, "detector": "mask2former", "scores": [0.946224, 0.097987], "status": "ok"}
+{"image_id": 13597, "file_name": "000000013597.jpg", "class": "cake", "gold": 1, "detector": "mask2former", "scores": [0.969688], "status": "ok"}
+{"image_id": 105014, "file_name": "000000105014.jpg", "class": "carrot", "gold": 1, "detector": "mask2former", "scores": [0.912046, 0.879073, 0.85476, 0.826057, 0.778836, 0.31268, 0.155761, 0.105121, 0.054458], "status": "ok"}
+{"image_id": 4795, "file_name": "000000004795.jpg", "class": "cat", "gold": 1, "detector": "mask2former", "scores": [0.950103], "status": "ok"}
+{"image_id": 16598, "file_name": "000000016598.jpg", "class": "cell phone", "gold": 1, "detector": "mask2former", "scores": [0.98026], "status": "ok"}
+{"image_id": 4495, "file_name": "000000004495.jpg", "class": "chair", "gold": 1, "detector": "mask2former", "scores": [0.967161, 0.103804], "status": "ok"}
+{"image_id": 36494, "file_name": "000000036494.jpg", "class": "clock", "gold": 1, "detector": "mask2former", "scores": [0.933472], "status": "ok"}
+{"image_id": 4495, "file_name": "000000004495.jpg", "class": "couch", "gold": 1, "detector": "mask2former", "scores": [], "status": "ok"}

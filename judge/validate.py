@@ -40,18 +40,58 @@ from criteria import MUST_AGREE, MUST_DIFFER, QUESTIONS  # noqa: E402
 QUESTION_IDS = tuple(QUESTIONS)
 
 
-def load(path, probe="target"):
-    """(item, condition, seed, pass) -> {question: answer}, ok rows only."""
+def load(paths, probe="target", model=None):
+    """(item, condition, seed, pass) -> {question: answer}, ok rows only.
+
+    Takes several files because the two judges run in different places -- one
+    against a hosted API, one against a locally served model -- and their
+    outputs only meet at analysis time."""
     out = {}
-    for line in path.read_text().splitlines():
-        if not line.strip():
-            continue
-        r = json.loads(line)
-        if r.get("status") != "ok" or r.get("probe", "target") != probe:
-            continue
-        key = (r["item_id"], r["condition"], r["seed"], r["pass"])
-        out[key] = {q: r[q]["answer"] for q in QUESTION_IDS if q in r}
+    for path in paths:
+        for line in path.read_text().splitlines():
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            if r.get("status") != "ok" or r.get("probe", "target") != probe:
+                continue
+            if model is not None and r.get("judge_model") != model:
+                continue
+            key = (r["item_id"], r["condition"], r["seed"], r["pass"])
+            out[key] = {q: r[q]["answer"] for q in QUESTION_IDS if q in r}
     return out
+
+
+def judge_models(paths):
+    seen = []
+    for path in paths:
+        for line in path.read_text().splitlines():
+            if not line.strip():
+                continue
+            m = json.loads(line).get("judge_model")
+            if m and m not in seen:
+                seen.append(m)
+    return seen
+
+
+def cross_judge(paths, model_a, model_b):
+    """Agreement between two different judges on the same videos.
+
+    Independent of the reliability and specificity numbers: two judges can each
+    be self-consistent and still disagree with each other, and that disagreement
+    bounds how much of any effect is judge-specific."""
+    a = load(paths, model=model_a)
+    b = load(paths, model=model_b)
+    per_q = defaultdict(lambda: [0, 0])
+    pairs = defaultdict(list)
+    for key, answers in a.items():
+        if key[3] != 1 or key not in b:
+            continue
+        for q in QUESTION_IDS:
+            if q in answers and q in b[key]:
+                per_q[q][1] += 1
+                per_q[q][0] += answers[q] == b[key][q]
+                pairs[q].append((answers[q], b[key][q]))
+    return per_q, pairs
 
 
 def specificity(negatives):
@@ -146,16 +186,23 @@ def action_rate(judged, judge_pass=1, condition="prog"):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--judgments", type=Path, required=True)
+    ap.add_argument("--judgments", type=Path, nargs="+", required=True,
+                    help="one or more judgments.jsonl; pass several to compare "
+                         "judges that ran in different places")
+    ap.add_argument("--model", help="restrict sections 1-4 to one judge")
     args = ap.parse_args()
 
-    judged = load(args.judgments)
-    negatives = load(args.judgments, probe="known_negative")
+    models = judge_models(args.judgments)
+    judged = load(args.judgments, model=args.model)
+    negatives = load(args.judgments, probe="known_negative", model=args.model)
     if not judged:
         raise SystemExit(f"no successful judgments in {args.judgments}")
     passes = sorted({k[3] for k in judged})
     print(f"{len(judged)} judgments, passes {passes}, "
-          f"{len(negatives)} known-negative probes\n")
+          f"{len(negatives)} known-negative probes")
+    print(f"judges: {', '.join(models)}"
+          + (f"  (sections 1-4 restricted to {args.model})" if args.model else "")
+          + "\n")
 
     print("=" * 66)
     print("1. judge noise -- same video judged twice")
@@ -234,6 +281,25 @@ def main():
     print(f"  action executed in `prog`: {rate(yes, total)}")
     print("  Items answered 'no' here carry no information about culmination:")
     print("  with no process there is nothing for an endpoint to be the end of.")
+
+    if len(models) > 1:
+        print()
+        print("=" * 66)
+        print("5. cross-judge agreement -- two judges on the same videos")
+        print("=" * 66)
+        for i, model_a in enumerate(models):
+            for model_b in models[i + 1:]:
+                per_q, pairs = cross_judge(args.judgments, model_a, model_b)
+                if not per_q:
+                    print(f"  {model_a} vs {model_b}: no overlapping videos")
+                    continue
+                print(f"  {model_a} vs {model_b}")
+                for q in QUESTION_IDS:
+                    m, t = per_q[q]
+                    if t:
+                        print(f"    {q:8s} {fmt(m, t, pairs[q])}")
+        print("\n  Two judges can each be self-consistent and still disagree.")
+        print("  This bounds how much of any reported effect is judge-specific.")
 
 
 if __name__ == "__main__":

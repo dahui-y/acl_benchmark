@@ -129,6 +129,48 @@ python judge.py --frames ... --model gpt-5.2 --known-negative
 默认 20 帧，与 OSCBench 的 MLLM 评测一致，所以两边的数字是可比的。
 `extract_frames.py` 的抽样公式也和他们完全相同（`linspace`，含首末帧）。
 
+## 两个判官跑在两个地方
+
+生成机在国内、能上外网的机器在国外，这个约束正好把两个判官拆开——
+而"两个 MLLM 交叉一致"本来就是效度论证里要补的一格：
+
+| 判官 | 跑在哪 | 需要外网 |
+|---|---|---|
+| **GPT-5.2**（主判官） | 本地 Mac | 是 |
+| **Qwen2.5-VL**（第二判官） | 生成机的 4090，vLLM 本地服务 | **否** |
+
+主判官选 GPT-5.2 的理由是**可比性**：OSCBench 的主结果就是用它报的，
+而且他们测出 GPT-5.2 + CoT 与人工相关最高。同一个判官，
+两边的数字在同一坐标系里。
+
+抽帧要搬到 Mac 上：111 个视频 × 20 帧 ≈ 2200 张图、一两百 MB。
+判官脚本只依赖 `openai`，不需要 torch。
+
+```bash
+# 生成机：打包抽帧
+tar czf frames.tgz -C $FRAMES wan2.2-ti2v-5b-480p
+
+# Mac：解包，判，把 judgments.jsonl 传回来（或就在 Mac 上做分析）
+pip install openai
+python judge.py --frames ./wan2.2-ti2v-5b-480p --model gpt-5.2 --repeat 2
+```
+
+```bash
+# 生成机：起本地服务，第二判官
+vllm serve Qwen/Qwen2.5-VL-7B-Instruct --port 8000
+JUDGE_BASE_URL=http://localhost:8000/v1 \
+python judge.py --frames $FRAMES/wan2.2-ti2v-5b-480p \
+  --model Qwen/Qwen2.5-VL-7B-Instruct --repeat 2 --out judgments_qwen.jsonl
+```
+
+两份 judgments 合到一起出报告，`validate.py` 会多出交叉一致率一节：
+
+```bash
+python validate.py --judgments judgments_gpt.jsonl judgments_qwen.jsonl
+```
+
+`--model` 可以把前四节限定到某一个判官。
+
 ## 与生成侧的接口
 
 ```

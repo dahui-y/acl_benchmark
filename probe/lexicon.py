@@ -251,6 +251,24 @@ def indefinite(noun: str) -> str:
     return ("an " if noun[0] in "aeiou" else "a ") + noun
 
 
+# Nouns whose dominant English sense is not the food. Unlike every other filter
+# here, this class is invisible in the prompt text and only shows up in the
+# generated video: the pilot's `mashing a plantain` item rendered a broad-leaved
+# weed (Plantago) across all four conditions, with no plantain and no mashing
+# anywhere in it. An item whose object is rendered as the wrong thing carries no
+# information about aspect, so it is a defect, not a finding.
+#
+# Blocked only on evidence or near-certainty. The remaining ambiguous nouns in
+# the taxonomy -- pepper, lime, orange, squash, kiwi -- sit in strong culinary
+# frames ("squeezing a lime in the kitchen") and are cheap to screen with one
+# video each, so they are checked rather than guessed at.
+AMBIGUOUS_NOUNS = {
+    "plantain",  # Plantago, a lawn weed -- confirmed misrendered in the pilot
+    "date",      # calendar date; "slicing a date" reads as anything but fruit
+}
+
+
 def is_usable_object(noun: str) -> bool:
     """Count nouns only, so the bare-plural atelic contrast is well formed."""
-    return noun not in MASS_OR_GENERIC and " " not in noun
+    return (noun not in MASS_OR_GENERIC and noun not in AMBIGUOUS_NOUNS
+            and " " not in noun)

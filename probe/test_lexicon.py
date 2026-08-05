@@ -11,7 +11,8 @@ Run: python test_lexicon.py
 import json
 from pathlib import Path
 
-from lexicon import MASS_OR_GENERIC, VERB_ASPECTUAL_CLASS, VERB_FORMS, is_compatible
+from lexicon import (AMBIGUOUS_NOUNS, MASS_OR_GENERIC, VERB_ASPECTUAL_CLASS,
+                     VERB_FORMS, is_compatible, is_usable_object)
 
 TAXONOMY = Path(__file__).parent.parent / "action_object_taxonomy"
 
@@ -79,6 +80,12 @@ MUST_ALLOW = [
 
 MUST_BE_MASS = ["celery", "chive", "bean", "okra", "dill", "caramel", "butter"]
 
+# Word-sense defects: the prompt reads fine, the video shows the wrong object.
+MUST_BE_UNUSABLE = [
+    ("plantain", "rendered as Plantago, the weed, in the pilot"),
+    ("date", "calendar date"),
+]
+
 
 def main():
     failures = []
@@ -99,6 +106,10 @@ def main():
         if noun not in MASS_OR_GENERIC:
             failures.append(f"{noun} should be in MASS_OR_GENERIC")
 
+    for noun, why in MUST_BE_UNUSABLE:
+        if is_usable_object(noun):
+            failures.append(f"{noun} should be unusable ({why})")
+
     missing = set(VERB_FORMS) - set(VERB_ASPECTUAL_CLASS)
     if missing:
         failures.append(f"verbs without an aspectual class: {sorted(missing)}")
@@ -110,7 +121,8 @@ def main():
         raise SystemExit(1)
 
     print(f"ok: {len(MUST_REJECT)} rejections, {len(MUST_ALLOW)} retentions, "
-          f"{len(MUST_BE_MASS)} mass nouns, all {len(VERB_FORMS)} verbs classed")
+          f"{len(MUST_BE_MASS)} mass nouns, {len(AMBIGUOUS_NOUNS)} ambiguous nouns, "
+          f"all {len(VERB_FORMS)} verbs classed")
 
 
 if __name__ == "__main__":

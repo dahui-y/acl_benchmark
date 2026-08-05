@@ -29,9 +29,28 @@ ANSWERS = {"yes", "no", "unclear"}
 QUESTION_IDS = ("action", "initial", "final")
 
 
+REQUIRED_FIELDS = ("verb_base", "other_verb_base", "noun")
+
+
 def load_items(stimuli_path):
-    return {r["item_id"]: r for r in
-            (json.loads(l) for l in stimuli_path.read_text().splitlines() if l)}
+    items = {r["item_id"]: r for r in
+             (json.loads(l) for l in stimuli_path.read_text().splitlines() if l)}
+    if not items:
+        raise SystemExit(f"{stimuli_path} is empty")
+    # The judge is shown the bare verb, never the gerund and never the sentence,
+    # so these fields have to be present. They were added after the first
+    # stimuli files were built, and a copy taken before that fails here rather
+    # than mid-run.
+    missing = [f for f in REQUIRED_FIELDS if f not in next(iter(items.values()))]
+    if missing:
+        raise SystemExit(
+            f"{stimuli_path} predates fields {missing}.\n"
+            f"  Rebuild it with the current code and copy it across again:\n"
+            f"    cd probe && python build_stimuli.py --n-generate 40\n"
+            f"  Both machines must use the SAME file -- item ids shift between "
+            f"builds, and a mismatch silently judges the wrong video."
+        )
+    return items
 
 
 def find_videos(frames_root, seeds=None, conditions=None):

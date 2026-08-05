@@ -190,8 +190,20 @@ def main():
     if args.limit:
         todo = todo[:args.limit]
 
-    print(f"{len(jobs)} videos x {args.repeat} pass(es), "
-          f"{len(already)} already judged, {len(todo)} to go")
+    # Count the overlap with this plan, not the whole file: a judgments file
+    # carried over from an earlier frame set holds rows for item ids that no
+    # longer exist, and reporting those made the three numbers fail to add up.
+    planned = len(jobs) * args.repeat
+    stale = len(already) - (planned - len(todo))
+    print(f"{len(jobs)} videos x {args.repeat} pass(es) = {planned} judgments, "
+          f"{planned - len(todo)} already done, {len(todo)} to go")
+    if stale > 0:
+        print(f"  WARNING: {stale} rows in {out_path.name} are outside this "
+              f"plan -- probably judged against an earlier frame set with "
+              f"different item ids. They will pollute validate.py; check with\n"
+              f"    python -c \"import json;"
+              f"[print(r['item_id'],r['condition'],r['seed'],r['pass']) "
+              f"for r in map(json.loads,open('{out_path}'))]\" | sort -u")
 
     if args.dry_run:
         j = todo[0]

@@ -60,8 +60,14 @@ def kappa(pairs, weighted=False):
 
 
 def counts_at(rows, thr):
-    """(gold, predicted) at a confidence threshold."""
-    return [(r["gold"], sum(1 for s in r["scores"] if s >= thr)) for r in rows]
+    """(gold, predicted) at a confidence threshold.
+
+    An MLLM verifier returns the integer itself, so its rows carry `count` and
+    the threshold does not apply -- sweeping one over them would report the same
+    number ten times and invite the reader to think it had been tuned.
+    """
+    return [(r["gold"], r["count"] if "count" in r else
+             sum(1 for s in r["scores"] if s >= thr)) for r in rows]
 
 
 def sweep(rows, thresholds):
@@ -341,8 +347,13 @@ def main():
     args = ap.parse_args()
 
     for path in args.pred:
-        rows = [r for r in map(json.loads, path.read_text().splitlines())
-                if r.get("status") == "ok"]
+        all_rows = [r for r in map(json.loads, path.read_text().splitlines())
+                    if r]
+        rows = [r for r in all_rows if r.get("status") == "ok"]
+        failed = len(all_rows) - len(rows)
+        if failed:
+            print(f"\n{path.name}: {failed} of {len(all_rows)} cells errored "
+                  f"and are excluded -- an unparseable count is not a zero")
         if not rows:
             print(f"\n{path}: no successful rows")
             continue

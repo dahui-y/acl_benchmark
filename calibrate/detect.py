@@ -25,6 +25,7 @@ human check we are not doing, so both have to be calibrated here first.
 
 import argparse
 import json
+import os
 import time
 from pathlib import Path
 from urllib.request import urlopen
@@ -36,7 +37,23 @@ MODELS = {
     "mask2former-small": "facebook/mask2former-swin-small-coco-instance",
     "owlv2": "google/owlv2-base-patch16-ensemble",
     "owlv2-large": "google/owlv2-large-patch14-ensemble",
+    # An MLLM asked for the number directly. Worth testing because the whole
+    # design hinges on the verifier, only detectors have been tried, and unlike
+    # the video judge this one can be calibrated -- COCO supplies the gold
+    # counts that the video work never had.
+    "mllm": "Qwen/Qwen2.5-VL-3B-Instruct",
+    "mllm-7b": "Qwen/Qwen2.5-VL-7B-Instruct",
+    "mllm-api": None,   # --model-id names the hosted model
 }
+
+COUNT_PROMPT = """How many {noun} are visible in this image?
+
+Count every separate {noun}, including ones that are partly hidden behind \
+something else or cut off at the edge of the frame. Do not count anything that \
+is not a {noun}.
+
+Answer with this JSON and nothing else:
+{{"count": <integer>}}"""
 
 # A permissive floor. Anything above it is stored; the operating threshold is
 # chosen in report.py. Do not raise this -- it would silently truncate the
@@ -137,8 +154,94 @@ class OwlV2:
         return nms(boxes, scores, iou).tolist()
 
 
-def load_detector(name, device):
-    model_id = MODELS[name]
+class MllmLocal:
+    """Open-weights vision-language model, asked for the integer directly.
+
+    Image tokens dominate the cost, so max_pixels is capped. Counting needs
+    enough resolution to separate touching instances, and this is the knob that
+    trades that against runtime -- it is exposed rather than fixed because the
+    right value is an empirical question, the same way the detectors' confidence
+    threshold was.
+    """
+
+    def __init__(self, model_id, device, max_pixels=768 * 28 * 28):
+        import torch  # noqa: PLC0415
+        from transformers import (AutoModelForImageTextToText,  # noqa: PLC0415
+                                  AutoProcessor)
+        self.torch = torch
+        self.proc = AutoProcessor.from_pretrained(model_id, max_pixels=max_pixels)
+        self.model = AutoModelForImageTextToText.from_pretrained(
+            model_id, dtype=torch.bfloat16).to(device).eval()
+        self.device = device
+
+    def count_for(self, image, class_name):
+        msgs = [{"role": "user", "content": [
+            {"type": "image"},
+            {"type": "text", "text": COUNT_PROMPT.format(noun=class_name)}]}]
+        text = self.proc.apply_chat_template(msgs, add_generation_prompt=True)
+        inputs = self.proc(text=[text], images=[image],
+                           return_tensors="pt").to(self.device)
+        with self.torch.no_grad():
+            out = self.model.generate(**inputs, max_new_tokens=24,
+                                      do_sample=False)
+        reply = self.proc.batch_decode(
+            out[:, inputs["input_ids"].shape[1]:],
+            skip_special_tokens=True)[0]
+        return parse_count(reply), reply
+
+
+class MllmApi:
+    """Any OpenAI-compatible chat endpoint, so a hosted model can be calibrated
+    on exactly the same cells as the local one."""
+
+    def __init__(self, model_id, device, base_url=None, api_key=None):
+        from openai import OpenAI  # noqa: PLC0415
+        self.client = OpenAI(api_key=api_key or os.environ.get("JUDGE_API_KEY"),
+                             base_url=base_url or os.environ.get("JUDGE_BASE_URL"))
+        self.model_id = model_id
+
+    def count_for(self, image, class_name):
+        import base64  # noqa: PLC0415
+        import io  # noqa: PLC0415
+        buf = io.BytesIO()
+        image.save(buf, format="JPEG", quality=92)
+        url = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+        resp = self.client.chat.completions.create(
+            model=self.model_id,
+            messages=[{"role": "user", "content": [
+                {"type": "text", "text": COUNT_PROMPT.format(noun=class_name)},
+                {"type": "image_url", "image_url": {"url": url}}]}],
+            response_format={"type": "json_object"}, max_completion_tokens=64)
+        reply = resp.choices[0].message.content
+        return parse_count(reply), reply
+
+
+def parse_count(reply):
+    """Pull the integer out, refusing to guess.
+
+    A reply that does not contain a number is an error, not a zero. Coercing it
+    would put the model's confusion into the count column, where it would look
+    like the model confidently saw nothing.
+    """
+    import re  # noqa: PLC0415
+    m = re.search(r'"count"\s*:\s*(-?\d+)', reply)
+    if not m:
+        m = re.search(r"(-?\d+)", reply)
+    if not m:
+        raise ValueError(f"no integer in reply: {reply!r}")
+    n = int(m.group(1))
+    if n < 0:
+        raise ValueError(f"negative count in reply: {reply!r}")
+    return n
+
+
+def load_detector(name, device, model_id=None, max_pixels=None):
+    model_id = model_id or MODELS[name]
+    if name == "mllm-api":
+        return MllmApi(model_id, device)
+    if name.startswith("mllm"):
+        kw = {"max_pixels": max_pixels} if max_pixels else {}
+        return MllmLocal(model_id, device, **kw)
     cls = OwlV2 if name.startswith("owlv2") else Mask2Former
     return cls(model_id, device)
 
@@ -161,6 +264,10 @@ def main():
     ap.add_argument("--device", default=None,
                     help="default cuda when available, else cpu")
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--model-id", default=None,
+                    help="override the checkpoint / hosted model name")
+    ap.add_argument("--max-pixels", type=int, default=None,
+                    help="mllm only: image-token budget, as pixels")
     args = ap.parse_args()
 
     import torch  # noqa: PLC0415
@@ -182,18 +289,25 @@ def main():
     if not todo:
         return
 
-    det = load_detector(args.detector, device)
+    det = load_detector(args.detector, device, args.model_id, args.max_pixels)
     t0 = time.time()
     with out_path.open("a") as fh:
         for n, cell in enumerate(todo, 1):
             rec = dict(cell, detector=args.detector)
             try:
                 image = Image.open(fetch(cell["file_name"], args.cache)).convert("RGB")
-                scores, boxes = det.scores_for(image, cell["class"])
-                order = sorted(range(len(scores)), key=lambda i: -scores[i])
-                rec["scores"] = [scores[i] for i in order]
-                if boxes is not None:
-                    rec["boxes"] = [boxes[i] for i in order]
+                if hasattr(det, "count_for"):
+                    # An MLLM emits the number itself, so there is no threshold
+                    # to sweep. report.py prefers `count` when it is present.
+                    rec["count"], rec["reply"] = det.count_for(
+                        image, cell["class"])
+                    rec["scores"] = [1.0] * rec["count"]
+                else:
+                    scores, boxes = det.scores_for(image, cell["class"])
+                    order = sorted(range(len(scores)), key=lambda i: -scores[i])
+                    rec["scores"] = [scores[i] for i in order]
+                    if boxes is not None:
+                        rec["boxes"] = [boxes[i] for i in order]
                 rec["status"] = "ok"
             except Exception as exc:  # one bad image must not kill the batch
                 rec.update(status="error", error=f"{type(exc).__name__}: {exc}")

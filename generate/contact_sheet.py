@@ -8,10 +8,18 @@ prompt -- reading down a column is reading the effect of the grammar directly.
 Two uses, and the same picture serves both: eyeballing whether the prompts
 render into something judgeable at all, and the qualitative figure in the paper.
 
+Two views:
+
+    rows = conditions, one item   the analysis view -- what the grammar did
+    rows = items, one condition   the screening view (--by-item) -- 37 items on
+                                  four sheets instead of 37 files, which is what
+                                  makes a whole-suite check something a person
+                                  will actually sit down and do
+
 Usage:
     python contact_sheet.py --videos /data/videos/wan2.2-ti2v-5b-480p --item 0
     python contact_sheet.py --videos ... --item 0 --conditions prog perf result
-    python contact_sheet.py --videos ... --all-items --out-dir sheets/
+    python contact_sheet.py --videos ... --all-items --conditions prog --by-item
 """
 
 import argparse
@@ -72,44 +80,73 @@ def wrap(text, width):
     return lines
 
 
-def build_sheet(video_dir, item_id, conditions, seed, prompts, n_frames, cell_w,
-                title):
-    rows, missing = [], []
-    for cond in conditions:
-        path = video_dir / f"item{item_id:04d}" / f"{cond}__seed{seed}.mp4"
-        if not path.exists():
-            missing.append(cond)
-            continue
-        frames = sample_frames(path, n_frames)
-        if not frames:
-            missing.append(cond)
-            continue
-        h, w = frames[0].shape[:2]
-        cell_h = int(cell_w * h / w)
-        strip = [cv2.resize(f, (cell_w, cell_h)) for f in frames]
-        while len(strip) < n_frames:  # a short video still gets a full-width row
-            strip.append(np.zeros((cell_h, cell_w, 3), np.uint8))
-
-        gutter = np.full((cell_h, LABEL_W, 3), 32, np.uint8)
-        cv2.putText(gutter, cond, (10, 26), FONT, 0.62, (255, 255, 255), 1, cv2.LINE_AA)
-        for i, line in enumerate(wrap(prompts.get(cond, ""), 38)[:4]):
-            cv2.putText(gutter, line, (10, 52 + i * 20), FONT, 0.42,
-                        (170, 170, 170), 1, cv2.LINE_AA)
-
-        cells = [np.pad(c, ((0, PAD), (0, PAD), (0, 0))) for c in [gutter] + strip]
-        row = np.hstack(cells)
-        rows.append(row)
-
+def build_rows(rows, title):
+    """Stack labelled rows into one image, padding to a common width."""
     if not rows:
-        return None, conditions
-
+        return None
     width = max(r.shape[1] for r in rows)
     rows = [np.pad(r, ((0, 0), (0, width - r.shape[1]), (0, 0))) for r in rows]
     body = np.vstack(rows)
-
     header = np.full((HEADER_H, width, 3), 20, np.uint8)
     cv2.putText(header, title, (10, 30), FONT, 0.68, (255, 255, 255), 1, cv2.LINE_AA)
-    return np.vstack([header, body]), missing
+    return np.vstack([header, body])
+
+
+def make_row(video_path, label, caption, n_frames, cell_w):
+    """One video as a labelled strip, or None if the file is missing or unreadable."""
+    if not video_path.exists():
+        return None
+    frames = sample_frames(video_path, n_frames)
+    if not frames:
+        return None
+    h, w = frames[0].shape[:2]
+    cell_h = int(cell_w * h / w)
+    strip = [cv2.resize(f, (cell_w, cell_h)) for f in frames]
+    while len(strip) < n_frames:
+        strip.append(np.zeros((cell_h, cell_w, 3), np.uint8))
+
+    gutter = np.full((cell_h, LABEL_W, 3), 32, np.uint8)
+    cv2.putText(gutter, label, (10, 26), FONT, 0.62, (255, 255, 255), 1, cv2.LINE_AA)
+    for i, line in enumerate(wrap(caption, 38)[:4]):
+        cv2.putText(gutter, line, (10, 52 + i * 20), FONT, 0.42,
+                    (170, 170, 170), 1, cv2.LINE_AA)
+    return np.hstack([np.pad(c, ((0, PAD), (0, PAD), (0, 0)))
+                      for c in [gutter] + strip])
+
+
+def build_item_sheet(video_dir, item_ids, condition, seed, items, n_frames,
+                     cell_w, title):
+    """Rows are items, one condition. The screening view: 37 items on four
+    sheets instead of 37 files, which is what makes a whole-suite check
+    something a person will actually sit down and do."""
+    rows, missing = [], []
+    for item_id in item_ids:
+        item = items.get(item_id)
+        if item is None:
+            missing.append(item_id)
+            continue
+        path = video_dir / f"item{item_id:04d}" / f"{condition}__seed{seed}.mp4"
+        row = make_row(path, f"item {item_id}: {item['gerund']} + {item['noun']}",
+                       item["texts"].get(condition, ""), n_frames, cell_w)
+        if row is None:
+            missing.append(item_id)
+        else:
+            rows.append(row)
+    return build_rows(rows, title), missing
+
+
+def build_sheet(video_dir, item_id, conditions, seed, prompts, n_frames, cell_w,
+                title):
+    """Rows are conditions, one item. The analysis view."""
+    rows, missing = [], []
+    for cond in conditions:
+        path = video_dir / f"item{item_id:04d}" / f"{cond}__seed{seed}.mp4"
+        row = make_row(path, cond, prompts.get(cond, ""), n_frames, cell_w)
+        if row is None:
+            missing.append(cond)
+        else:
+            rows.append(row)
+    return build_rows(rows, title), missing
 
 
 def main():
@@ -126,6 +163,11 @@ def main():
     ap.add_argument("--stimuli", type=Path,
                     default=Path(__file__).parent.parent / "probe" / "stimuli.jsonl")
     ap.add_argument("--out-dir", type=Path, default=Path("sheets"))
+    ap.add_argument("--by-item", action="store_true",
+                    help="rows are items rather than conditions; needs exactly "
+                         "one --conditions value. The whole-suite screening view")
+    ap.add_argument("--per-sheet", type=int, default=10,
+                    help="items per sheet in --by-item mode")
     args = ap.parse_args()
 
     items = {r["item_id"]: r for r in
@@ -146,6 +188,28 @@ def main():
         ap.error("pass --item N or --all-items")
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.by_item:
+        if len(conditions) != 1:
+            ap.error("--by-item takes exactly one condition")
+        cond = conditions[0]
+        for n, start in enumerate(range(0, len(found), args.per_sheet), 1):
+            chunk = found[start:start + args.per_sheet]
+            total = -(-len(found) // args.per_sheet)
+            title = (f"{cond}  |  seed {args.seed}  |  {args.videos.name}  |  "
+                     f"sheet {n}/{total}  (items {chunk[0]}-{chunk[-1]})")
+            sheet, missing = build_item_sheet(args.videos, chunk, cond, args.seed,
+                                              items, args.frames, args.cell_width,
+                                              title)
+            if sheet is None:
+                print(f"sheet {n}: no videos found")
+                continue
+            out = args.out_dir / f"{cond}_seed{args.seed}_sheet{n}.png"
+            cv2.imwrite(str(out), sheet)
+            note = f"  (missing: {missing})" if missing else ""
+            print(f"{out}  {sheet.shape[1]}x{sheet.shape[0]}{note}")
+        return
+
     for item_id in found:
         item = items.get(item_id)
         if item is None:

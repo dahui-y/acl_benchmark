@@ -1,88 +1,127 @@
-"""Build the calibration cells from COCO gold annotations.
+"""Build the calibration cells from gold instance annotations.
 
 A *cell* is one (image, class) pair whose gold instance count is known. The
-detector is asked "how many <class> are in this image", and its answer is
-compared against that count. No new labelling: the counts come out of
-`instances_val2017.json`.
+verifier is asked "how many <class> are in this image", and its answer is
+compared against that count. No new labelling: someone else already paid for
+these counts.
 
-Two things about COCO gold counts have to be handled or the calibration number
-is meaningless:
+**Why LVIS and not COCO.** The first version of this file used COCO, and the
+counts were not trustworthy. COCO image 2149 is annotated with one apple; the
+photograph is a bowl holding seven or eight of them. That is not a rare defect
+-- it concentrates in exactly the classes a counting benchmark cares about
+(apple, banana, broccoli, carrot: small, repeated, touching), and it inflates
+the verifier's apparent false-positive rate, because a verifier that correctly
+reports eight is scored as wrong. Numbers measured that way understate every
+verifier, and understate them worst on the classes that matter most.
 
-**Crowd regions.** `iscrowd=1` marks a blob covering an unspecified number of
-instances. An image with one crowd annotation of apples does not have "1 apple".
-Any image with a crowd region for the class is dropped, not counted as 1.
+LVIS annotates the same photographs and records, per image, which categories are
+NOT exhaustively annotated. Dropping those pairs leaves counts that can be
+compared against. This is the property the calibration needs and COCO does not
+carry, and it costs nothing extra: still no new labels.
 
-**Tiny background instances.** COCO labels every visible instance, including
-ones a few pixels across. A generated image for "three apples" contains three
-salient apples, so a detector's failure to find a 12-pixel apple in a real photo
-says nothing about how it will behave on our images. Cells are therefore
-restricted to images where EVERY instance of the class is above an area
-threshold -- images with borderline instances are dropped rather than counted
-either way, because for those the gold count itself is arguable and we would be
-measuring our own threshold rather than the detector.
+Two further filters, both there so the gold count is not itself arguable:
 
-The result is a deliberately clean regime. That is the point: if the detector
-cannot count 2-5 large, unambiguous objects in real photographs, the whole
-plan of using it as the verifier is dead, and no amount of care downstream
-rescues it. The optimism is intentional -- this step can only kill the
-direction, never certify it.
+**Tiny background instances.** LVIS labels instances a few pixels across, and no
+prompt-driven generation produces those, so a verifier's failure to find one
+says nothing about how it behaves on our images. Cells keep only images where
+EVERY instance of the class clears an area floor; images with borderline
+instances are dropped rather than counted either way.
+
+**Negative categories.** LVIS also records categories verified absent from an
+image. Those make clean N=0 cells, which is the one band a detector cannot fake.
+
+The result is a deliberately clean regime, and that is the point: this step can
+only kill the direction, never certify it. If a verifier cannot count 2-5 large,
+unambiguous objects in real photographs, it will not do better on generated ones.
 """
 
 import argparse
 import json
 from collections import defaultdict
+from itertools import zip_longest
 from pathlib import Path
 
-# The object vocabulary the benchmark would actually use: things that are
-# discrete, countable, and idiomatic as the object of "the three girls are each
-# holding a ___". COCO's 80 classes are the constraint here -- the real suite
-# can go beyond them with an open-vocabulary detector, but calibration needs
-# gold counts, and gold counts only exist for these.
+# LVIS names differ from COCO's for a good many classes, and a silent miss here
+# would drop a class from the calibration without saying so -- build_cells
+# raises on anything unmapped rather than quietly skipping it.
+LVIS_NAME = {
+    "orange": "orange_(fruit)", "wine glass": "wineglass",
+    "cell phone": "cellular_telephone", "sports ball": "ball",
+    "remote": "remote_control", "mouse": "mouse_(computer_equipment)",
+    "potted plant": "flowerpot", "laptop": "laptop_computer",
+    "dining table": "dining_table", "teddy bear": "teddy_bear",
+    "donut": "doughnut", "couch": "sofa", "wristwatch": "watch",
+}
+
+# The object vocabulary the benchmark would actually use: discrete, countable,
+# idiomatic as the object of "the three girls are each holding a ___". LVIS's
+# 1203 categories reach well past COCO's 80, which is why `balloon` -- the
+# canonical example the whole design is written around -- is testable at all.
 CANDIDATE_CLASSES = [
-    # small handheld things -- the core of the distributive items
-    "apple", "orange", "banana", "donut", "cup", "wine glass", "bottle",
-    "bowl", "book", "cell phone", "umbrella", "kite", "sports ball",
+    # small handheld things: the core of the distributive items
+    "balloon", "apple", "orange", "banana", "donut", "cup", "wine glass",
+    "bottle", "bowl", "book", "cell phone", "umbrella", "kite", "sports ball",
     "frisbee", "vase", "clock", "teddy bear", "scissors", "spoon", "fork",
     "knife", "toothbrush", "remote", "mouse", "carrot", "broccoli",
-    "sandwich", "cake", "pizza", "hot dog",
-    # agents and animals -- the subject side ("the three girls", "the two dogs")
+    "sandwich", "cake", "pizza", "candle", "flower_arrangement", "mug",
+    "wristwatch", "necklace", "sunglasses", "handbag", "backpack",
+    # agents and animals: the subject side ("the three girls", "the two dogs")
     "person", "dog", "cat", "bird", "horse", "sheep", "cow", "elephant",
-    "zebra", "giraffe",
+    "zebra", "giraffe", "duck", "goose",
     # furniture-scale, for the larger-N difficulty band
-    "chair", "couch", "potted plant", "bed", "dining table", "tv", "laptop",
+    "chair", "couch", "potted plant", "bed", "dining table", "laptop",
 ]
 
 
-def build_cells(ann_path, classes, min_area_frac, max_count, drop_borderline=True):
-    """Return cells [(image_id, file_name, class_name, gold_count), ...].
+def load_source(path):
+    """Return (images, annotations, name->id, per-image exhaustive info)."""
+    d = json.loads(Path(path).read_text())
+    by_name = {c["name"]: c["id"] for c in d["categories"]}
+    images = {im["id"]: im for im in d["images"]}
+    return d, images, by_name
 
-    min_area_frac is a fraction of the image area. An instance below it is
-    "small". With drop_borderline, an image containing ANY small instance of
-    the class is discarded; without it, small instances are simply counted.
-    """
-    coco = json.loads(Path(ann_path).read_text())
-    cat_name = {c["id"]: c["name"] for c in coco["categories"]}
-    wanted = {c["id"] for c in coco["categories"] if c["name"] in classes}
-    images = {im["id"]: im for im in coco["images"]}
 
-    big = defaultdict(int)        # (img, cat) -> instances above threshold
-    small = defaultdict(int)      # (img, cat) -> instances below threshold
-    crowd = set()                 # (img, cat) with a crowd region
+def build_cells(ann_path, classes, min_area_frac, max_count,
+                drop_borderline=True, negatives=0):
+    d, images, by_name = load_source(ann_path)
 
-    for a in coco["annotations"]:
+    wanted = {}
+    missing = []
+    for c in classes:
+        name = LVIS_NAME.get(c, c.replace(" ", "_"))
+        if name in by_name:
+            wanted[by_name[name]] = c
+        elif c in by_name:
+            wanted[by_name[c]] = c
+        else:
+            missing.append(c)
+    if missing:
+        raise SystemExit(
+            f"{len(missing)} classes have no category in {Path(ann_path).name}: "
+            f"{missing}\n  Add them to LVIS_NAME, or drop them from "
+            f"CANDIDATE_CLASSES. They are not skipped silently because a class "
+            f"vanishing from the calibration is exactly the kind of thing that "
+            f"goes unnoticed.")
+
+    # Pairs LVIS flags as not exhaustively annotated: the count is a lower
+    # bound, so scoring a verifier against it would punish it for being right.
+    not_exhaustive = {(im["id"], cid) for im in d["images"]
+                      for cid in im.get("not_exhaustive_category_ids", [])}
+
+    big = defaultdict(int)
+    small = defaultdict(int)
+    for a in d["annotations"]:
         if a["category_id"] not in wanted:
             continue
         key = (a["image_id"], a["category_id"])
-        if a.get("iscrowd"):
-            crowd.add(key)
-            continue
         im = images[a["image_id"]]
         frac = a["area"] / (im["width"] * im["height"])
         (big if frac >= min_area_frac else small)[key] += 1
 
-    cells = []
+    cells, dropped = [], 0
     for key in set(big) | set(small):
-        if key in crowd:
+        if key in not_exhaustive:
+            dropped += 1
             continue
         img_id, cat_id = key
         if drop_borderline and small[key]:
@@ -90,28 +129,37 @@ def build_cells(ann_path, classes, min_area_frac, max_count, drop_borderline=Tru
         n = big[key] + (0 if drop_borderline else small[key])
         if not 1 <= n <= max_count:
             continue
-        cells.append({
-            "image_id": img_id, "file_name": images[img_id]["file_name"],
-            "class": cat_name[cat_id], "gold": n,
-        })
+        cells.append(_cell(images[img_id], wanted[cat_id], n))
+
+    # Verified-absent categories give N=0 cells. A verifier that hedges upward
+    # -- and both detectors did, at low thresholds -- has nowhere to hide here.
+    if negatives:
+        neg = [(im, cid) for im in d["images"]
+               for cid in im.get("neg_category_ids", []) if cid in wanted]
+        per_class = defaultdict(int)
+        for im, cid in neg:
+            if per_class[cid] < negatives:
+                per_class[cid] += 1
+                cells.append(_cell(im, wanted[cid], 0))
+
+    print(f"dropped {dropped} (image, class) pairs flagged not-exhaustive")
     return sorted(cells, key=lambda c: (c["class"], c["gold"], c["image_id"]))
+
+
+def _cell(im, class_name, n):
+    return {"image_id": im["id"],
+            "file_name": im["coco_url"].rsplit("/", 1)[-1],
+            "url": im["coco_url"], "class": class_name, "gold": n}
 
 
 def balance(cells, per_n, per_class_n):
     """Take a class-spread, count-balanced subset, deterministically.
 
-    Two reasons not to calibrate on the raw pool. It is 71% N=1, and a metric
-    computed over a set that skewed mostly reports the detector's behaviour at
-    N=1 -- which is the one band the benchmark barely uses. And `person` alone
-    is a quarter of the multi-instance cells, so an unbalanced set would largely
-    be measuring person detection.
-
-    Round-robin over classes, so every class contributes before any class
-    contributes twice, and the per-class cap binds only the classes that have
-    enough images to hit it.
+    The raw pool is dominated by N=1, and a metric computed over a set that
+    skewed mostly reports the verifier's behaviour at N=1 -- the one band the
+    benchmark barely uses. Round-robin over classes, so every class contributes
+    before any class contributes twice.
     """
-    from itertools import zip_longest  # noqa: PLC0415
-
     out = []
     for n in sorted({c["gold"] for c in cells}):
         pools = defaultdict(list)
@@ -119,7 +167,6 @@ def balance(cells, per_n, per_class_n):
             if c["gold"] == n:
                 pools[c["class"]].append(c)
         ordered = [pools[k][:per_class_n] for k in sorted(pools)]
-        # interleave: one cell per class per lap
         flat = [c for lap in zip_longest(*ordered) for c in lap if c is not None]
         out.extend(flat[:per_n])
     return out
@@ -131,49 +178,45 @@ def summarise(cells, max_count):
     for c in cells:
         by_class[c["class"]][c["gold"]] += 1
         by_n[c["gold"]] += 1
-    print(f"{len(cells)} cells over {len(by_class)} classes\n")
-    print("count distribution:")
-    for n in range(1, max_count + 1):
-        print(f"  N={n}: {by_n[n]:5d}")
-    print(f"\n{'class':<15}" + "".join(f"{'N='+str(n):>7}" for n in
-                                       range(1, max_count + 1)) + f"{'total':>8}")
+    counts = sorted(by_n)
+    print(f"\n{len(cells)} cells over {len(by_class)} classes\n")
+    print("count distribution:  " + "  ".join(f"N={n}:{by_n[n]}" for n in counts))
+    print(f"\n{'class':<20}" + "".join(f"{'N=' + str(n):>6}" for n in counts)
+          + f"{'total':>8}")
     for name in sorted(by_class, key=lambda k: -sum(by_class[k].values())):
         row = by_class[name]
-        print(f"{name:<15}" + "".join(f"{row[n]:>7}" for n in
-                                      range(1, max_count + 1))
+        print(f"{name:<20}" + "".join(f"{row[n]:>6}" for n in counts)
               + f"{sum(row.values()):>8}")
-    return by_class
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--annotations", type=Path,
-                    default=Path(__file__).parent / "data" / "annotations"
-                    / "instances_val2017.json")
+                    default=Path(__file__).parent / "data" / "lvis_v1_val.json",
+                    help="LVIS v1 val. COCO's instances_val2017.json also "
+                         "loads, but its counts are not exhaustive -- see the "
+                         "module docstring")
     ap.add_argument("--out", type=Path,
                     default=Path(__file__).parent / "data" / "cells.jsonl")
     ap.add_argument("--min-area-frac", type=float, default=0.005,
                     help="an instance below this fraction of the image is "
-                         "'small'; 0.005 of a 640x480 image is ~1500 px, about "
-                         "39x39 -- still small, but unarguably visible")
-    ap.add_argument("--max-count", type=int, default=6,
-                    help="the benchmark's difficulty bands are N in 2..5; 1 and "
-                         "6 are included so the confusion matrix has room on "
-                         "both sides")
-    ap.add_argument("--keep-borderline", action="store_true",
-                    help="count small instances instead of dropping the image; "
-                         "reports the harder regime for comparison")
+                         "'small'; 0.005 of a 640x480 image is ~39x39 px")
+    ap.add_argument("--max-count", type=int, default=5,
+                    help="the benchmark's difficulty bands; N=1 is the "
+                         "collective reading and is always included")
+    ap.add_argument("--keep-borderline", action="store_true")
+    ap.add_argument("--negatives", type=int, default=0,
+                    help="add up to this many verified-absent (N=0) cells per "
+                         "class, from LVIS neg_category_ids")
     ap.add_argument("--per-n", type=int, default=0,
-                    help="balance to this many cells per count band; 0 = keep "
-                         "the raw pool, which is 71%% N=1")
-    ap.add_argument("--per-class-n", type=int, default=12,
-                    help="cap per (class, N) when balancing, so `person` does "
-                         "not become a quarter of the set")
+                    help="balance to this many cells per count band")
+    ap.add_argument("--per-class-n", type=int, default=12)
     args = ap.parse_args()
 
-    cells = build_cells(args.annotations, set(CANDIDATE_CLASSES),
+    cells = build_cells(args.annotations, CANDIDATE_CLASSES,
                         args.min_area_frac, args.max_count,
-                        drop_borderline=not args.keep_borderline)
+                        drop_borderline=not args.keep_borderline,
+                        negatives=args.negatives)
     if args.per_n:
         cells = balance(cells, args.per_n, args.per_class_n)
 

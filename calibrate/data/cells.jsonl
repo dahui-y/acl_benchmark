@@ -1,415 +1,540 @@
-{"image_id": 2149, "file_name": "000000002149.jpg", "class": "apple", "gold": 1}
-{"image_id": 2587, "file_name": "000000002587.jpg", "class": "banana", "gold": 1}
-{"image_id": 632, "file_name": "000000000632.jpg", "class": "bed", "gold": 1}
-{"image_id": 32811, "file_name": "000000032811.jpg", "class": "bird", "gold": 1}
-{"image_id": 22371, "file_name": "000000022371.jpg", "class": "book", "gold": 1}
-{"image_id": 26564, "file_name": "000000026564.jpg", "class": "bottle", "gold": 1}
-{"image_id": 1425, "file_name": "000000001425.jpg", "class": "bowl", "gold": 1}
-{"image_id": 15278, "file_name": "000000015278.jpg", "class": "broccoli", "gold": 1}
-{"image_id": 2157, "file_name": "000000002157.jpg", "class": "cake", "gold": 1}
-{"image_id": 7991, "file_name": "000000007991.jpg", "class": "carrot", "gold": 1}
-{"image_id": 1675, "file_name": "000000001675.jpg", "class": "cat", "gold": 1}
-{"image_id": 1296, "file_name": "000000001296.jpg", "class": "cell phone", "gold": 1}
-{"image_id": 632, "file_name": "000000000632.jpg", "class": "chair", "gold": 1}
-{"image_id": 31749, "file_name": "000000031749.jpg", "class": "clock", "gold": 1}
-{"image_id": 3934, "file_name": "000000003934.jpg", "class": "couch", "gold": 1}
-{"image_id": 14888, "file_name": "000000014888.jpg", "class": "cow", "gold": 1}
-{"image_id": 2592, "file_name": "000000002592.jpg", "class": "cup", "gold": 1}
-{"image_id": 139, "file_name": "000000000139.jpg", "class": "dining table", "gold": 1}
-{"image_id": 7386, "file_name": "000000007386.jpg", "class": "dog", "gold": 1}
-{"image_id": 2587, "file_name": "000000002587.jpg", "class": "donut", "gold": 1}
-{"image_id": 6894, "file_name": "000000006894.jpg", "class": "elephant", "gold": 1}
-{"image_id": 3845, "file_name": "000000003845.jpg", "class": "fork", "gold": 1}
-{"image_id": 9378, "file_name": "000000009378.jpg", "class": "frisbee", "gold": 1}
-{"image_id": 17031, "file_name": "000000017031.jpg", "class": "giraffe", "gold": 1}
-{"image_id": 12748, "file_name": "000000012748.jpg", "class": "horse", "gold": 1}
-{"image_id": 9914, "file_name": "000000009914.jpg", "class": "hot dog", "gold": 1}
-{"image_id": 7784, "file_name": "000000007784.jpg", "class": "kite", "gold": 1}
-{"image_id": 2592, "file_name": "000000002592.jpg", "class": "knife", "gold": 1}
-{"image_id": 1503, "file_name": "000000001503.jpg", "class": "laptop", "gold": 1}
-{"image_id": 15497, "file_name": "000000015497.jpg", "class": "mouse", "gold": 1}
-{"image_id": 6614, "file_name": "000000006614.jpg", "class": "orange", "gold": 1}
-{"image_id": 785, "file_name": "000000000785.jpg", "class": "person", "gold": 1}
-{"image_id": 17714, "file_name": "000000017714.jpg", "class": "pizza", "gold": 1}
-{"image_id": 14038, "file_name": "000000014038.jpg", "class": "potted plant", "gold": 1}
-{"image_id": 21503, "file_name": "000000021503.jpg", "class": "remote", "gold": 1}
-{"image_id": 1425, "file_name": "000000001425.jpg", "class": "sandwich", "gold": 1}
-{"image_id": 154213, "file_name": "000000154213.jpg", "class": "scissors", "gold": 1}
-{"image_id": 8690, "file_name": "000000008690.jpg", "class": "sheep", "gold": 1}
-{"image_id": 3845, "file_name": "000000003845.jpg", "class": "spoon", "gold": 1}
-{"image_id": 12062, "file_name": "000000012062.jpg", "class": "sports ball", "gold": 1}
-{"image_id": 12670, "file_name": "000000012670.jpg", "class": "teddy bear", "gold": 1}
-{"image_id": 160666, "file_name": "000000160666.jpg", "class": "toothbrush", "gold": 1}
-{"image_id": 1503, "file_name": "000000001503.jpg", "class": "tv", "gold": 1}
-{"image_id": 7088, "file_name": "000000007088.jpg", "class": "umbrella", "gold": 1}
-{"image_id": 7818, "file_name": "000000007818.jpg", "class": "vase", "gold": 1}
-{"image_id": 2431, "file_name": "000000002431.jpg", "class": "wine glass", "gold": 1}
-{"image_id": 125211, "file_name": "000000125211.jpg", "class": "zebra", "gold": 1}
-{"image_id": 6614, "file_name": "000000006614.jpg", "class": "apple", "gold": 1}
-{"image_id": 3661, "file_name": "000000003661.jpg", "class": "banana", "gold": 1}
-{"image_id": 776, "file_name": "000000000776.jpg", "class": "bed", "gold": 1}
-{"image_id": 46378, "file_name": "000000046378.jpg", "class": "bird", "gold": 1}
-{"image_id": 25603, "file_name": "000000025603.jpg", "class": "book", "gold": 1}
-{"image_id": 27620, "file_name": "000000027620.jpg", "class": "bottle", "gold": 1}
-{"image_id": 2149, "file_name": "000000002149.jpg", "class": "bowl", "gold": 1}
-{"image_id": 19221, "file_name": "000000019221.jpg", "class": "broccoli", "gold": 1}
-{"image_id": 13597, "file_name": "000000013597.jpg", "class": "cake", "gold": 1}
-{"image_id": 105014, "file_name": "000000105014.jpg", "class": "carrot", "gold": 1}
-{"image_id": 4795, "file_name": "000000004795.jpg", "class": "cat", "gold": 1}
-{"image_id": 16598, "file_name": "000000016598.jpg", "class": "cell phone", "gold": 1}
-{"image_id": 4495, "file_name": "000000004495.jpg", "class": "chair", "gold": 1}
-{"image_id": 36494, "file_name": "000000036494.jpg", "class": "clock", "gold": 1}
-{"image_id": 4495, "file_name": "000000004495.jpg", "class": "couch", "gold": 1}
-{"image_id": 52565, "file_name": "000000052565.jpg", "class": "cow", "gold": 1}
-{"image_id": 3661, "file_name": "000000003661.jpg", "class": "cup", "gold": 1}
-{"image_id": 1993, "file_name": "000000001993.jpg", "class": "dining table", "gold": 1}
-{"image_id": 17029, "file_name": "000000017029.jpg", "class": "dog", "gold": 1}
-{"image_id": 38678, "file_name": "000000038678.jpg", "class": "donut", "gold": 1}
-{"image_id": 21903, "file_name": "000000021903.jpg", "class": "elephant", "gold": 1}
-{"image_id": 8277, "file_name": "000000008277.jpg", "class": "fork", "gold": 1}
-{"image_id": 17029, "file_name": "000000017029.jpg", "class": "frisbee", "gold": 1}
-{"image_id": 55072, "file_name": "000000055072.jpg", "class": "giraffe", "gold": 1}
-{"image_id": 15956, "file_name": "000000015956.jpg", "class": "horse", "gold": 1}
-{"image_id": 17899, "file_name": "000000017899.jpg", "class": "hot dog", "gold": 1}
-{"image_id": 14439, "file_name": "000000014439.jpg", "class": "kite", "gold": 1}
-{"image_id": 9914, "file_name": "000000009914.jpg", "class": "knife", "gold": 1}
-{"image_id": 4795, "file_name": "000000004795.jpg", "class": "laptop", "gold": 1}
-{"image_id": 21503, "file_name": "000000021503.jpg", "class": "mouse", "gold": 1}
-{"image_id": 45472, "file_name": "000000045472.jpg", "class": "orange", "gold": 1}
-{"image_id": 1490, "file_name": "000000001490.jpg", "class": "person", "gold": 1}
-{"image_id": 19402, "file_name": "000000019402.jpg", "class": "pizza", "gold": 1}
-{"image_id": 22892, "file_name": "000000022892.jpg", "class": "potted plant", "gold": 1}
-{"image_id": 26465, "file_name": "000000026465.jpg", "class": "remote", "gold": 1}
-{"image_id": 18575, "file_name": "000000018575.jpg", "class": "sandwich", "gold": 1}
-{"image_id": 161008, "file_name": "000000161008.jpg", "class": "scissors", "gold": 1}
-{"image_id": 16502, "file_name": "000000016502.jpg", "class": "sheep", "gold": 1}
-{"image_id": 5600, "file_name": "000000005600.jpg", "class": "spoon", "gold": 1}
-{"image_id": 22935, "file_name": "000000022935.jpg", "class": "sports ball", "gold": 1}
-{"image_id": 42889, "file_name": "000000042889.jpg", "class": "teddy bear", "gold": 1}
-{"image_id": 175251, "file_name": "000000175251.jpg", "class": "toothbrush", "gold": 1}
-{"image_id": 4495, "file_name": "000000004495.jpg", "class": "tv", "gold": 1}
-{"image_id": 60855, "file_name": "000000060855.jpg", "class": "apple", "gold": 2}
-{"image_id": 6012, "file_name": "000000006012.jpg", "class": "banana", "gold": 2}
-{"image_id": 7795, "file_name": "000000007795.jpg", "class": "bed", "gold": 2}
-{"image_id": 98261, "file_name": "000000098261.jpg", "class": "bird", "gold": 2}
-{"image_id": 35279, "file_name": "000000035279.jpg", "class": "book", "gold": 2}
-{"image_id": 83531, "file_name": "000000083531.jpg", "class": "bottle", "gold": 2}
-{"image_id": 5600, "file_name": "000000005600.jpg", "class": "bowl", "gold": 2}
-{"image_id": 3501, "file_name": "000000003501.jpg", "class": "broccoli", "gold": 2}
-{"image_id": 180878, "file_name": "000000180878.jpg", "class": "cake", "gold": 2}
-{"image_id": 130613, "file_name": "000000130613.jpg", "class": "carrot", "gold": 2}
-{"image_id": 39769, "file_name": "000000039769.jpg", "class": "cat", "gold": 2}
-{"image_id": 35279, "file_name": "000000035279.jpg", "class": "cell phone", "gold": 2}
-{"image_id": 1993, "file_name": "000000001993.jpg", "class": "chair", "gold": 2}
-{"image_id": 7888, "file_name": "000000007888.jpg", "class": "clock", "gold": 2}
-{"image_id": 10707, "file_name": "000000010707.jpg", "class": "couch", "gold": 2}
-{"image_id": 118594, "file_name": "000000118594.jpg", "class": "cow", "gold": 2}
-{"image_id": 2157, "file_name": "000000002157.jpg", "class": "cup", "gold": 2}
-{"image_id": 47112, "file_name": "000000047112.jpg", "class": "dining table", "gold": 2}
-{"image_id": 71226, "file_name": "000000071226.jpg", "class": "dog", "gold": 2}
-{"image_id": 341973, "file_name": "000000341973.jpg", "class": "donut", "gold": 2}
-{"image_id": 24919, "file_name": "000000024919.jpg", "class": "elephant", "gold": 2}
-{"image_id": 17714, "file_name": "000000017714.jpg", "class": "fork", "gold": 2}
-{"image_id": 6954, "file_name": "000000006954.jpg", "class": "frisbee", "gold": 2}
-{"image_id": 22969, "file_name": "000000022969.jpg", "class": "giraffe", "gold": 2}
-{"image_id": 7281, "file_name": "000000007281.jpg", "class": "horse", "gold": 2}
-{"image_id": 179898, "file_name": "000000179898.jpg", "class": "hot dog", "gold": 2}
-{"image_id": 47740, "file_name": "000000047740.jpg", "class": "kite", "gold": 2}
-{"image_id": 7991, "file_name": "000000007991.jpg", "class": "knife", "gold": 2}
-{"image_id": 13659, "file_name": "000000013659.jpg", "class": "laptop", "gold": 2}
-{"image_id": 46031, "file_name": "000000046031.jpg", "class": "mouse", "gold": 2}
-{"image_id": 110999, "file_name": "000000110999.jpg", "class": "orange", "gold": 2}
-{"image_id": 872, "file_name": "000000000872.jpg", "class": "person", "gold": 2}
-{"image_id": 74733, "file_name": "000000074733.jpg", "class": "pizza", "gold": 2}
-{"image_id": 632, "file_name": "000000000632.jpg", "class": "potted plant", "gold": 2}
-{"image_id": 39769, "file_name": "000000039769.jpg", "class": "remote", "gold": 2}
-{"image_id": 9914, "file_name": "000000009914.jpg", "class": "sandwich", "gold": 2}
-{"image_id": 340930, "file_name": "000000340930.jpg", "class": "scissors", "gold": 2}
-{"image_id": 22589, "file_name": "000000022589.jpg", "class": "sheep", "gold": 2}
-{"image_id": 66817, "file_name": "000000066817.jpg", "class": "spoon", "gold": 2}
-{"image_id": 257624, "file_name": "000000257624.jpg", "class": "sports ball", "gold": 2}
-{"image_id": 35963, "file_name": "000000035963.jpg", "class": "teddy bear", "gold": 2}
-{"image_id": 139, "file_name": "000000000139.jpg", "class": "tv", "gold": 2}
-{"image_id": 143961, "file_name": "000000143961.jpg", "class": "umbrella", "gold": 2}
-{"image_id": 95786, "file_name": "000000095786.jpg", "class": "vase", "gold": 2}
-{"image_id": 47112, "file_name": "000000047112.jpg", "class": "wine glass", "gold": 2}
-{"image_id": 1818, "file_name": "000000001818.jpg", "class": "zebra", "gold": 2}
-{"image_id": 113589, "file_name": "000000113589.jpg", "class": "apple", "gold": 2}
-{"image_id": 79651, "file_name": "000000079651.jpg", "class": "banana", "gold": 2}
-{"image_id": 218439, "file_name": "000000218439.jpg", "class": "bed", "gold": 2}
-{"image_id": 122927, "file_name": "000000122927.jpg", "class": "bird", "gold": 2}
-{"image_id": 71226, "file_name": "000000071226.jpg", "class": "book", "gold": 2}
-{"image_id": 88040, "file_name": "000000088040.jpg", "class": "bottle", "gold": 2}
-{"image_id": 8277, "file_name": "000000008277.jpg", "class": "bowl", "gold": 2}
-{"image_id": 50331, "file_name": "000000050331.jpg", "class": "broccoli", "gold": 2}
-{"image_id": 182417, "file_name": "000000182417.jpg", "class": "cake", "gold": 2}
-{"image_id": 196009, "file_name": "000000196009.jpg", "class": "carrot", "gold": 2}
-{"image_id": 49810, "file_name": "000000049810.jpg", "class": "cat", "gold": 2}
-{"image_id": 213035, "file_name": "000000213035.jpg", "class": "cell phone", "gold": 2}
-{"image_id": 10092, "file_name": "000000010092.jpg", "class": "chair", "gold": 2}
-{"image_id": 154339, "file_name": "000000154339.jpg", "class": "clock", "gold": 2}
-{"image_id": 27186, "file_name": "000000027186.jpg", "class": "couch", "gold": 2}
-{"image_id": 125806, "file_name": "000000125806.jpg", "class": "cow", "gold": 2}
-{"image_id": 2431, "file_name": "000000002431.jpg", "class": "cup", "gold": 2}
-{"image_id": 64084, "file_name": "000000064084.jpg", "class": "dining table", "gold": 2}
-{"image_id": 89880, "file_name": "000000089880.jpg", "class": "dog", "gold": 2}
-{"image_id": 405432, "file_name": "000000405432.jpg", "class": "donut", "gold": 2}
-{"image_id": 48504, "file_name": "000000048504.jpg", "class": "elephant", "gold": 2}
-{"image_id": 54605, "file_name": "000000054605.jpg", "class": "fork", "gold": 2}
-{"image_id": 33707, "file_name": "000000033707.jpg", "class": "giraffe", "gold": 2}
-{"image_id": 23034, "file_name": "000000023034.jpg", "class": "horse", "gold": 2}
-{"image_id": 226130, "file_name": "000000226130.jpg", "class": "hot dog", "gold": 2}
-{"image_id": 224675, "file_name": "000000224675.jpg", "class": "kite", "gold": 2}
-{"image_id": 181796, "file_name": "000000181796.jpg", "class": "knife", "gold": 2}
-{"image_id": 198641, "file_name": "000000198641.jpg", "class": "laptop", "gold": 2}
-{"image_id": 371677, "file_name": "000000371677.jpg", "class": "mouse", "gold": 2}
-{"image_id": 119452, "file_name": "000000119452.jpg", "class": "orange", "gold": 2}
-{"image_id": 1296, "file_name": "000000001296.jpg", "class": "person", "gold": 2}
-{"image_id": 99039, "file_name": "000000099039.jpg", "class": "pizza", "gold": 2}
-{"image_id": 31735, "file_name": "000000031735.jpg", "class": "potted plant", "gold": 2}
-{"image_id": 55528, "file_name": "000000055528.jpg", "class": "remote", "gold": 2}
-{"image_id": 10583, "file_name": "000000010583.jpg", "class": "sandwich", "gold": 2}
-{"image_id": 550322, "file_name": "000000550322.jpg", "class": "scissors", "gold": 2}
-{"image_id": 66561, "file_name": "000000066561.jpg", "class": "sheep", "gold": 2}
-{"image_id": 88040, "file_name": "000000088040.jpg", "class": "spoon", "gold": 2}
-{"image_id": 50844, "file_name": "000000050844.jpg", "class": "teddy bear", "gold": 2}
-{"image_id": 36844, "file_name": "000000036844.jpg", "class": "tv", "gold": 2}
-{"image_id": 228214, "file_name": "000000228214.jpg", "class": "umbrella", "gold": 2}
-{"image_id": 154431, "file_name": "000000154431.jpg", "class": "vase", "gold": 2}
-{"image_id": 70739, "file_name": "000000070739.jpg", "class": "wine glass", "gold": 2}
-{"image_id": 17115, "file_name": "000000017115.jpg", "class": "zebra", "gold": 2}
-{"image_id": 110999, "file_name": "000000110999.jpg", "class": "apple", "gold": 3}
-{"image_id": 139260, "file_name": "000000139260.jpg", "class": "banana", "gold": 3}
-{"image_id": 61960, "file_name": "000000061960.jpg", "class": "bed", "gold": 3}
-{"image_id": 41888, "file_name": "000000041888.jpg", "class": "bird", "gold": 3}
-{"image_id": 222299, "file_name": "000000222299.jpg", "class": "book", "gold": 3}
-{"image_id": 18575, "file_name": "000000018575.jpg", "class": "bottle", "gold": 3}
-{"image_id": 13923, "file_name": "000000013923.jpg", "class": "bowl", "gold": 3}
-{"image_id": 3845, "file_name": "000000003845.jpg", "class": "broccoli", "gold": 3}
-{"image_id": 162092, "file_name": "000000162092.jpg", "class": "cake", "gold": 3}
-{"image_id": 221872, "file_name": "000000221872.jpg", "class": "carrot", "gold": 3}
-{"image_id": 99428, "file_name": "000000099428.jpg", "class": "cell phone", "gold": 3}
-{"image_id": 16958, "file_name": "000000016958.jpg", "class": "chair", "gold": 3}
-{"image_id": 115870, "file_name": "000000115870.jpg", "class": "couch", "gold": 3}
-{"image_id": 60823, "file_name": "000000060823.jpg", "class": "cow", "gold": 3}
-{"image_id": 131138, "file_name": "000000131138.jpg", "class": "cup", "gold": 3}
-{"image_id": 54628, "file_name": "000000054628.jpg", "class": "dining table", "gold": 3}
-{"image_id": 81766, "file_name": "000000081766.jpg", "class": "dog", "gold": 3}
-{"image_id": 109798, "file_name": "000000109798.jpg", "class": "donut", "gold": 3}
-{"image_id": 110638, "file_name": "000000110638.jpg", "class": "elephant", "gold": 3}
-{"image_id": 173371, "file_name": "000000173371.jpg", "class": "fork", "gold": 3}
-{"image_id": 100238, "file_name": "000000100238.jpg", "class": "frisbee", "gold": 3}
-{"image_id": 47010, "file_name": "000000047010.jpg", "class": "giraffe", "gold": 3}
-{"image_id": 234807, "file_name": "000000234807.jpg", "class": "horse", "gold": 3}
-{"image_id": 29675, "file_name": "000000029675.jpg", "class": "hot dog", "gold": 3}
-{"image_id": 143068, "file_name": "000000143068.jpg", "class": "kite", "gold": 3}
-{"image_id": 2157, "file_name": "000000002157.jpg", "class": "knife", "gold": 3}
-{"image_id": 97994, "file_name": "000000097994.jpg", "class": "laptop", "gold": 3}
-{"image_id": 185599, "file_name": "000000185599.jpg", "class": "orange", "gold": 3}
-{"image_id": 6763, "file_name": "000000006763.jpg", "class": "person", "gold": 3}
-{"image_id": 12576, "file_name": "000000012576.jpg", "class": "pizza", "gold": 3}
-{"image_id": 31248, "file_name": "000000031248.jpg", "class": "potted plant", "gold": 3}
-{"image_id": 371749, "file_name": "000000371749.jpg", "class": "remote", "gold": 3}
-{"image_id": 226147, "file_name": "000000226147.jpg", "class": "sandwich", "gold": 3}
-{"image_id": 419098, "file_name": "000000419098.jpg", "class": "scissors", "gold": 3}
-{"image_id": 12062, "file_name": "000000012062.jpg", "class": "sheep", "gold": 3}
-{"image_id": 42296, "file_name": "000000042296.jpg", "class": "sports ball", "gold": 3}
-{"image_id": 776, "file_name": "000000000776.jpg", "class": "teddy bear", "gold": 3}
-{"image_id": 172595, "file_name": "000000172595.jpg", "class": "tv", "gold": 3}
-{"image_id": 275198, "file_name": "000000275198.jpg", "class": "umbrella", "gold": 3}
-{"image_id": 395343, "file_name": "000000395343.jpg", "class": "vase", "gold": 3}
-{"image_id": 7818, "file_name": "000000007818.jpg", "class": "wine glass", "gold": 3}
-{"image_id": 11760, "file_name": "000000011760.jpg", "class": "zebra", "gold": 3}
-{"image_id": 185599, "file_name": "000000185599.jpg", "class": "apple", "gold": 3}
-{"image_id": 189078, "file_name": "000000189078.jpg", "class": "banana", "gold": 3}
-{"image_id": 393569, "file_name": "000000393569.jpg", "class": "bed", "gold": 3}
-{"image_id": 104119, "file_name": "000000104119.jpg", "class": "bird", "gold": 3}
-{"image_id": 379842, "file_name": "000000379842.jpg", "class": "book", "gold": 3}
-{"image_id": 64084, "file_name": "000000064084.jpg", "class": "bottle", "gold": 3}
-{"image_id": 15254, "file_name": "000000015254.jpg", "class": "bowl", "gold": 3}
-{"image_id": 34205, "file_name": "000000034205.jpg", "class": "broccoli", "gold": 3}
-{"image_id": 276434, "file_name": "000000276434.jpg", "class": "cake", "gold": 3}
-{"image_id": 223090, "file_name": "000000223090.jpg", "class": "carrot", "gold": 3}
-{"image_id": 334977, "file_name": "000000334977.jpg", "class": "cell phone", "gold": 3}
-{"image_id": 25386, "file_name": "000000025386.jpg", "class": "chair", "gold": 3}
-{"image_id": 194832, "file_name": "000000194832.jpg", "class": "couch", "gold": 3}
-{"image_id": 119038, "file_name": "000000119038.jpg", "class": "cow", "gold": 3}
-{"image_id": 166277, "file_name": "000000166277.jpg", "class": "cup", "gold": 3}
-{"image_id": 129062, "file_name": "000000129062.jpg", "class": "dining table", "gold": 3}
-{"image_id": 107226, "file_name": "000000107226.jpg", "class": "dog", "gold": 3}
-{"image_id": 449312, "file_name": "000000449312.jpg", "class": "donut", "gold": 3}
-{"image_id": 167128, "file_name": "000000167128.jpg", "class": "elephant", "gold": 3}
-{"image_id": 62353, "file_name": "000000062353.jpg", "class": "giraffe", "gold": 3}
-{"image_id": 303653, "file_name": "000000303653.jpg", "class": "horse", "gold": 3}
-{"image_id": 91779, "file_name": "000000091779.jpg", "class": "hot dog", "gold": 3}
-{"image_id": 337498, "file_name": "000000337498.jpg", "class": "knife", "gold": 3}
-{"image_id": 516916, "file_name": "000000516916.jpg", "class": "laptop", "gold": 3}
-{"image_id": 189078, "file_name": "000000189078.jpg", "class": "orange", "gold": 3}
-{"image_id": 8021, "file_name": "000000008021.jpg", "class": "person", "gold": 3}
-{"image_id": 194724, "file_name": "000000194724.jpg", "class": "pizza", "gold": 3}
-{"image_id": 65288, "file_name": "000000065288.jpg", "class": "potted plant", "gold": 3}
-{"image_id": 430286, "file_name": "000000430286.jpg", "class": "remote", "gold": 3}
-{"image_id": 244181, "file_name": "000000244181.jpg", "class": "sandwich", "gold": 3}
-{"image_id": 198960, "file_name": "000000198960.jpg", "class": "sheep", "gold": 3}
-{"image_id": 113403, "file_name": "000000113403.jpg", "class": "teddy bear", "gold": 3}
-{"image_id": 190236, "file_name": "000000190236.jpg", "class": "tv", "gold": 3}
-{"image_id": 278848, "file_name": "000000278848.jpg", "class": "umbrella", "gold": 3}
-{"image_id": 244750, "file_name": "000000244750.jpg", "class": "wine glass", "gold": 3}
-{"image_id": 31269, "file_name": "000000031269.jpg", "class": "zebra", "gold": 3}
-{"image_id": 213935, "file_name": "000000213935.jpg", "class": "apple", "gold": 3}
-{"image_id": 389812, "file_name": "000000389812.jpg", "class": "banana", "gold": 3}
-{"image_id": 518326, "file_name": "000000518326.jpg", "class": "bed", "gold": 3}
-{"image_id": 535253, "file_name": "000000535253.jpg", "class": "book", "gold": 3}
-{"image_id": 79651, "file_name": "000000079651.jpg", "class": "bottle", "gold": 3}
-{"image_id": 62554, "file_name": "000000062554.jpg", "class": "bowl", "gold": 3}
-{"image_id": 452784, "file_name": "000000452784.jpg", "class": "broccoli", "gold": 3}
-{"image_id": 346703, "file_name": "000000346703.jpg", "class": "cake", "gold": 3}
-{"image_id": 485972, "file_name": "000000485972.jpg", "class": "carrot", "gold": 3}
-{"image_id": 31248, "file_name": "000000031248.jpg", "class": "chair", "gold": 3}
-{"image_id": 322895, "file_name": "000000322895.jpg", "class": "couch", "gold": 3}
-{"image_id": 124636, "file_name": "000000124636.jpg", "class": "cow", "gold": 3}
-{"image_id": 8844, "file_name": "000000008844.jpg", "class": "banana", "gold": 4}
-{"image_id": 166259, "file_name": "000000166259.jpg", "class": "bird", "gold": 4}
-{"image_id": 231831, "file_name": "000000231831.jpg", "class": "book", "gold": 4}
-{"image_id": 116208, "file_name": "000000116208.jpg", "class": "bottle", "gold": 4}
-{"image_id": 170670, "file_name": "000000170670.jpg", "class": "bowl", "gold": 4}
-{"image_id": 29640, "file_name": "000000029640.jpg", "class": "broccoli", "gold": 4}
-{"image_id": 54628, "file_name": "000000054628.jpg", "class": "cake", "gold": 4}
-{"image_id": 15254, "file_name": "000000015254.jpg", "class": "carrot", "gold": 4}
-{"image_id": 36660, "file_name": "000000036660.jpg", "class": "cell phone", "gold": 4}
-{"image_id": 14226, "file_name": "000000014226.jpg", "class": "chair", "gold": 4}
-{"image_id": 205514, "file_name": "000000205514.jpg", "class": "couch", "gold": 4}
-{"image_id": 41635, "file_name": "000000041635.jpg", "class": "cow", "gold": 4}
-{"image_id": 9400, "file_name": "000000009400.jpg", "class": "cup", "gold": 4}
-{"image_id": 286908, "file_name": "000000286908.jpg", "class": "dining table", "gold": 4}
-{"image_id": 262938, "file_name": "000000262938.jpg", "class": "dog", "gold": 4}
-{"image_id": 419379, "file_name": "000000419379.jpg", "class": "donut", "gold": 4}
-{"image_id": 57027, "file_name": "000000057027.jpg", "class": "elephant", "gold": 4}
-{"image_id": 75393, "file_name": "000000075393.jpg", "class": "fork", "gold": 4}
-{"image_id": 13291, "file_name": "000000013291.jpg", "class": "frisbee", "gold": 4}
-{"image_id": 64359, "file_name": "000000064359.jpg", "class": "giraffe", "gold": 4}
-{"image_id": 51309, "file_name": "000000051309.jpg", "class": "horse", "gold": 4}
-{"image_id": 398237, "file_name": "000000398237.jpg", "class": "kite", "gold": 4}
-{"image_id": 248980, "file_name": "000000248980.jpg", "class": "orange", "gold": 4}
-{"image_id": 1268, "file_name": "000000001268.jpg", "class": "person", "gold": 4}
-{"image_id": 173004, "file_name": "000000173004.jpg", "class": "pizza", "gold": 4}
-{"image_id": 86582, "file_name": "000000086582.jpg", "class": "potted plant", "gold": 4}
-{"image_id": 400161, "file_name": "000000400161.jpg", "class": "remote", "gold": 4}
-{"image_id": 369370, "file_name": "000000369370.jpg", "class": "sandwich", "gold": 4}
-{"image_id": 44699, "file_name": "000000044699.jpg", "class": "sheep", "gold": 4}
-{"image_id": 125062, "file_name": "000000125062.jpg", "class": "teddy bear", "gold": 4}
-{"image_id": 66038, "file_name": "000000066038.jpg", "class": "umbrella", "gold": 4}
-{"image_id": 429530, "file_name": "000000429530.jpg", "class": "vase", "gold": 4}
-{"image_id": 85089, "file_name": "000000085089.jpg", "class": "wine glass", "gold": 4}
-{"image_id": 49761, "file_name": "000000049761.jpg", "class": "zebra", "gold": 4}
-{"image_id": 28809, "file_name": "000000028809.jpg", "class": "banana", "gold": 4}
-{"image_id": 277051, "file_name": "000000277051.jpg", "class": "bird", "gold": 4}
-{"image_id": 132329, "file_name": "000000132329.jpg", "class": "bottle", "gold": 4}
-{"image_id": 314182, "file_name": "000000314182.jpg", "class": "bowl", "gold": 4}
-{"image_id": 559707, "file_name": "000000559707.jpg", "class": "broccoli", "gold": 4}
-{"image_id": 95707, "file_name": "000000095707.jpg", "class": "cake", "gold": 4}
-{"image_id": 424721, "file_name": "000000424721.jpg", "class": "carrot", "gold": 4}
-{"image_id": 74209, "file_name": "000000074209.jpg", "class": "chair", "gold": 4}
-{"image_id": 206135, "file_name": "000000206135.jpg", "class": "cow", "gold": 4}
-{"image_id": 12576, "file_name": "000000012576.jpg", "class": "cup", "gold": 4}
-{"image_id": 381587, "file_name": "000000381587.jpg", "class": "dining table", "gold": 4}
-{"image_id": 547502, "file_name": "000000547502.jpg", "class": "dog", "gold": 4}
-{"image_id": 572388, "file_name": "000000572388.jpg", "class": "donut", "gold": 4}
-{"image_id": 126216, "file_name": "000000126216.jpg", "class": "elephant", "gold": 4}
-{"image_id": 101780, "file_name": "000000101780.jpg", "class": "giraffe", "gold": 4}
-{"image_id": 80659, "file_name": "000000080659.jpg", "class": "horse", "gold": 4}
-{"image_id": 2153, "file_name": "000000002153.jpg", "class": "person", "gold": 4}
-{"image_id": 173371, "file_name": "000000173371.jpg", "class": "pizza", "gold": 4}
-{"image_id": 94871, "file_name": "000000094871.jpg", "class": "sheep", "gold": 4}
-{"image_id": 145020, "file_name": "000000145020.jpg", "class": "teddy bear", "gold": 4}
-{"image_id": 116208, "file_name": "000000116208.jpg", "class": "wine glass", "gold": 4}
-{"image_id": 69106, "file_name": "000000069106.jpg", "class": "zebra", "gold": 4}
-{"image_id": 193926, "file_name": "000000193926.jpg", "class": "banana", "gold": 4}
-{"image_id": 170670, "file_name": "000000170670.jpg", "class": "bottle", "gold": 4}
-{"image_id": 410735, "file_name": "000000410735.jpg", "class": "bowl", "gold": 4}
-{"image_id": 242060, "file_name": "000000242060.jpg", "class": "cake", "gold": 4}
-{"image_id": 465585, "file_name": "000000465585.jpg", "class": "carrot", "gold": 4}
-{"image_id": 233033, "file_name": "000000233033.jpg", "class": "chair", "gold": 4}
-{"image_id": 329447, "file_name": "000000329447.jpg", "class": "cow", "gold": 4}
-{"image_id": 66771, "file_name": "000000066771.jpg", "class": "cup", "gold": 4}
-{"image_id": 389109, "file_name": "000000389109.jpg", "class": "dining table", "gold": 4}
-{"image_id": 272364, "file_name": "000000272364.jpg", "class": "giraffe", "gold": 4}
-{"image_id": 348488, "file_name": "000000348488.jpg", "class": "horse", "gold": 4}
-{"image_id": 8690, "file_name": "000000008690.jpg", "class": "person", "gold": 4}
-{"image_id": 256916, "file_name": "000000256916.jpg", "class": "pizza", "gold": 4}
-{"image_id": 459437, "file_name": "000000459437.jpg", "class": "sheep", "gold": 4}
-{"image_id": 207585, "file_name": "000000207585.jpg", "class": "teddy bear", "gold": 4}
-{"image_id": 513041, "file_name": "000000513041.jpg", "class": "wine glass", "gold": 4}
-{"image_id": 218424, "file_name": "000000218424.jpg", "class": "zebra", "gold": 4}
-{"image_id": 206027, "file_name": "000000206027.jpg", "class": "bottle", "gold": 4}
-{"image_id": 571804, "file_name": "000000571804.jpg", "class": "bowl", "gold": 4}
-{"image_id": 329542, "file_name": "000000329542.jpg", "class": "cake", "gold": 4}
-{"image_id": 255536, "file_name": "000000255536.jpg", "class": "chair", "gold": 4}
-{"image_id": 389451, "file_name": "000000389451.jpg", "class": "cow", "gold": 4}
-{"image_id": 170670, "file_name": "000000170670.jpg", "class": "cup", "gold": 4}
-{"image_id": 286849, "file_name": "000000286849.jpg", "class": "giraffe", "gold": 4}
-{"image_id": 456015, "file_name": "000000456015.jpg", "class": "horse", "gold": 4}
-{"image_id": 11511, "file_name": "000000011511.jpg", "class": "person", "gold": 4}
-{"image_id": 369757, "file_name": "000000369757.jpg", "class": "pizza", "gold": 4}
-{"image_id": 474881, "file_name": "000000474881.jpg", "class": "sheep", "gold": 4}
-{"image_id": 211120, "file_name": "000000211120.jpg", "class": "teddy bear", "gold": 4}
-{"image_id": 268729, "file_name": "000000268729.jpg", "class": "zebra", "gold": 4}
-{"image_id": 541773, "file_name": "000000541773.jpg", "class": "bottle", "gold": 4}
-{"image_id": 578871, "file_name": "000000578871.jpg", "class": "bowl", "gold": 4}
-{"image_id": 331817, "file_name": "000000331817.jpg", "class": "cake", "gold": 4}
-{"image_id": 298396, "file_name": "000000298396.jpg", "class": "chair", "gold": 4}
-{"image_id": 548506, "file_name": "000000548506.jpg", "class": "apple", "gold": 5}
-{"image_id": 165351, "file_name": "000000165351.jpg", "class": "banana", "gold": 5}
-{"image_id": 123585, "file_name": "000000123585.jpg", "class": "bird", "gold": 5}
-{"image_id": 506310, "file_name": "000000506310.jpg", "class": "bottle", "gold": 5}
-{"image_id": 286182, "file_name": "000000286182.jpg", "class": "bowl", "gold": 5}
-{"image_id": 132116, "file_name": "000000132116.jpg", "class": "broccoli", "gold": 5}
-{"image_id": 261116, "file_name": "000000261116.jpg", "class": "cake", "gold": 5}
-{"image_id": 3845, "file_name": "000000003845.jpg", "class": "carrot", "gold": 5}
-{"image_id": 13923, "file_name": "000000013923.jpg", "class": "chair", "gold": 5}
-{"image_id": 156292, "file_name": "000000156292.jpg", "class": "clock", "gold": 5}
-{"image_id": 258911, "file_name": "000000258911.jpg", "class": "cow", "gold": 5}
-{"image_id": 45472, "file_name": "000000045472.jpg", "class": "cup", "gold": 5}
-{"image_id": 7108, "file_name": "000000007108.jpg", "class": "elephant", "gold": 5}
-{"image_id": 180011, "file_name": "000000180011.jpg", "class": "giraffe", "gold": 5}
-{"image_id": 492282, "file_name": "000000492282.jpg", "class": "horse", "gold": 5}
-{"image_id": 60855, "file_name": "000000060855.jpg", "class": "orange", "gold": 5}
-{"image_id": 6954, "file_name": "000000006954.jpg", "class": "person", "gold": 5}
-{"image_id": 108253, "file_name": "000000108253.jpg", "class": "pizza", "gold": 5}
-{"image_id": 136355, "file_name": "000000136355.jpg", "class": "potted plant", "gold": 5}
-{"image_id": 21503, "file_name": "000000021503.jpg", "class": "sandwich", "gold": 5}
-{"image_id": 5992, "file_name": "000000005992.jpg", "class": "sheep", "gold": 5}
-{"image_id": 66841, "file_name": "000000066841.jpg", "class": "spoon", "gold": 5}
-{"image_id": 328030, "file_name": "000000328030.jpg", "class": "teddy bear", "gold": 5}
-{"image_id": 281759, "file_name": "000000281759.jpg", "class": "umbrella", "gold": 5}
-{"image_id": 473974, "file_name": "000000473974.jpg", "class": "zebra", "gold": 5}
-{"image_id": 271471, "file_name": "000000271471.jpg", "class": "banana", "gold": 5}
-{"image_id": 229997, "file_name": "000000229997.jpg", "class": "bird", "gold": 5}
-{"image_id": 331817, "file_name": "000000331817.jpg", "class": "bowl", "gold": 5}
-{"image_id": 153510, "file_name": "000000153510.jpg", "class": "broccoli", "gold": 5}
-{"image_id": 143998, "file_name": "000000143998.jpg", "class": "carrot", "gold": 5}
-{"image_id": 140076, "file_name": "000000140076.jpg", "class": "chair", "gold": 5}
-{"image_id": 239627, "file_name": "000000239627.jpg", "class": "cup", "gold": 5}
-{"image_id": 28449, "file_name": "000000028449.jpg", "class": "elephant", "gold": 5}
-{"image_id": 192871, "file_name": "000000192871.jpg", "class": "orange", "gold": 5}
-{"image_id": 13659, "file_name": "000000013659.jpg", "class": "person", "gold": 5}
-{"image_id": 181816, "file_name": "000000181816.jpg", "class": "potted plant", "gold": 5}
-{"image_id": 269196, "file_name": "000000269196.jpg", "class": "sheep", "gold": 5}
-{"image_id": 551660, "file_name": "000000551660.jpg", "class": "broccoli", "gold": 5}
-{"image_id": 205514, "file_name": "000000205514.jpg", "class": "chair", "gold": 5}
-{"image_id": 231527, "file_name": "000000231527.jpg", "class": "orange", "gold": 5}
-{"image_id": 16249, "file_name": "000000016249.jpg", "class": "person", "gold": 5}
-{"image_id": 484893, "file_name": "000000484893.jpg", "class": "sheep", "gold": 5}
-{"image_id": 325838, "file_name": "000000325838.jpg", "class": "chair", "gold": 5}
-{"image_id": 283070, "file_name": "000000283070.jpg", "class": "orange", "gold": 5}
-{"image_id": 31817, "file_name": "000000031817.jpg", "class": "person", "gold": 5}
-{"image_id": 363666, "file_name": "000000363666.jpg", "class": "chair", "gold": 5}
-{"image_id": 32901, "file_name": "000000032901.jpg", "class": "person", "gold": 5}
-{"image_id": 467315, "file_name": "000000467315.jpg", "class": "chair", "gold": 5}
-{"image_id": 42628, "file_name": "000000042628.jpg", "class": "person", "gold": 5}
-{"image_id": 504074, "file_name": "000000504074.jpg", "class": "chair", "gold": 5}
-{"image_id": 81988, "file_name": "000000081988.jpg", "class": "person", "gold": 5}
-{"image_id": 564336, "file_name": "000000564336.jpg", "class": "chair", "gold": 5}
-{"image_id": 88848, "file_name": "000000088848.jpg", "class": "person", "gold": 5}
-{"image_id": 90891, "file_name": "000000090891.jpg", "class": "person", "gold": 5}
-{"image_id": 113720, "file_name": "000000113720.jpg", "class": "person", "gold": 5}
+{"image_id": 228144, "file_name": "000000228144.jpg", "url": "http://images.cocodataset.org/val2017/000000228144.jpg", "class": "apple", "gold": 0}
+{"image_id": 30675, "file_name": "000000030675.jpg", "url": "http://images.cocodataset.org/val2017/000000030675.jpg", "class": "backpack", "gold": 0}
+{"image_id": 177935, "file_name": "000000177935.jpg", "url": "http://images.cocodataset.org/val2017/000000177935.jpg", "class": "balloon", "gold": 0}
+{"image_id": 95786, "file_name": "000000095786.jpg", "url": "http://images.cocodataset.org/val2017/000000095786.jpg", "class": "banana", "gold": 0}
+{"image_id": 33638, "file_name": "000000033638.jpg", "url": "http://images.cocodataset.org/val2017/000000033638.jpg", "class": "bed", "gold": 0}
+{"image_id": 239347, "file_name": "000000239347.jpg", "url": "http://images.cocodataset.org/val2017/000000239347.jpg", "class": "bird", "gold": 0}
+{"image_id": 356427, "file_name": "000000356427.jpg", "url": "http://images.cocodataset.org/val2017/000000356427.jpg", "class": "book", "gold": 0}
+{"image_id": 99242, "file_name": "000000099242.jpg", "url": "http://images.cocodataset.org/val2017/000000099242.jpg", "class": "bottle", "gold": 0}
+{"image_id": 173383, "file_name": "000000173383.jpg", "url": "http://images.cocodataset.org/val2017/000000173383.jpg", "class": "bowl", "gold": 0}
+{"image_id": 355257, "file_name": "000000355257.jpg", "url": "http://images.cocodataset.org/val2017/000000355257.jpg", "class": "broccoli", "gold": 0}
+{"image_id": 127182, "file_name": "000000127182.jpg", "url": "http://images.cocodataset.org/val2017/000000127182.jpg", "class": "cake", "gold": 0}
+{"image_id": 85329, "file_name": "000000085329.jpg", "url": "http://images.cocodataset.org/val2017/000000085329.jpg", "class": "candle", "gold": 0}
+{"image_id": 180560, "file_name": "000000180560.jpg", "url": "http://images.cocodataset.org/val2017/000000180560.jpg", "class": "carrot", "gold": 0}
+{"image_id": 61171, "file_name": "000000061171.jpg", "url": "http://images.cocodataset.org/val2017/000000061171.jpg", "class": "cat", "gold": 0}
+{"image_id": 212166, "file_name": "000000212166.jpg", "url": "http://images.cocodataset.org/val2017/000000212166.jpg", "class": "cell phone", "gold": 0}
+{"image_id": 334719, "file_name": "000000334719.jpg", "url": "http://images.cocodataset.org/val2017/000000334719.jpg", "class": "chair", "gold": 0}
+{"image_id": 6818, "file_name": "000000006818.jpg", "url": "http://images.cocodataset.org/val2017/000000006818.jpg", "class": "clock", "gold": 0}
+{"image_id": 261116, "file_name": "000000261116.jpg", "url": "http://images.cocodataset.org/val2017/000000261116.jpg", "class": "couch", "gold": 0}
+{"image_id": 118921, "file_name": "000000118921.jpg", "url": "http://images.cocodataset.org/val2017/000000118921.jpg", "class": "cow", "gold": 0}
+{"image_id": 202228, "file_name": "000000202228.jpg", "url": "http://images.cocodataset.org/val2017/000000202228.jpg", "class": "cup", "gold": 0}
+{"image_id": 108026, "file_name": "000000108026.jpg", "url": "http://images.cocodataset.org/val2017/000000108026.jpg", "class": "dining table", "gold": 0}
+{"image_id": 34873, "file_name": "000000034873.jpg", "url": "http://images.cocodataset.org/val2017/000000034873.jpg", "class": "dog", "gold": 0}
+{"image_id": 122046, "file_name": "000000122046.jpg", "url": "http://images.cocodataset.org/val2017/000000122046.jpg", "class": "donut", "gold": 0}
+{"image_id": 23899, "file_name": "000000023899.jpg", "url": "http://images.cocodataset.org/val2017/000000023899.jpg", "class": "duck", "gold": 0}
+{"image_id": 502136, "file_name": "000000502136.jpg", "url": "http://images.cocodataset.org/val2017/000000502136.jpg", "class": "elephant", "gold": 0}
+{"image_id": 38576, "file_name": "000000038576.jpg", "url": "http://images.cocodataset.org/val2017/000000038576.jpg", "class": "flower_arrangement", "gold": 0}
+{"image_id": 137246, "file_name": "000000137246.jpg", "url": "http://images.cocodataset.org/val2017/000000137246.jpg", "class": "fork", "gold": 0}
+{"image_id": 174482, "file_name": "000000174482.jpg", "url": "http://images.cocodataset.org/val2017/000000174482.jpg", "class": "frisbee", "gold": 0}
+{"image_id": 48153, "file_name": "000000048153.jpg", "url": "http://images.cocodataset.org/val2017/000000048153.jpg", "class": "giraffe", "gold": 0}
+{"image_id": 321214, "file_name": "000000321214.jpg", "url": "http://images.cocodataset.org/val2017/000000321214.jpg", "class": "goose", "gold": 0}
+{"image_id": 108026, "file_name": "000000108026.jpg", "url": "http://images.cocodataset.org/val2017/000000108026.jpg", "class": "handbag", "gold": 0}
+{"image_id": 166521, "file_name": "000000166521.jpg", "url": "http://images.cocodataset.org/val2017/000000166521.jpg", "class": "horse", "gold": 0}
+{"image_id": 366141, "file_name": "000000366141.jpg", "url": "http://images.cocodataset.org/val2017/000000366141.jpg", "class": "kite", "gold": 0}
+{"image_id": 104612, "file_name": "000000104612.jpg", "url": "http://images.cocodataset.org/val2017/000000104612.jpg", "class": "knife", "gold": 0}
+{"image_id": 270244, "file_name": "000000270244.jpg", "url": "http://images.cocodataset.org/val2017/000000270244.jpg", "class": "laptop", "gold": 0}
+{"image_id": 476258, "file_name": "000000476258.jpg", "url": "http://images.cocodataset.org/val2017/000000476258.jpg", "class": "mouse", "gold": 0}
+{"image_id": 34139, "file_name": "000000034139.jpg", "url": "http://images.cocodataset.org/val2017/000000034139.jpg", "class": "mug", "gold": 0}
+{"image_id": 166277, "file_name": "000000166277.jpg", "url": "http://images.cocodataset.org/val2017/000000166277.jpg", "class": "necklace", "gold": 0}
+{"image_id": 4495, "file_name": "000000004495.jpg", "url": "http://images.cocodataset.org/val2017/000000004495.jpg", "class": "orange", "gold": 0}
+{"image_id": 110638, "file_name": "000000110638.jpg", "url": "http://images.cocodataset.org/val2017/000000110638.jpg", "class": "person", "gold": 0}
+{"image_id": 21503, "file_name": "000000021503.jpg", "url": "http://images.cocodataset.org/val2017/000000021503.jpg", "class": "pizza", "gold": 0}
+{"image_id": 270244, "file_name": "000000270244.jpg", "url": "http://images.cocodataset.org/val2017/000000270244.jpg", "class": "potted plant", "gold": 0}
+{"image_id": 34071, "file_name": "000000034071.jpg", "url": "http://images.cocodataset.org/val2017/000000034071.jpg", "class": "remote", "gold": 0}
+{"image_id": 322864, "file_name": "000000322864.jpg", "url": "http://images.cocodataset.org/val2017/000000322864.jpg", "class": "sandwich", "gold": 0}
+{"image_id": 458755, "file_name": "000000458755.jpg", "url": "http://images.cocodataset.org/val2017/000000458755.jpg", "class": "scissors", "gold": 0}
+{"image_id": 21503, "file_name": "000000021503.jpg", "url": "http://images.cocodataset.org/val2017/000000021503.jpg", "class": "sheep", "gold": 0}
+{"image_id": 134112, "file_name": "000000134112.jpg", "url": "http://images.cocodataset.org/val2017/000000134112.jpg", "class": "spoon", "gold": 0}
+{"image_id": 80671, "file_name": "000000080671.jpg", "url": "http://images.cocodataset.org/val2017/000000080671.jpg", "class": "sports ball", "gold": 0}
+{"image_id": 95786, "file_name": "000000095786.jpg", "url": "http://images.cocodataset.org/val2017/000000095786.jpg", "class": "sunglasses", "gold": 0}
+{"image_id": 95786, "file_name": "000000095786.jpg", "url": "http://images.cocodataset.org/val2017/000000095786.jpg", "class": "teddy bear", "gold": 0}
+{"image_id": 84431, "file_name": "000000084431.jpg", "url": "http://images.cocodataset.org/val2017/000000084431.jpg", "class": "toothbrush", "gold": 0}
+{"image_id": 213086, "file_name": "000000213086.jpg", "url": "http://images.cocodataset.org/val2017/000000213086.jpg", "class": "umbrella", "gold": 0}
+{"image_id": 80671, "file_name": "000000080671.jpg", "url": "http://images.cocodataset.org/val2017/000000080671.jpg", "class": "vase", "gold": 0}
+{"image_id": 21503, "file_name": "000000021503.jpg", "url": "http://images.cocodataset.org/val2017/000000021503.jpg", "class": "wine glass", "gold": 0}
+{"image_id": 238866, "file_name": "000000238866.jpg", "url": "http://images.cocodataset.org/val2017/000000238866.jpg", "class": "wristwatch", "gold": 0}
+{"image_id": 386912, "file_name": "000000386912.jpg", "url": "http://images.cocodataset.org/val2017/000000386912.jpg", "class": "zebra", "gold": 0}
+{"image_id": 255664, "file_name": "000000255664.jpg", "url": "http://images.cocodataset.org/val2017/000000255664.jpg", "class": "apple", "gold": 0}
+{"image_id": 578545, "file_name": "000000578545.jpg", "url": "http://images.cocodataset.org/val2017/000000578545.jpg", "class": "backpack", "gold": 0}
+{"image_id": 555412, "file_name": "000000555412.jpg", "url": "http://images.cocodataset.org/val2017/000000555412.jpg", "class": "balloon", "gold": 0}
+{"image_id": 252219, "file_name": "000000252219.jpg", "url": "http://images.cocodataset.org/val2017/000000252219.jpg", "class": "banana", "gold": 0}
+{"image_id": 166391, "file_name": "000000166391.jpg", "url": "http://images.cocodataset.org/val2017/000000166391.jpg", "class": "bed", "gold": 0}
+{"image_id": 337055, "file_name": "000000337055.jpg", "url": "http://images.cocodataset.org/val2017/000000337055.jpg", "class": "bird", "gold": 0}
+{"image_id": 397133, "file_name": "000000397133.jpg", "url": "http://images.cocodataset.org/val2017/000000397133.jpg", "class": "book", "gold": 0}
+{"image_id": 125211, "file_name": "000000125211.jpg", "url": "http://images.cocodataset.org/val2017/000000125211.jpg", "class": "bottle", "gold": 0}
+{"image_id": 383384, "file_name": "000000383384.jpg", "url": "http://images.cocodataset.org/val2017/000000383384.jpg", "class": "bowl", "gold": 0}
+{"image_id": 511321, "file_name": "000000511321.jpg", "url": "http://images.cocodataset.org/val2017/000000511321.jpg", "class": "broccoli", "gold": 0}
+{"image_id": 314294, "file_name": "000000314294.jpg", "url": "http://images.cocodataset.org/val2017/000000314294.jpg", "class": "cake", "gold": 0}
+{"image_id": 252219, "file_name": "000000252219.jpg", "url": "http://images.cocodataset.org/val2017/000000252219.jpg", "class": "candle", "gold": 0}
+{"image_id": 336587, "file_name": "000000336587.jpg", "url": "http://images.cocodataset.org/val2017/000000336587.jpg", "class": "carrot", "gold": 0}
+{"image_id": 297343, "file_name": "000000297343.jpg", "url": "http://images.cocodataset.org/val2017/000000297343.jpg", "class": "cat", "gold": 0}
+{"image_id": 323355, "file_name": "000000323355.jpg", "url": "http://images.cocodataset.org/val2017/000000323355.jpg", "class": "cell phone", "gold": 0}
+{"image_id": 520264, "file_name": "000000520264.jpg", "url": "http://images.cocodataset.org/val2017/000000520264.jpg", "class": "chair", "gold": 0}
+{"image_id": 338560, "file_name": "000000338560.jpg", "url": "http://images.cocodataset.org/val2017/000000338560.jpg", "class": "clock", "gold": 0}
+{"image_id": 458755, "file_name": "000000458755.jpg", "url": "http://images.cocodataset.org/val2017/000000458755.jpg", "class": "couch", "gold": 0}
+{"image_id": 331352, "file_name": "000000331352.jpg", "url": "http://images.cocodataset.org/val2017/000000331352.jpg", "class": "cow", "gold": 0}
+{"image_id": 418281, "file_name": "000000418281.jpg", "url": "http://images.cocodataset.org/val2017/000000418281.jpg", "class": "cup", "gold": 0}
+{"image_id": 308394, "file_name": "000000308394.jpg", "url": "http://images.cocodataset.org/val2017/000000308394.jpg", "class": "dining table", "gold": 0}
+{"image_id": 37777, "file_name": "000000037777.jpg", "url": "http://images.cocodataset.org/val2017/000000037777.jpg", "class": "dog", "gold": 0}
+{"image_id": 185250, "file_name": "000000185250.jpg", "url": "http://images.cocodataset.org/val2017/000000185250.jpg", "class": "donut", "gold": 0}
+{"image_id": 360661, "file_name": "000000360661.jpg", "url": "http://images.cocodataset.org/val2017/000000360661.jpg", "class": "duck", "gold": 0}
+{"image_id": 524456, "file_name": "000000524456.jpg", "url": "http://images.cocodataset.org/val2017/000000524456.jpg", "class": "elephant", "gold": 0}
+{"image_id": 173033, "file_name": "000000173033.jpg", "url": "http://images.cocodataset.org/val2017/000000173033.jpg", "class": "flower_arrangement", "gold": 0}
+{"image_id": 233771, "file_name": "000000233771.jpg", "url": "http://images.cocodataset.org/val2017/000000233771.jpg", "class": "fork", "gold": 0}
+{"image_id": 314294, "file_name": "000000314294.jpg", "url": "http://images.cocodataset.org/val2017/000000314294.jpg", "class": "frisbee", "gold": 0}
+{"image_id": 578500, "file_name": "000000578500.jpg", "url": "http://images.cocodataset.org/val2017/000000578500.jpg", "class": "giraffe", "gold": 0}
+{"image_id": 363840, "file_name": "000000363840.jpg", "url": "http://images.cocodataset.org/val2017/000000363840.jpg", "class": "goose", "gold": 0}
+{"image_id": 378605, "file_name": "000000378605.jpg", "url": "http://images.cocodataset.org/val2017/000000378605.jpg", "class": "handbag", "gold": 0}
+{"image_id": 189310, "file_name": "000000189310.jpg", "url": "http://images.cocodataset.org/val2017/000000189310.jpg", "class": "horse", "gold": 0}
+{"image_id": 476415, "file_name": "000000476415.jpg", "url": "http://images.cocodataset.org/val2017/000000476415.jpg", "class": "kite", "gold": 0}
+{"image_id": 430961, "file_name": "000000430961.jpg", "url": "http://images.cocodataset.org/val2017/000000430961.jpg", "class": "knife", "gold": 0}
+{"image_id": 18336, "file_name": "000000018336.jpg", "url": "http://images.cocodataset.org/train2017/000000018336.jpg", "class": "apple", "gold": 1}
+{"image_id": 7256, "file_name": "000000007256.jpg", "url": "http://images.cocodataset.org/train2017/000000007256.jpg", "class": "backpack", "gold": 1}
+{"image_id": 5001, "file_name": "000000005001.jpg", "url": "http://images.cocodataset.org/val2017/000000005001.jpg", "class": "balloon", "gold": 1}
+{"image_id": 2587, "file_name": "000000002587.jpg", "url": "http://images.cocodataset.org/val2017/000000002587.jpg", "class": "banana", "gold": 1}
+{"image_id": 632, "file_name": "000000000632.jpg", "url": "http://images.cocodataset.org/val2017/000000000632.jpg", "class": "bed", "gold": 1}
+{"image_id": 8665, "file_name": "000000008665.jpg", "url": "http://images.cocodataset.org/train2017/000000008665.jpg", "class": "bird", "gold": 1}
+{"image_id": 20601, "file_name": "000000020601.jpg", "url": "http://images.cocodataset.org/train2017/000000020601.jpg", "class": "book", "gold": 1}
+{"image_id": 3310, "file_name": "000000003310.jpg", "url": "http://images.cocodataset.org/train2017/000000003310.jpg", "class": "bottle", "gold": 1}
+{"image_id": 853, "file_name": "000000000853.jpg", "url": "http://images.cocodataset.org/train2017/000000000853.jpg", "class": "bowl", "gold": 1}
+{"image_id": 19221, "file_name": "000000019221.jpg", "url": "http://images.cocodataset.org/val2017/000000019221.jpg", "class": "broccoli", "gold": 1}
+{"image_id": 2157, "file_name": "000000002157.jpg", "url": "http://images.cocodataset.org/val2017/000000002157.jpg", "class": "cake", "gold": 1}
+{"image_id": 8024, "file_name": "000000008024.jpg", "url": "http://images.cocodataset.org/train2017/000000008024.jpg", "class": "candle", "gold": 1}
+{"image_id": 6792, "file_name": "000000006792.jpg", "url": "http://images.cocodataset.org/train2017/000000006792.jpg", "class": "carrot", "gold": 1}
+{"image_id": 684, "file_name": "000000000684.jpg", "url": "http://images.cocodataset.org/train2017/000000000684.jpg", "class": "cat", "gold": 1}
+{"image_id": 387, "file_name": "000000000387.jpg", "url": "http://images.cocodataset.org/train2017/000000000387.jpg", "class": "cell phone", "gold": 1}
+{"image_id": 1522, "file_name": "000000001522.jpg", "url": "http://images.cocodataset.org/train2017/000000001522.jpg", "class": "chair", "gold": 1}
+{"image_id": 3084, "file_name": "000000003084.jpg", "url": "http://images.cocodataset.org/train2017/000000003084.jpg", "class": "clock", "gold": 1}
+{"image_id": 1404, "file_name": "000000001404.jpg", "url": "http://images.cocodataset.org/train2017/000000001404.jpg", "class": "couch", "gold": 1}
+{"image_id": 14888, "file_name": "000000014888.jpg", "url": "http://images.cocodataset.org/val2017/000000014888.jpg", "class": "cow", "gold": 1}
+{"image_id": 909, "file_name": "000000000909.jpg", "url": "http://images.cocodataset.org/train2017/000000000909.jpg", "class": "cup", "gold": 1}
+{"image_id": 23258, "file_name": "000000023258.jpg", "url": "http://images.cocodataset.org/train2017/000000023258.jpg", "class": "dining table", "gold": 1}
+{"image_id": 1025, "file_name": "000000001025.jpg", "url": "http://images.cocodataset.org/train2017/000000001025.jpg", "class": "dog", "gold": 1}
+{"image_id": 2587, "file_name": "000000002587.jpg", "url": "http://images.cocodataset.org/val2017/000000002587.jpg", "class": "donut", "gold": 1}
+{"image_id": 69163, "file_name": "000000069163.jpg", "url": "http://images.cocodataset.org/train2017/000000069163.jpg", "class": "duck", "gold": 1}
+{"image_id": 2849, "file_name": "000000002849.jpg", "url": "http://images.cocodataset.org/train2017/000000002849.jpg", "class": "elephant", "gold": 1}
+{"image_id": 1393, "file_name": "000000001393.jpg", "url": "http://images.cocodataset.org/train2017/000000001393.jpg", "class": "flower_arrangement", "gold": 1}
+{"image_id": 853, "file_name": "000000000853.jpg", "url": "http://images.cocodataset.org/train2017/000000000853.jpg", "class": "fork", "gold": 1}
+{"image_id": 3862, "file_name": "000000003862.jpg", "url": "http://images.cocodataset.org/train2017/000000003862.jpg", "class": "frisbee", "gold": 1}
+{"image_id": 6631, "file_name": "000000006631.jpg", "url": "http://images.cocodataset.org/train2017/000000006631.jpg", "class": "giraffe", "gold": 1}
+{"image_id": 7049, "file_name": "000000007049.jpg", "url": "http://images.cocodataset.org/train2017/000000007049.jpg", "class": "handbag", "gold": 1}
+{"image_id": 8580, "file_name": "000000008580.jpg", "url": "http://images.cocodataset.org/train2017/000000008580.jpg", "class": "horse", "gold": 1}
+{"image_id": 8019, "file_name": "000000008019.jpg", "url": "http://images.cocodataset.org/train2017/000000008019.jpg", "class": "kite", "gold": 1}
+{"image_id": 12281, "file_name": "000000012281.jpg", "url": "http://images.cocodataset.org/train2017/000000012281.jpg", "class": "knife", "gold": 1}
+{"image_id": 1503, "file_name": "000000001503.jpg", "url": "http://images.cocodataset.org/val2017/000000001503.jpg", "class": "laptop", "gold": 1}
+{"image_id": 387, "file_name": "000000000387.jpg", "url": "http://images.cocodataset.org/train2017/000000000387.jpg", "class": "mouse", "gold": 1}
+{"image_id": 2592, "file_name": "000000002592.jpg", "url": "http://images.cocodataset.org/val2017/000000002592.jpg", "class": "mug", "gold": 1}
+{"image_id": 75393, "file_name": "000000075393.jpg", "url": "http://images.cocodataset.org/val2017/000000075393.jpg", "class": "necklace", "gold": 1}
+{"image_id": 50679, "file_name": "000000050679.jpg", "url": "http://images.cocodataset.org/val2017/000000050679.jpg", "class": "orange", "gold": 1}
+{"image_id": 15956, "file_name": "000000015956.jpg", "url": "http://images.cocodataset.org/val2017/000000015956.jpg", "class": "person", "gold": 1}
+{"image_id": 397, "file_name": "000000000397.jpg", "url": "http://images.cocodataset.org/train2017/000000000397.jpg", "class": "pizza", "gold": 1}
+{"image_id": 11528, "file_name": "000000011528.jpg", "url": "http://images.cocodataset.org/train2017/000000011528.jpg", "class": "potted plant", "gold": 1}
+{"image_id": 19994, "file_name": "000000019994.jpg", "url": "http://images.cocodataset.org/train2017/000000019994.jpg", "class": "remote", "gold": 1}
+{"image_id": 4931, "file_name": "000000004931.jpg", "url": "http://images.cocodataset.org/train2017/000000004931.jpg", "class": "sandwich", "gold": 1}
+{"image_id": 165, "file_name": "000000000165.jpg", "url": "http://images.cocodataset.org/train2017/000000000165.jpg", "class": "scissors", "gold": 1}
+{"image_id": 12062, "file_name": "000000012062.jpg", "url": "http://images.cocodataset.org/val2017/000000012062.jpg", "class": "sheep", "gold": 1}
+{"image_id": 605, "file_name": "000000000605.jpg", "url": "http://images.cocodataset.org/train2017/000000000605.jpg", "class": "spoon", "gold": 1}
+{"image_id": 2849, "file_name": "000000002849.jpg", "url": "http://images.cocodataset.org/train2017/000000002849.jpg", "class": "sports ball", "gold": 1}
+{"image_id": 27345, "file_name": "000000027345.jpg", "url": "http://images.cocodataset.org/train2017/000000027345.jpg", "class": "sunglasses", "gold": 1}
+{"image_id": 11029, "file_name": "000000011029.jpg", "url": "http://images.cocodataset.org/train2017/000000011029.jpg", "class": "teddy bear", "gold": 1}
+{"image_id": 20417, "file_name": "000000020417.jpg", "url": "http://images.cocodataset.org/train2017/000000020417.jpg", "class": "toothbrush", "gold": 1}
+{"image_id": 4129, "file_name": "000000004129.jpg", "url": "http://images.cocodataset.org/train2017/000000004129.jpg", "class": "umbrella", "gold": 1}
+{"image_id": 1393, "file_name": "000000001393.jpg", "url": "http://images.cocodataset.org/train2017/000000001393.jpg", "class": "vase", "gold": 1}
+{"image_id": 6964, "file_name": "000000006964.jpg", "url": "http://images.cocodataset.org/train2017/000000006964.jpg", "class": "wine glass", "gold": 1}
+{"image_id": 1296, "file_name": "000000001296.jpg", "url": "http://images.cocodataset.org/val2017/000000001296.jpg", "class": "wristwatch", "gold": 1}
+{"image_id": 14862, "file_name": "000000014862.jpg", "url": "http://images.cocodataset.org/train2017/000000014862.jpg", "class": "zebra", "gold": 1}
+{"image_id": 31796, "file_name": "000000031796.jpg", "url": "http://images.cocodataset.org/train2017/000000031796.jpg", "class": "apple", "gold": 1}
+{"image_id": 16837, "file_name": "000000016837.jpg", "url": "http://images.cocodataset.org/train2017/000000016837.jpg", "class": "backpack", "gold": 1}
+{"image_id": 81571, "file_name": "000000081571.jpg", "url": "http://images.cocodataset.org/train2017/000000081571.jpg", "class": "balloon", "gold": 1}
+{"image_id": 3093, "file_name": "000000003093.jpg", "url": "http://images.cocodataset.org/train2017/000000003093.jpg", "class": "banana", "gold": 1}
+{"image_id": 1205, "file_name": "000000001205.jpg", "url": "http://images.cocodataset.org/train2017/000000001205.jpg", "class": "bed", "gold": 1}
+{"image_id": 9553, "file_name": "000000009553.jpg", "url": "http://images.cocodataset.org/train2017/000000009553.jpg", "class": "bird", "gold": 1}
+{"image_id": 22879, "file_name": "000000022879.jpg", "url": "http://images.cocodataset.org/train2017/000000022879.jpg", "class": "book", "gold": 1}
+{"image_id": 12991, "file_name": "000000012991.jpg", "url": "http://images.cocodataset.org/train2017/000000012991.jpg", "class": "bottle", "gold": 1}
+{"image_id": 2149, "file_name": "000000002149.jpg", "url": "http://images.cocodataset.org/val2017/000000002149.jpg", "class": "bowl", "gold": 1}
+{"image_id": 52490, "file_name": "000000052490.jpg", "url": "http://images.cocodataset.org/train2017/000000052490.jpg", "class": "broccoli", "gold": 1}
+{"image_id": 13597, "file_name": "000000013597.jpg", "url": "http://images.cocodataset.org/val2017/000000013597.jpg", "class": "cake", "gold": 1}
+{"image_id": 19742, "file_name": "000000019742.jpg", "url": "http://images.cocodataset.org/val2017/000000019742.jpg", "class": "candle", "gold": 1}
+{"image_id": 26671, "file_name": "000000026671.jpg", "url": "http://images.cocodataset.org/train2017/000000026671.jpg", "class": "carrot", "gold": 1}
+{"image_id": 825, "file_name": "000000000825.jpg", "url": "http://images.cocodataset.org/train2017/000000000825.jpg", "class": "cat", "gold": 1}
+{"image_id": 2434, "file_name": "000000002434.jpg", "url": "http://images.cocodataset.org/train2017/000000002434.jpg", "class": "cell phone", "gold": 1}
+{"image_id": 2988, "file_name": "000000002988.jpg", "url": "http://images.cocodataset.org/train2017/000000002988.jpg", "class": "chair", "gold": 1}
+{"image_id": 5046, "file_name": "000000005046.jpg", "url": "http://images.cocodataset.org/train2017/000000005046.jpg", "class": "clock", "gold": 1}
+{"image_id": 5115, "file_name": "000000005115.jpg", "url": "http://images.cocodataset.org/train2017/000000005115.jpg", "class": "couch", "gold": 1}
+{"image_id": 36345, "file_name": "000000036345.jpg", "url": "http://images.cocodataset.org/train2017/000000036345.jpg", "class": "cow", "gold": 1}
+{"image_id": 3661, "file_name": "000000003661.jpg", "url": "http://images.cocodataset.org/val2017/000000003661.jpg", "class": "cup", "gold": 1}
+{"image_id": 34873, "file_name": "000000034873.jpg", "url": "http://images.cocodataset.org/val2017/000000034873.jpg", "class": "dining table", "gold": 1}
+{"image_id": 1622, "file_name": "000000001622.jpg", "url": "http://images.cocodataset.org/train2017/000000001622.jpg", "class": "dog", "gold": 1}
+{"image_id": 10579, "file_name": "000000010579.jpg", "url": "http://images.cocodataset.org/train2017/000000010579.jpg", "class": "donut", "gold": 1}
+{"image_id": 145020, "file_name": "000000145020.jpg", "url": "http://images.cocodataset.org/val2017/000000145020.jpg", "class": "duck", "gold": 1}
+{"image_id": 2985, "file_name": "000000002985.jpg", "url": "http://images.cocodataset.org/train2017/000000002985.jpg", "class": "elephant", "gold": 1}
+{"image_id": 6673, "file_name": "000000006673.jpg", "url": "http://images.cocodataset.org/train2017/000000006673.jpg", "class": "flower_arrangement", "gold": 1}
+{"image_id": 6792, "file_name": "000000006792.jpg", "url": "http://images.cocodataset.org/train2017/000000006792.jpg", "class": "fork", "gold": 1}
+{"image_id": 9378, "file_name": "000000009378.jpg", "url": "http://images.cocodataset.org/val2017/000000009378.jpg", "class": "frisbee", "gold": 1}
+{"image_id": 7205, "file_name": "000000007205.jpg", "url": "http://images.cocodataset.org/train2017/000000007205.jpg", "class": "giraffe", "gold": 1}
+{"image_id": 8458, "file_name": "000000008458.jpg", "url": "http://images.cocodataset.org/train2017/000000008458.jpg", "class": "handbag", "gold": 1}
+{"image_id": 9465, "file_name": "000000009465.jpg", "url": "http://images.cocodataset.org/train2017/000000009465.jpg", "class": "horse", "gold": 1}
+{"image_id": 8933, "file_name": "000000008933.jpg", "url": "http://images.cocodataset.org/train2017/000000008933.jpg", "class": "kite", "gold": 1}
+{"image_id": 13045, "file_name": "000000013045.jpg", "url": "http://images.cocodataset.org/train2017/000000013045.jpg", "class": "knife", "gold": 1}
+{"image_id": 1675, "file_name": "000000001675.jpg", "url": "http://images.cocodataset.org/val2017/000000001675.jpg", "class": "laptop", "gold": 1}
+{"image_id": 1503, "file_name": "000000001503.jpg", "url": "http://images.cocodataset.org/val2017/000000001503.jpg", "class": "mouse", "gold": 1}
+{"image_id": 6614, "file_name": "000000006614.jpg", "url": "http://images.cocodataset.org/val2017/000000006614.jpg", "class": "apple", "gold": 2}
+{"image_id": 20188, "file_name": "000000020188.jpg", "url": "http://images.cocodataset.org/train2017/000000020188.jpg", "class": "backpack", "gold": 2}
+{"image_id": 428, "file_name": "000000000428.jpg", "url": "http://images.cocodataset.org/train2017/000000000428.jpg", "class": "balloon", "gold": 2}
+{"image_id": 4749, "file_name": "000000004749.jpg", "url": "http://images.cocodataset.org/train2017/000000004749.jpg", "class": "banana", "gold": 2}
+{"image_id": 7795, "file_name": "000000007795.jpg", "url": "http://images.cocodataset.org/val2017/000000007795.jpg", "class": "bed", "gold": 2}
+{"image_id": 4283, "file_name": "000000004283.jpg", "url": "http://images.cocodataset.org/train2017/000000004283.jpg", "class": "bird", "gold": 2}
+{"image_id": 3219, "file_name": "000000003219.jpg", "url": "http://images.cocodataset.org/train2017/000000003219.jpg", "class": "book", "gold": 2}
+{"image_id": 26454, "file_name": "000000026454.jpg", "url": "http://images.cocodataset.org/train2017/000000026454.jpg", "class": "bottle", "gold": 2}
+{"image_id": 25986, "file_name": "000000025986.jpg", "url": "http://images.cocodataset.org/val2017/000000025986.jpg", "class": "bowl", "gold": 2}
+{"image_id": 38083, "file_name": "000000038083.jpg", "url": "http://images.cocodataset.org/train2017/000000038083.jpg", "class": "broccoli", "gold": 2}
+{"image_id": 56632, "file_name": "000000056632.jpg", "url": "http://images.cocodataset.org/train2017/000000056632.jpg", "class": "cake", "gold": 2}
+{"image_id": 121249, "file_name": "000000121249.jpg", "url": "http://images.cocodataset.org/train2017/000000121249.jpg", "class": "candle", "gold": 2}
+{"image_id": 203095, "file_name": "000000203095.jpg", "url": "http://images.cocodataset.org/val2017/000000203095.jpg", "class": "carrot", "gold": 2}
+{"image_id": 23272, "file_name": "000000023272.jpg", "url": "http://images.cocodataset.org/val2017/000000023272.jpg", "class": "cat", "gold": 2}
+{"image_id": 1296, "file_name": "000000001296.jpg", "url": "http://images.cocodataset.org/val2017/000000001296.jpg", "class": "cell phone", "gold": 2}
+{"image_id": 1993, "file_name": "000000001993.jpg", "url": "http://images.cocodataset.org/val2017/000000001993.jpg", "class": "chair", "gold": 2}
+{"image_id": 7888, "file_name": "000000007888.jpg", "url": "http://images.cocodataset.org/val2017/000000007888.jpg", "class": "clock", "gold": 2}
+{"image_id": 8602, "file_name": "000000008602.jpg", "url": "http://images.cocodataset.org/train2017/000000008602.jpg", "class": "couch", "gold": 2}
+{"image_id": 12475, "file_name": "000000012475.jpg", "url": "http://images.cocodataset.org/train2017/000000012475.jpg", "class": "cow", "gold": 2}
+{"image_id": 17714, "file_name": "000000017714.jpg", "url": "http://images.cocodataset.org/val2017/000000017714.jpg", "class": "cup", "gold": 2}
+{"image_id": 63865, "file_name": "000000063865.jpg", "url": "http://images.cocodataset.org/train2017/000000063865.jpg", "class": "dining table", "gold": 2}
+{"image_id": 10276, "file_name": "000000010276.jpg", "url": "http://images.cocodataset.org/train2017/000000010276.jpg", "class": "dog", "gold": 2}
+{"image_id": 13595, "file_name": "000000013595.jpg", "url": "http://images.cocodataset.org/train2017/000000013595.jpg", "class": "donut", "gold": 2}
+{"image_id": 44123, "file_name": "000000044123.jpg", "url": "http://images.cocodataset.org/train2017/000000044123.jpg", "class": "duck", "gold": 2}
+{"image_id": 11791, "file_name": "000000011791.jpg", "url": "http://images.cocodataset.org/train2017/000000011791.jpg", "class": "elephant", "gold": 2}
+{"image_id": 22149, "file_name": "000000022149.jpg", "url": "http://images.cocodataset.org/train2017/000000022149.jpg", "class": "flower_arrangement", "gold": 2}
+{"image_id": 50536, "file_name": "000000050536.jpg", "url": "http://images.cocodataset.org/train2017/000000050536.jpg", "class": "fork", "gold": 2}
+{"image_id": 6954, "file_name": "000000006954.jpg", "url": "http://images.cocodataset.org/val2017/000000006954.jpg", "class": "frisbee", "gold": 2}
+{"image_id": 25, "file_name": "000000000025.jpg", "url": "http://images.cocodataset.org/train2017/000000000025.jpg", "class": "giraffe", "gold": 2}
+{"image_id": 436551, "file_name": "000000436551.jpg", "url": "http://images.cocodataset.org/val2017/000000436551.jpg", "class": "goose", "gold": 2}
+{"image_id": 11511, "file_name": "000000011511.jpg", "url": "http://images.cocodataset.org/val2017/000000011511.jpg", "class": "handbag", "gold": 2}
+{"image_id": 2444, "file_name": "000000002444.jpg", "url": "http://images.cocodataset.org/train2017/000000002444.jpg", "class": "horse", "gold": 2}
+{"image_id": 134322, "file_name": "000000134322.jpg", "url": "http://images.cocodataset.org/val2017/000000134322.jpg", "class": "kite", "gold": 2}
+{"image_id": 19226, "file_name": "000000019226.jpg", "url": "http://images.cocodataset.org/train2017/000000019226.jpg", "class": "knife", "gold": 2}
+{"image_id": 15644, "file_name": "000000015644.jpg", "url": "http://images.cocodataset.org/train2017/000000015644.jpg", "class": "laptop", "gold": 2}
+{"image_id": 46031, "file_name": "000000046031.jpg", "url": "http://images.cocodataset.org/val2017/000000046031.jpg", "class": "mouse", "gold": 2}
+{"image_id": 17587, "file_name": "000000017587.jpg", "url": "http://images.cocodataset.org/train2017/000000017587.jpg", "class": "mug", "gold": 2}
+{"image_id": 25202, "file_name": "000000025202.jpg", "url": "http://images.cocodataset.org/train2017/000000025202.jpg", "class": "orange", "gold": 2}
+{"image_id": 11029, "file_name": "000000011029.jpg", "url": "http://images.cocodataset.org/train2017/000000011029.jpg", "class": "person", "gold": 2}
+{"image_id": 7787, "file_name": "000000007787.jpg", "url": "http://images.cocodataset.org/train2017/000000007787.jpg", "class": "pizza", "gold": 2}
+{"image_id": 7570, "file_name": "000000007570.jpg", "url": "http://images.cocodataset.org/train2017/000000007570.jpg", "class": "potted plant", "gold": 2}
+{"image_id": 6422, "file_name": "000000006422.jpg", "url": "http://images.cocodataset.org/train2017/000000006422.jpg", "class": "remote", "gold": 2}
+{"image_id": 1697, "file_name": "000000001697.jpg", "url": "http://images.cocodataset.org/train2017/000000001697.jpg", "class": "sandwich", "gold": 2}
+{"image_id": 340930, "file_name": "000000340930.jpg", "url": "http://images.cocodataset.org/val2017/000000340930.jpg", "class": "scissors", "gold": 2}
+{"image_id": 5099, "file_name": "000000005099.jpg", "url": "http://images.cocodataset.org/train2017/000000005099.jpg", "class": "sheep", "gold": 2}
+{"image_id": 58979, "file_name": "000000058979.jpg", "url": "http://images.cocodataset.org/train2017/000000058979.jpg", "class": "spoon", "gold": 2}
+{"image_id": 224907, "file_name": "000000224907.jpg", "url": "http://images.cocodataset.org/train2017/000000224907.jpg", "class": "sports ball", "gold": 2}
+{"image_id": 643, "file_name": "000000000643.jpg", "url": "http://images.cocodataset.org/train2017/000000000643.jpg", "class": "teddy bear", "gold": 2}
+{"image_id": 26828, "file_name": "000000026828.jpg", "url": "http://images.cocodataset.org/train2017/000000026828.jpg", "class": "toothbrush", "gold": 2}
+{"image_id": 16412, "file_name": "000000016412.jpg", "url": "http://images.cocodataset.org/train2017/000000016412.jpg", "class": "umbrella", "gold": 2}
+{"image_id": 10903, "file_name": "000000010903.jpg", "url": "http://images.cocodataset.org/train2017/000000010903.jpg", "class": "vase", "gold": 2}
+{"image_id": 4065, "file_name": "000000004065.jpg", "url": "http://images.cocodataset.org/train2017/000000004065.jpg", "class": "wine glass", "gold": 2}
+{"image_id": 1818, "file_name": "000000001818.jpg", "url": "http://images.cocodataset.org/val2017/000000001818.jpg", "class": "zebra", "gold": 2}
+{"image_id": 7934, "file_name": "000000007934.jpg", "url": "http://images.cocodataset.org/train2017/000000007934.jpg", "class": "apple", "gold": 2}
+{"image_id": 32610, "file_name": "000000032610.jpg", "url": "http://images.cocodataset.org/val2017/000000032610.jpg", "class": "backpack", "gold": 2}
+{"image_id": 108762, "file_name": "000000108762.jpg", "url": "http://images.cocodataset.org/train2017/000000108762.jpg", "class": "balloon", "gold": 2}
+{"image_id": 44734, "file_name": "000000044734.jpg", "url": "http://images.cocodataset.org/train2017/000000044734.jpg", "class": "banana", "gold": 2}
+{"image_id": 30434, "file_name": "000000030434.jpg", "url": "http://images.cocodataset.org/train2017/000000030434.jpg", "class": "bed", "gold": 2}
+{"image_id": 5564, "file_name": "000000005564.jpg", "url": "http://images.cocodataset.org/train2017/000000005564.jpg", "class": "bird", "gold": 2}
+{"image_id": 35279, "file_name": "000000035279.jpg", "url": "http://images.cocodataset.org/val2017/000000035279.jpg", "class": "book", "gold": 2}
+{"image_id": 28287, "file_name": "000000028287.jpg", "url": "http://images.cocodataset.org/train2017/000000028287.jpg", "class": "bottle", "gold": 2}
+{"image_id": 29323, "file_name": "000000029323.jpg", "url": "http://images.cocodataset.org/train2017/000000029323.jpg", "class": "bowl", "gold": 2}
+{"image_id": 50331, "file_name": "000000050331.jpg", "url": "http://images.cocodataset.org/val2017/000000050331.jpg", "class": "broccoli", "gold": 2}
+{"image_id": 109916, "file_name": "000000109916.jpg", "url": "http://images.cocodataset.org/val2017/000000109916.jpg", "class": "cake", "gold": 2}
+{"image_id": 143010, "file_name": "000000143010.jpg", "url": "http://images.cocodataset.org/train2017/000000143010.jpg", "class": "candle", "gold": 2}
+{"image_id": 208295, "file_name": "000000208295.jpg", "url": "http://images.cocodataset.org/train2017/000000208295.jpg", "class": "carrot", "gold": 2}
+{"image_id": 39531, "file_name": "000000039531.jpg", "url": "http://images.cocodataset.org/train2017/000000039531.jpg", "class": "cat", "gold": 2}
+{"image_id": 35279, "file_name": "000000035279.jpg", "url": "http://images.cocodataset.org/val2017/000000035279.jpg", "class": "cell phone", "gold": 2}
+{"image_id": 10092, "file_name": "000000010092.jpg", "url": "http://images.cocodataset.org/val2017/000000010092.jpg", "class": "chair", "gold": 2}
+{"image_id": 8433, "file_name": "000000008433.jpg", "url": "http://images.cocodataset.org/train2017/000000008433.jpg", "class": "clock", "gold": 2}
+{"image_id": 28349, "file_name": "000000028349.jpg", "url": "http://images.cocodataset.org/train2017/000000028349.jpg", "class": "couch", "gold": 2}
+{"image_id": 100371, "file_name": "000000100371.jpg", "url": "http://images.cocodataset.org/train2017/000000100371.jpg", "class": "cow", "gold": 2}
+{"image_id": 42042, "file_name": "000000042042.jpg", "url": "http://images.cocodataset.org/train2017/000000042042.jpg", "class": "cup", "gold": 2}
+{"image_id": 127394, "file_name": "000000127394.jpg", "url": "http://images.cocodataset.org/val2017/000000127394.jpg", "class": "dining table", "gold": 2}
+{"image_id": 26734, "file_name": "000000026734.jpg", "url": "http://images.cocodataset.org/train2017/000000026734.jpg", "class": "dog", "gold": 2}
+{"image_id": 20818, "file_name": "000000020818.jpg", "url": "http://images.cocodataset.org/train2017/000000020818.jpg", "class": "donut", "gold": 2}
+{"image_id": 361484, "file_name": "000000361484.jpg", "url": "http://images.cocodataset.org/train2017/000000361484.jpg", "class": "duck", "gold": 2}
+{"image_id": 14160, "file_name": "000000014160.jpg", "url": "http://images.cocodataset.org/train2017/000000014160.jpg", "class": "elephant", "gold": 2}
+{"image_id": 23440, "file_name": "000000023440.jpg", "url": "http://images.cocodataset.org/train2017/000000023440.jpg", "class": "flower_arrangement", "gold": 2}
+{"image_id": 66817, "file_name": "000000066817.jpg", "url": "http://images.cocodataset.org/val2017/000000066817.jpg", "class": "fork", "gold": 2}
+{"image_id": 133492, "file_name": "000000133492.jpg", "url": "http://images.cocodataset.org/train2017/000000133492.jpg", "class": "frisbee", "gold": 2}
+{"image_id": 1224, "file_name": "000000001224.jpg", "url": "http://images.cocodataset.org/train2017/000000001224.jpg", "class": "giraffe", "gold": 2}
+{"image_id": 11699, "file_name": "000000011699.jpg", "url": "http://images.cocodataset.org/val2017/000000011699.jpg", "class": "handbag", "gold": 2}
+{"image_id": 3325, "file_name": "000000003325.jpg", "url": "http://images.cocodataset.org/train2017/000000003325.jpg", "class": "horse", "gold": 2}
+{"image_id": 182639, "file_name": "000000182639.jpg", "url": "http://images.cocodataset.org/train2017/000000182639.jpg", "class": "kite", "gold": 2}
+{"image_id": 95707, "file_name": "000000095707.jpg", "url": "http://images.cocodataset.org/val2017/000000095707.jpg", "class": "knife", "gold": 2}
+{"image_id": 34491, "file_name": "000000034491.jpg", "url": "http://images.cocodataset.org/train2017/000000034491.jpg", "class": "laptop", "gold": 2}
+{"image_id": 80053, "file_name": "000000080053.jpg", "url": "http://images.cocodataset.org/train2017/000000080053.jpg", "class": "mouse", "gold": 2}
+{"image_id": 63740, "file_name": "000000063740.jpg", "url": "http://images.cocodataset.org/val2017/000000063740.jpg", "class": "mug", "gold": 2}
+{"image_id": 110999, "file_name": "000000110999.jpg", "url": "http://images.cocodataset.org/val2017/000000110999.jpg", "class": "orange", "gold": 2}
+{"image_id": 47388, "file_name": "000000047388.jpg", "url": "http://images.cocodataset.org/train2017/000000047388.jpg", "class": "apple", "gold": 3}
+{"image_id": 96288, "file_name": "000000096288.jpg", "url": "http://images.cocodataset.org/train2017/000000096288.jpg", "class": "backpack", "gold": 3}
+{"image_id": 120127, "file_name": "000000120127.jpg", "url": "http://images.cocodataset.org/train2017/000000120127.jpg", "class": "banana", "gold": 3}
+{"image_id": 320987, "file_name": "000000320987.jpg", "url": "http://images.cocodataset.org/train2017/000000320987.jpg", "class": "bed", "gold": 3}
+{"image_id": 41888, "file_name": "000000041888.jpg", "url": "http://images.cocodataset.org/val2017/000000041888.jpg", "class": "bird", "gold": 3}
+{"image_id": 222299, "file_name": "000000222299.jpg", "url": "http://images.cocodataset.org/val2017/000000222299.jpg", "class": "book", "gold": 3}
+{"image_id": 7220, "file_name": "000000007220.jpg", "url": "http://images.cocodataset.org/train2017/000000007220.jpg", "class": "bottle", "gold": 3}
+{"image_id": 17587, "file_name": "000000017587.jpg", "url": "http://images.cocodataset.org/train2017/000000017587.jpg", "class": "bowl", "gold": 3}
+{"image_id": 9, "file_name": "000000000009.jpg", "url": "http://images.cocodataset.org/train2017/000000000009.jpg", "class": "broccoli", "gold": 3}
+{"image_id": 30073, "file_name": "000000030073.jpg", "url": "http://images.cocodataset.org/train2017/000000030073.jpg", "class": "cake", "gold": 3}
+{"image_id": 74638, "file_name": "000000074638.jpg", "url": "http://images.cocodataset.org/train2017/000000074638.jpg", "class": "candle", "gold": 3}
+{"image_id": 196009, "file_name": "000000196009.jpg", "url": "http://images.cocodataset.org/val2017/000000196009.jpg", "class": "carrot", "gold": 3}
+{"image_id": 143876, "file_name": "000000143876.jpg", "url": "http://images.cocodataset.org/train2017/000000143876.jpg", "class": "cat", "gold": 3}
+{"image_id": 146098, "file_name": "000000146098.jpg", "url": "http://images.cocodataset.org/train2017/000000146098.jpg", "class": "cell phone", "gold": 3}
+{"image_id": 16958, "file_name": "000000016958.jpg", "url": "http://images.cocodataset.org/val2017/000000016958.jpg", "class": "chair", "gold": 3}
+{"image_id": 7504, "file_name": "000000007504.jpg", "url": "http://images.cocodataset.org/train2017/000000007504.jpg", "class": "clock", "gold": 3}
+{"image_id": 67655, "file_name": "000000067655.jpg", "url": "http://images.cocodataset.org/train2017/000000067655.jpg", "class": "couch", "gold": 3}
+{"image_id": 17984, "file_name": "000000017984.jpg", "url": "http://images.cocodataset.org/train2017/000000017984.jpg", "class": "cow", "gold": 3}
+{"image_id": 91779, "file_name": "000000091779.jpg", "url": "http://images.cocodataset.org/val2017/000000091779.jpg", "class": "cup", "gold": 3}
+{"image_id": 80932, "file_name": "000000080932.jpg", "url": "http://images.cocodataset.org/val2017/000000080932.jpg", "class": "dining table", "gold": 3}
+{"image_id": 22879, "file_name": "000000022879.jpg", "url": "http://images.cocodataset.org/train2017/000000022879.jpg", "class": "dog", "gold": 3}
+{"image_id": 22080, "file_name": "000000022080.jpg", "url": "http://images.cocodataset.org/train2017/000000022080.jpg", "class": "donut", "gold": 3}
+{"image_id": 26836, "file_name": "000000026836.jpg", "url": "http://images.cocodataset.org/train2017/000000026836.jpg", "class": "duck", "gold": 3}
+{"image_id": 934, "file_name": "000000000934.jpg", "url": "http://images.cocodataset.org/train2017/000000000934.jpg", "class": "elephant", "gold": 3}
+{"image_id": 17867, "file_name": "000000017867.jpg", "url": "http://images.cocodataset.org/train2017/000000017867.jpg", "class": "flower_arrangement", "gold": 3}
+{"image_id": 173371, "file_name": "000000173371.jpg", "url": "http://images.cocodataset.org/val2017/000000173371.jpg", "class": "fork", "gold": 3}
+{"image_id": 996, "file_name": "000000000996.jpg", "url": "http://images.cocodataset.org/train2017/000000000996.jpg", "class": "giraffe", "gold": 3}
+{"image_id": 23258, "file_name": "000000023258.jpg", "url": "http://images.cocodataset.org/train2017/000000023258.jpg", "class": "handbag", "gold": 3}
+{"image_id": 6352, "file_name": "000000006352.jpg", "url": "http://images.cocodataset.org/train2017/000000006352.jpg", "class": "horse", "gold": 3}
+{"image_id": 26748, "file_name": "000000026748.jpg", "url": "http://images.cocodataset.org/train2017/000000026748.jpg", "class": "kite", "gold": 3}
+{"image_id": 96693, "file_name": "000000096693.jpg", "url": "http://images.cocodataset.org/train2017/000000096693.jpg", "class": "knife", "gold": 3}
+{"image_id": 24132, "file_name": "000000024132.jpg", "url": "http://images.cocodataset.org/train2017/000000024132.jpg", "class": "laptop", "gold": 3}
+{"image_id": 53465, "file_name": "000000053465.jpg", "url": "http://images.cocodataset.org/train2017/000000053465.jpg", "class": "mug", "gold": 3}
+{"image_id": 31733, "file_name": "000000031733.jpg", "url": "http://images.cocodataset.org/train2017/000000031733.jpg", "class": "orange", "gold": 3}
+{"image_id": 17582, "file_name": "000000017582.jpg", "url": "http://images.cocodataset.org/train2017/000000017582.jpg", "class": "person", "gold": 3}
+{"image_id": 19959, "file_name": "000000019959.jpg", "url": "http://images.cocodataset.org/train2017/000000019959.jpg", "class": "pizza", "gold": 3}
+{"image_id": 135459, "file_name": "000000135459.jpg", "url": "http://images.cocodataset.org/train2017/000000135459.jpg", "class": "potted plant", "gold": 3}
+{"image_id": 35045, "file_name": "000000035045.jpg", "url": "http://images.cocodataset.org/train2017/000000035045.jpg", "class": "remote", "gold": 3}
+{"image_id": 154107, "file_name": "000000154107.jpg", "url": "http://images.cocodataset.org/train2017/000000154107.jpg", "class": "sandwich", "gold": 3}
+{"image_id": 3812, "file_name": "000000003812.jpg", "url": "http://images.cocodataset.org/train2017/000000003812.jpg", "class": "scissors", "gold": 3}
+{"image_id": 88029, "file_name": "000000088029.jpg", "url": "http://images.cocodataset.org/train2017/000000088029.jpg", "class": "sheep", "gold": 3}
+{"image_id": 362547, "file_name": "000000362547.jpg", "url": "http://images.cocodataset.org/train2017/000000362547.jpg", "class": "spoon", "gold": 3}
+{"image_id": 42296, "file_name": "000000042296.jpg", "url": "http://images.cocodataset.org/val2017/000000042296.jpg", "class": "sports ball", "gold": 3}
+{"image_id": 66507, "file_name": "000000066507.jpg", "url": "http://images.cocodataset.org/train2017/000000066507.jpg", "class": "sunglasses", "gold": 3}
+{"image_id": 776, "file_name": "000000000776.jpg", "url": "http://images.cocodataset.org/val2017/000000000776.jpg", "class": "teddy bear", "gold": 3}
+{"image_id": 61683, "file_name": "000000061683.jpg", "url": "http://images.cocodataset.org/train2017/000000061683.jpg", "class": "umbrella", "gold": 3}
+{"image_id": 17867, "file_name": "000000017867.jpg", "url": "http://images.cocodataset.org/train2017/000000017867.jpg", "class": "vase", "gold": 3}
+{"image_id": 104495, "file_name": "000000104495.jpg", "url": "http://images.cocodataset.org/train2017/000000104495.jpg", "class": "wine glass", "gold": 3}
+{"image_id": 195188, "file_name": "000000195188.jpg", "url": "http://images.cocodataset.org/train2017/000000195188.jpg", "class": "wristwatch", "gold": 3}
+{"image_id": 154, "file_name": "000000000154.jpg", "url": "http://images.cocodataset.org/train2017/000000000154.jpg", "class": "zebra", "gold": 3}
+{"image_id": 169529, "file_name": "000000169529.jpg", "url": "http://images.cocodataset.org/train2017/000000169529.jpg", "class": "apple", "gold": 3}
+{"image_id": 177954, "file_name": "000000177954.jpg", "url": "http://images.cocodataset.org/train2017/000000177954.jpg", "class": "backpack", "gold": 3}
+{"image_id": 139260, "file_name": "000000139260.jpg", "url": "http://images.cocodataset.org/val2017/000000139260.jpg", "class": "banana", "gold": 3}
+{"image_id": 347693, "file_name": "000000347693.jpg", "url": "http://images.cocodataset.org/val2017/000000347693.jpg", "class": "bed", "gold": 3}
+{"image_id": 79642, "file_name": "000000079642.jpg", "url": "http://images.cocodataset.org/train2017/000000079642.jpg", "class": "bird", "gold": 3}
+{"image_id": 472678, "file_name": "000000472678.jpg", "url": "http://images.cocodataset.org/val2017/000000472678.jpg", "class": "book", "gold": 3}
+{"image_id": 19093, "file_name": "000000019093.jpg", "url": "http://images.cocodataset.org/train2017/000000019093.jpg", "class": "bottle", "gold": 3}
+{"image_id": 22446, "file_name": "000000022446.jpg", "url": "http://images.cocodataset.org/train2017/000000022446.jpg", "class": "bowl", "gold": 3}
+{"image_id": 40881, "file_name": "000000040881.jpg", "url": "http://images.cocodataset.org/train2017/000000040881.jpg", "class": "broccoli", "gold": 3}
+{"image_id": 146773, "file_name": "000000146773.jpg", "url": "http://images.cocodataset.org/train2017/000000146773.jpg", "class": "cake", "gold": 3}
+{"image_id": 221872, "file_name": "000000221872.jpg", "url": "http://images.cocodataset.org/val2017/000000221872.jpg", "class": "carrot", "gold": 3}
+{"image_id": 161013, "file_name": "000000161013.jpg", "url": "http://images.cocodataset.org/train2017/000000161013.jpg", "class": "cat", "gold": 3}
+{"image_id": 215908, "file_name": "000000215908.jpg", "url": "http://images.cocodataset.org/train2017/000000215908.jpg", "class": "cell phone", "gold": 3}
+{"image_id": 19994, "file_name": "000000019994.jpg", "url": "http://images.cocodataset.org/train2017/000000019994.jpg", "class": "chair", "gold": 3}
+{"image_id": 279122, "file_name": "000000279122.jpg", "url": "http://images.cocodataset.org/train2017/000000279122.jpg", "class": "couch", "gold": 3}
+{"image_id": 60823, "file_name": "000000060823.jpg", "url": "http://images.cocodataset.org/val2017/000000060823.jpg", "class": "cow", "gold": 3}
+{"image_id": 131343, "file_name": "000000131343.jpg", "url": "http://images.cocodataset.org/train2017/000000131343.jpg", "class": "cup", "gold": 3}
+{"image_id": 329455, "file_name": "000000329455.jpg", "url": "http://images.cocodataset.org/val2017/000000329455.jpg", "class": "dining table", "gold": 3}
+{"image_id": 133295, "file_name": "000000133295.jpg", "url": "http://images.cocodataset.org/train2017/000000133295.jpg", "class": "dog", "gold": 3}
+{"image_id": 109798, "file_name": "000000109798.jpg", "url": "http://images.cocodataset.org/val2017/000000109798.jpg", "class": "donut", "gold": 3}
+{"image_id": 64804, "file_name": "000000064804.jpg", "url": "http://images.cocodataset.org/train2017/000000064804.jpg", "class": "duck", "gold": 3}
+{"image_id": 38092, "file_name": "000000038092.jpg", "url": "http://images.cocodataset.org/train2017/000000038092.jpg", "class": "elephant", "gold": 3}
+{"image_id": 55109, "file_name": "000000055109.jpg", "url": "http://images.cocodataset.org/train2017/000000055109.jpg", "class": "flower_arrangement", "gold": 3}
+{"image_id": 28069, "file_name": "000000028069.jpg", "url": "http://images.cocodataset.org/train2017/000000028069.jpg", "class": "giraffe", "gold": 3}
+{"image_id": 380913, "file_name": "000000380913.jpg", "url": "http://images.cocodataset.org/val2017/000000380913.jpg", "class": "handbag", "gold": 3}
+{"image_id": 29895, "file_name": "000000029895.jpg", "url": "http://images.cocodataset.org/train2017/000000029895.jpg", "class": "horse", "gold": 3}
+{"image_id": 45680, "file_name": "000000045680.jpg", "url": "http://images.cocodataset.org/train2017/000000045680.jpg", "class": "kite", "gold": 3}
+{"image_id": 165753, "file_name": "000000165753.jpg", "url": "http://images.cocodataset.org/train2017/000000165753.jpg", "class": "laptop", "gold": 3}
+{"image_id": 304093, "file_name": "000000304093.jpg", "url": "http://images.cocodataset.org/train2017/000000304093.jpg", "class": "mug", "gold": 3}
+{"image_id": 87620, "file_name": "000000087620.jpg", "url": "http://images.cocodataset.org/train2017/000000087620.jpg", "class": "orange", "gold": 3}
+{"image_id": 26734, "file_name": "000000026734.jpg", "url": "http://images.cocodataset.org/train2017/000000026734.jpg", "class": "person", "gold": 3}
+{"image_id": 22696, "file_name": "000000022696.jpg", "url": "http://images.cocodataset.org/train2017/000000022696.jpg", "class": "pizza", "gold": 3}
+{"image_id": 338200, "file_name": "000000338200.jpg", "url": "http://images.cocodataset.org/train2017/000000338200.jpg", "class": "potted plant", "gold": 3}
+{"image_id": 166229, "file_name": "000000166229.jpg", "url": "http://images.cocodataset.org/train2017/000000166229.jpg", "class": "remote", "gold": 3}
+{"image_id": 208295, "file_name": "000000208295.jpg", "url": "http://images.cocodataset.org/train2017/000000208295.jpg", "class": "sandwich", "gold": 3}
+{"image_id": 217760, "file_name": "000000217760.jpg", "url": "http://images.cocodataset.org/train2017/000000217760.jpg", "class": "scissors", "gold": 3}
+{"image_id": 178994, "file_name": "000000178994.jpg", "url": "http://images.cocodataset.org/train2017/000000178994.jpg", "class": "sheep", "gold": 3}
+{"image_id": 2240, "file_name": "000000002240.jpg", "url": "http://images.cocodataset.org/train2017/000000002240.jpg", "class": "teddy bear", "gold": 3}
+{"image_id": 143961, "file_name": "000000143961.jpg", "url": "http://images.cocodataset.org/val2017/000000143961.jpg", "class": "umbrella", "gold": 3}
+{"image_id": 202928, "file_name": "000000202928.jpg", "url": "http://images.cocodataset.org/train2017/000000202928.jpg", "class": "vase", "gold": 3}
+{"image_id": 113113, "file_name": "000000113113.jpg", "url": "http://images.cocodataset.org/train2017/000000113113.jpg", "class": "apple", "gold": 4}
+{"image_id": 394677, "file_name": "000000394677.jpg", "url": "http://images.cocodataset.org/val2017/000000394677.jpg", "class": "backpack", "gold": 4}
+{"image_id": 131565, "file_name": "000000131565.jpg", "url": "http://images.cocodataset.org/train2017/000000131565.jpg", "class": "banana", "gold": 4}
+{"image_id": 258934, "file_name": "000000258934.jpg", "url": "http://images.cocodataset.org/train2017/000000258934.jpg", "class": "bird", "gold": 4}
+{"image_id": 92315, "file_name": "000000092315.jpg", "url": "http://images.cocodataset.org/train2017/000000092315.jpg", "class": "book", "gold": 4}
+{"image_id": 54218, "file_name": "000000054218.jpg", "url": "http://images.cocodataset.org/train2017/000000054218.jpg", "class": "bottle", "gold": 4}
+{"image_id": 60464, "file_name": "000000060464.jpg", "url": "http://images.cocodataset.org/train2017/000000060464.jpg", "class": "bowl", "gold": 4}
+{"image_id": 3501, "file_name": "000000003501.jpg", "url": "http://images.cocodataset.org/val2017/000000003501.jpg", "class": "broccoli", "gold": 4}
+{"image_id": 124812, "file_name": "000000124812.jpg", "url": "http://images.cocodataset.org/train2017/000000124812.jpg", "class": "cake", "gold": 4}
+{"image_id": 106639, "file_name": "000000106639.jpg", "url": "http://images.cocodataset.org/train2017/000000106639.jpg", "class": "candle", "gold": 4}
+{"image_id": 15254, "file_name": "000000015254.jpg", "url": "http://images.cocodataset.org/val2017/000000015254.jpg", "class": "carrot", "gold": 4}
+{"image_id": 298354, "file_name": "000000298354.jpg", "url": "http://images.cocodataset.org/train2017/000000298354.jpg", "class": "cat", "gold": 4}
+{"image_id": 36660, "file_name": "000000036660.jpg", "url": "http://images.cocodataset.org/val2017/000000036660.jpg", "class": "cell phone", "gold": 4}
+{"image_id": 235268, "file_name": "000000235268.jpg", "url": "http://images.cocodataset.org/train2017/000000235268.jpg", "class": "chair", "gold": 4}
+{"image_id": 194753, "file_name": "000000194753.jpg", "url": "http://images.cocodataset.org/train2017/000000194753.jpg", "class": "clock", "gold": 4}
+{"image_id": 302680, "file_name": "000000302680.jpg", "url": "http://images.cocodataset.org/train2017/000000302680.jpg", "class": "couch", "gold": 4}
+{"image_id": 31471, "file_name": "000000031471.jpg", "url": "http://images.cocodataset.org/train2017/000000031471.jpg", "class": "cow", "gold": 4}
+{"image_id": 496571, "file_name": "000000496571.jpg", "url": "http://images.cocodataset.org/val2017/000000496571.jpg", "class": "cup", "gold": 4}
+{"image_id": 354569, "file_name": "000000354569.jpg", "url": "http://images.cocodataset.org/train2017/000000354569.jpg", "class": "dog", "gold": 4}
+{"image_id": 135554, "file_name": "000000135554.jpg", "url": "http://images.cocodataset.org/train2017/000000135554.jpg", "class": "donut", "gold": 4}
+{"image_id": 166259, "file_name": "000000166259.jpg", "url": "http://images.cocodataset.org/val2017/000000166259.jpg", "class": "duck", "gold": 4}
+{"image_id": 1869, "file_name": "000000001869.jpg", "url": "http://images.cocodataset.org/train2017/000000001869.jpg", "class": "elephant", "gold": 4}
+{"image_id": 8300, "file_name": "000000008300.jpg", "url": "http://images.cocodataset.org/train2017/000000008300.jpg", "class": "giraffe", "gold": 4}
+{"image_id": 192524, "file_name": "000000192524.jpg", "url": "http://images.cocodataset.org/train2017/000000192524.jpg", "class": "handbag", "gold": 4}
+{"image_id": 167661, "file_name": "000000167661.jpg", "url": "http://images.cocodataset.org/train2017/000000167661.jpg", "class": "horse", "gold": 4}
+{"image_id": 7991, "file_name": "000000007991.jpg", "url": "http://images.cocodataset.org/val2017/000000007991.jpg", "class": "knife", "gold": 4}
+{"image_id": 437156, "file_name": "000000437156.jpg", "url": "http://images.cocodataset.org/train2017/000000437156.jpg", "class": "laptop", "gold": 4}
+{"image_id": 15644, "file_name": "000000015644.jpg", "url": "http://images.cocodataset.org/train2017/000000015644.jpg", "class": "mug", "gold": 4}
+{"image_id": 45472, "file_name": "000000045472.jpg", "url": "http://images.cocodataset.org/val2017/000000045472.jpg", "class": "orange", "gold": 4}
+{"image_id": 119379, "file_name": "000000119379.jpg", "url": "http://images.cocodataset.org/train2017/000000119379.jpg", "class": "person", "gold": 4}
+{"image_id": 15195, "file_name": "000000015195.jpg", "url": "http://images.cocodataset.org/train2017/000000015195.jpg", "class": "pizza", "gold": 4}
+{"image_id": 86582, "file_name": "000000086582.jpg", "url": "http://images.cocodataset.org/val2017/000000086582.jpg", "class": "potted plant", "gold": 4}
+{"image_id": 128970, "file_name": "000000128970.jpg", "url": "http://images.cocodataset.org/train2017/000000128970.jpg", "class": "remote", "gold": 4}
+{"image_id": 43944, "file_name": "000000043944.jpg", "url": "http://images.cocodataset.org/train2017/000000043944.jpg", "class": "sandwich", "gold": 4}
+{"image_id": 21387, "file_name": "000000021387.jpg", "url": "http://images.cocodataset.org/train2017/000000021387.jpg", "class": "sheep", "gold": 4}
+{"image_id": 92315, "file_name": "000000092315.jpg", "url": "http://images.cocodataset.org/train2017/000000092315.jpg", "class": "teddy bear", "gold": 4}
+{"image_id": 210189, "file_name": "000000210189.jpg", "url": "http://images.cocodataset.org/train2017/000000210189.jpg", "class": "toothbrush", "gold": 4}
+{"image_id": 66038, "file_name": "000000066038.jpg", "url": "http://images.cocodataset.org/val2017/000000066038.jpg", "class": "umbrella", "gold": 4}
+{"image_id": 31050, "file_name": "000000031050.jpg", "url": "http://images.cocodataset.org/val2017/000000031050.jpg", "class": "vase", "gold": 4}
+{"image_id": 20291, "file_name": "000000020291.jpg", "url": "http://images.cocodataset.org/train2017/000000020291.jpg", "class": "wine glass", "gold": 4}
+{"image_id": 14377, "file_name": "000000014377.jpg", "url": "http://images.cocodataset.org/train2017/000000014377.jpg", "class": "zebra", "gold": 4}
+{"image_id": 134542, "file_name": "000000134542.jpg", "url": "http://images.cocodataset.org/train2017/000000134542.jpg", "class": "apple", "gold": 4}
+{"image_id": 404065, "file_name": "000000404065.jpg", "url": "http://images.cocodataset.org/train2017/000000404065.jpg", "class": "backpack", "gold": 4}
+{"image_id": 165351, "file_name": "000000165351.jpg", "url": "http://images.cocodataset.org/val2017/000000165351.jpg", "class": "banana", "gold": 4}
+{"image_id": 325688, "file_name": "000000325688.jpg", "url": "http://images.cocodataset.org/train2017/000000325688.jpg", "class": "bird", "gold": 4}
+{"image_id": 190945, "file_name": "000000190945.jpg", "url": "http://images.cocodataset.org/train2017/000000190945.jpg", "class": "book", "gold": 4}
+{"image_id": 323114, "file_name": "000000323114.jpg", "url": "http://images.cocodataset.org/train2017/000000323114.jpg", "class": "bottle", "gold": 4}
+{"image_id": 314182, "file_name": "000000314182.jpg", "url": "http://images.cocodataset.org/val2017/000000314182.jpg", "class": "bowl", "gold": 4}
+{"image_id": 13045, "file_name": "000000013045.jpg", "url": "http://images.cocodataset.org/train2017/000000013045.jpg", "class": "broccoli", "gold": 4}
+{"image_id": 496424, "file_name": "000000496424.jpg", "url": "http://images.cocodataset.org/train2017/000000496424.jpg", "class": "cake", "gold": 4}
+{"image_id": 478105, "file_name": "000000478105.jpg", "url": "http://images.cocodataset.org/train2017/000000478105.jpg", "class": "candle", "gold": 4}
+{"image_id": 227960, "file_name": "000000227960.jpg", "url": "http://images.cocodataset.org/train2017/000000227960.jpg", "class": "carrot", "gold": 4}
+{"image_id": 421903, "file_name": "000000421903.jpg", "url": "http://images.cocodataset.org/train2017/000000421903.jpg", "class": "cat", "gold": 4}
+{"image_id": 343193, "file_name": "000000343193.jpg", "url": "http://images.cocodataset.org/train2017/000000343193.jpg", "class": "cell phone", "gold": 4}
+{"image_id": 368879, "file_name": "000000368879.jpg", "url": "http://images.cocodataset.org/train2017/000000368879.jpg", "class": "chair", "gold": 4}
+{"image_id": 41635, "file_name": "000000041635.jpg", "url": "http://images.cocodataset.org/val2017/000000041635.jpg", "class": "cow", "gold": 4}
+{"image_id": 541634, "file_name": "000000541634.jpg", "url": "http://images.cocodataset.org/val2017/000000541634.jpg", "class": "cup", "gold": 4}
+{"image_id": 534252, "file_name": "000000534252.jpg", "url": "http://images.cocodataset.org/train2017/000000534252.jpg", "class": "dog", "gold": 4}
+{"image_id": 162827, "file_name": "000000162827.jpg", "url": "http://images.cocodataset.org/train2017/000000162827.jpg", "class": "donut", "gold": 4}
+{"image_id": 335081, "file_name": "000000335081.jpg", "url": "http://images.cocodataset.org/val2017/000000335081.jpg", "class": "duck", "gold": 4}
+{"image_id": 57027, "file_name": "000000057027.jpg", "url": "http://images.cocodataset.org/val2017/000000057027.jpg", "class": "elephant", "gold": 4}
+{"image_id": 47010, "file_name": "000000047010.jpg", "url": "http://images.cocodataset.org/val2017/000000047010.jpg", "class": "giraffe", "gold": 4}
+{"image_id": 436555, "file_name": "000000436555.jpg", "url": "http://images.cocodataset.org/train2017/000000436555.jpg", "class": "handbag", "gold": 4}
+{"image_id": 269381, "file_name": "000000269381.jpg", "url": "http://images.cocodataset.org/train2017/000000269381.jpg", "class": "horse", "gold": 4}
+{"image_id": 53351, "file_name": "000000053351.jpg", "url": "http://images.cocodataset.org/train2017/000000053351.jpg", "class": "mug", "gold": 4}
+{"image_id": 192780, "file_name": "000000192780.jpg", "url": "http://images.cocodataset.org/train2017/000000192780.jpg", "class": "orange", "gold": 4}
+{"image_id": 180101, "file_name": "000000180101.jpg", "url": "http://images.cocodataset.org/val2017/000000180101.jpg", "class": "person", "gold": 4}
+{"image_id": 30462, "file_name": "000000030462.jpg", "url": "http://images.cocodataset.org/train2017/000000030462.jpg", "class": "pizza", "gold": 4}
+{"image_id": 364566, "file_name": "000000364566.jpg", "url": "http://images.cocodataset.org/train2017/000000364566.jpg", "class": "potted plant", "gold": 4}
+{"image_id": 400161, "file_name": "000000400161.jpg", "url": "http://images.cocodataset.org/val2017/000000400161.jpg", "class": "remote", "gold": 4}
+{"image_id": 335752, "file_name": "000000335752.jpg", "url": "http://images.cocodataset.org/train2017/000000335752.jpg", "class": "sandwich", "gold": 4}
+{"image_id": 94871, "file_name": "000000094871.jpg", "url": "http://images.cocodataset.org/val2017/000000094871.jpg", "class": "sheep", "gold": 4}
+{"image_id": 125062, "file_name": "000000125062.jpg", "url": "http://images.cocodataset.org/val2017/000000125062.jpg", "class": "teddy bear", "gold": 4}
+{"image_id": 421944, "file_name": "000000421944.jpg", "url": "http://images.cocodataset.org/train2017/000000421944.jpg", "class": "toothbrush", "gold": 4}
+{"image_id": 104365, "file_name": "000000104365.jpg", "url": "http://images.cocodataset.org/train2017/000000104365.jpg", "class": "umbrella", "gold": 4}
+{"image_id": 239726, "file_name": "000000239726.jpg", "url": "http://images.cocodataset.org/train2017/000000239726.jpg", "class": "vase", "gold": 4}
+{"image_id": 116208, "file_name": "000000116208.jpg", "url": "http://images.cocodataset.org/val2017/000000116208.jpg", "class": "wine glass", "gold": 4}
+{"image_id": 49761, "file_name": "000000049761.jpg", "url": "http://images.cocodataset.org/val2017/000000049761.jpg", "class": "zebra", "gold": 4}
+{"image_id": 322959, "file_name": "000000322959.jpg", "url": "http://images.cocodataset.org/val2017/000000322959.jpg", "class": "apple", "gold": 4}
+{"image_id": 431997, "file_name": "000000431997.jpg", "url": "http://images.cocodataset.org/train2017/000000431997.jpg", "class": "backpack", "gold": 4}
+{"image_id": 193926, "file_name": "000000193926.jpg", "url": "http://images.cocodataset.org/val2017/000000193926.jpg", "class": "banana", "gold": 4}
+{"image_id": 390483, "file_name": "000000390483.jpg", "url": "http://images.cocodataset.org/train2017/000000390483.jpg", "class": "bird", "gold": 4}
+{"image_id": 325545, "file_name": "000000325545.jpg", "url": "http://images.cocodataset.org/train2017/000000325545.jpg", "class": "bottle", "gold": 4}
+{"image_id": 405691, "file_name": "000000405691.jpg", "url": "http://images.cocodataset.org/val2017/000000405691.jpg", "class": "bowl", "gold": 4}
+{"image_id": 189446, "file_name": "000000189446.jpg", "url": "http://images.cocodataset.org/train2017/000000189446.jpg", "class": "broccoli", "gold": 4}
+{"image_id": 461172, "file_name": "000000461172.jpg", "url": "http://images.cocodataset.org/train2017/000000461172.jpg", "class": "carrot", "gold": 4}
+{"image_id": 462589, "file_name": "000000462589.jpg", "url": "http://images.cocodataset.org/train2017/000000462589.jpg", "class": "cat", "gold": 4}
+{"image_id": 462839, "file_name": "000000462839.jpg", "url": "http://images.cocodataset.org/train2017/000000462839.jpg", "class": "chair", "gold": 4}
+{"image_id": 57749, "file_name": "000000057749.jpg", "url": "http://images.cocodataset.org/train2017/000000057749.jpg", "class": "cow", "gold": 4}
+{"image_id": 194536, "file_name": "000000194536.jpg", "url": "http://images.cocodataset.org/train2017/000000194536.jpg", "class": "donut", "gold": 4}
+{"image_id": 117679, "file_name": "000000117679.jpg", "url": "http://images.cocodataset.org/train2017/000000117679.jpg", "class": "apple", "gold": 5}
+{"image_id": 3661, "file_name": "000000003661.jpg", "url": "http://images.cocodataset.org/val2017/000000003661.jpg", "class": "banana", "gold": 5}
+{"image_id": 97592, "file_name": "000000097592.jpg", "url": "http://images.cocodataset.org/train2017/000000097592.jpg", "class": "bed", "gold": 5}
+{"image_id": 161266, "file_name": "000000161266.jpg", "url": "http://images.cocodataset.org/train2017/000000161266.jpg", "class": "bird", "gold": 5}
+{"image_id": 7753, "file_name": "000000007753.jpg", "url": "http://images.cocodataset.org/train2017/000000007753.jpg", "class": "book", "gold": 5}
+{"image_id": 63231, "file_name": "000000063231.jpg", "url": "http://images.cocodataset.org/train2017/000000063231.jpg", "class": "bottle", "gold": 5}
+{"image_id": 170670, "file_name": "000000170670.jpg", "url": "http://images.cocodataset.org/val2017/000000170670.jpg", "class": "bowl", "gold": 5}
+{"image_id": 58172, "file_name": "000000058172.jpg", "url": "http://images.cocodataset.org/train2017/000000058172.jpg", "class": "broccoli", "gold": 5}
+{"image_id": 7746, "file_name": "000000007746.jpg", "url": "http://images.cocodataset.org/train2017/000000007746.jpg", "class": "cake", "gold": 5}
+{"image_id": 72485, "file_name": "000000072485.jpg", "url": "http://images.cocodataset.org/train2017/000000072485.jpg", "class": "carrot", "gold": 5}
+{"image_id": 325838, "file_name": "000000325838.jpg", "url": "http://images.cocodataset.org/val2017/000000325838.jpg", "class": "chair", "gold": 5}
+{"image_id": 177535, "file_name": "000000177535.jpg", "url": "http://images.cocodataset.org/train2017/000000177535.jpg", "class": "cow", "gold": 5}
+{"image_id": 45472, "file_name": "000000045472.jpg", "url": "http://images.cocodataset.org/val2017/000000045472.jpg", "class": "cup", "gold": 5}
+{"image_id": 262938, "file_name": "000000262938.jpg", "url": "http://images.cocodataset.org/val2017/000000262938.jpg", "class": "dog", "gold": 5}
+{"image_id": 36034, "file_name": "000000036034.jpg", "url": "http://images.cocodataset.org/train2017/000000036034.jpg", "class": "donut", "gold": 5}
+{"image_id": 40455, "file_name": "000000040455.jpg", "url": "http://images.cocodataset.org/train2017/000000040455.jpg", "class": "duck", "gold": 5}
+{"image_id": 7108, "file_name": "000000007108.jpg", "url": "http://images.cocodataset.org/val2017/000000007108.jpg", "class": "elephant", "gold": 5}
+{"image_id": 398438, "file_name": "000000398438.jpg", "url": "http://images.cocodataset.org/val2017/000000398438.jpg", "class": "flower_arrangement", "gold": 5}
+{"image_id": 289640, "file_name": "000000289640.jpg", "url": "http://images.cocodataset.org/train2017/000000289640.jpg", "class": "frisbee", "gold": 5}
+{"image_id": 76087, "file_name": "000000076087.jpg", "url": "http://images.cocodataset.org/train2017/000000076087.jpg", "class": "giraffe", "gold": 5}
+{"image_id": 209400, "file_name": "000000209400.jpg", "url": "http://images.cocodataset.org/train2017/000000209400.jpg", "class": "horse", "gold": 5}
+{"image_id": 228155, "file_name": "000000228155.jpg", "url": "http://images.cocodataset.org/train2017/000000228155.jpg", "class": "laptop", "gold": 5}
+{"image_id": 533888, "file_name": "000000533888.jpg", "url": "http://images.cocodataset.org/train2017/000000533888.jpg", "class": "mug", "gold": 5}
+{"image_id": 60855, "file_name": "000000060855.jpg", "url": "http://images.cocodataset.org/val2017/000000060855.jpg", "class": "orange", "gold": 5}
+{"image_id": 91960, "file_name": "000000091960.jpg", "url": "http://images.cocodataset.org/train2017/000000091960.jpg", "class": "person", "gold": 5}
+{"image_id": 358075, "file_name": "000000358075.jpg", "url": "http://images.cocodataset.org/train2017/000000358075.jpg", "class": "pizza", "gold": 5}
+{"image_id": 13061, "file_name": "000000013061.jpg", "url": "http://images.cocodataset.org/train2017/000000013061.jpg", "class": "remote", "gold": 5}
+{"image_id": 44699, "file_name": "000000044699.jpg", "url": "http://images.cocodataset.org/val2017/000000044699.jpg", "class": "sheep", "gold": 5}
+{"image_id": 542611, "file_name": "000000542611.jpg", "url": "http://images.cocodataset.org/train2017/000000542611.jpg", "class": "spoon", "gold": 5}
+{"image_id": 39527, "file_name": "000000039527.jpg", "url": "http://images.cocodataset.org/train2017/000000039527.jpg", "class": "teddy bear", "gold": 5}
+{"image_id": 75230, "file_name": "000000075230.jpg", "url": "http://images.cocodataset.org/train2017/000000075230.jpg", "class": "toothbrush", "gold": 5}
+{"image_id": 94360, "file_name": "000000094360.jpg", "url": "http://images.cocodataset.org/train2017/000000094360.jpg", "class": "umbrella", "gold": 5}
+{"image_id": 99311, "file_name": "000000099311.jpg", "url": "http://images.cocodataset.org/train2017/000000099311.jpg", "class": "vase", "gold": 5}
+{"image_id": 80526, "file_name": "000000080526.jpg", "url": "http://images.cocodataset.org/train2017/000000080526.jpg", "class": "wine glass", "gold": 5}
+{"image_id": 110211, "file_name": "000000110211.jpg", "url": "http://images.cocodataset.org/val2017/000000110211.jpg", "class": "zebra", "gold": 5}
+{"image_id": 213935, "file_name": "000000213935.jpg", "url": "http://images.cocodataset.org/val2017/000000213935.jpg", "class": "apple", "gold": 5}
+{"image_id": 61382, "file_name": "000000061382.jpg", "url": "http://images.cocodataset.org/train2017/000000061382.jpg", "class": "banana", "gold": 5}
+{"image_id": 229997, "file_name": "000000229997.jpg", "url": "http://images.cocodataset.org/val2017/000000229997.jpg", "class": "bird", "gold": 5}
+{"image_id": 354608, "file_name": "000000354608.jpg", "url": "http://images.cocodataset.org/train2017/000000354608.jpg", "class": "book", "gold": 5}
+{"image_id": 264155, "file_name": "000000264155.jpg", "url": "http://images.cocodataset.org/train2017/000000264155.jpg", "class": "bottle", "gold": 5}
+{"image_id": 331817, "file_name": "000000331817.jpg", "url": "http://images.cocodataset.org/val2017/000000331817.jpg", "class": "bowl", "gold": 5}
+{"image_id": 99649, "file_name": "000000099649.jpg", "url": "http://images.cocodataset.org/train2017/000000099649.jpg", "class": "broccoli", "gold": 5}
+{"image_id": 95707, "file_name": "000000095707.jpg", "url": "http://images.cocodataset.org/val2017/000000095707.jpg", "class": "cake", "gold": 5}
+{"image_id": 396685, "file_name": "000000396685.jpg", "url": "http://images.cocodataset.org/train2017/000000396685.jpg", "class": "carrot", "gold": 5}
+{"image_id": 467315, "file_name": "000000467315.jpg", "url": "http://images.cocodataset.org/val2017/000000467315.jpg", "class": "chair", "gold": 5}
+{"image_id": 184761, "file_name": "000000184761.jpg", "url": "http://images.cocodataset.org/train2017/000000184761.jpg", "class": "cow", "gold": 5}
+{"image_id": 524965, "file_name": "000000524965.jpg", "url": "http://images.cocodataset.org/train2017/000000524965.jpg", "class": "donut", "gold": 5}
+{"image_id": 28449, "file_name": "000000028449.jpg", "url": "http://images.cocodataset.org/val2017/000000028449.jpg", "class": "elephant", "gold": 5}
+{"image_id": 134119, "file_name": "000000134119.jpg", "url": "http://images.cocodataset.org/train2017/000000134119.jpg", "class": "giraffe", "gold": 5}
+{"image_id": 213592, "file_name": "000000213592.jpg", "url": "http://images.cocodataset.org/train2017/000000213592.jpg", "class": "horse", "gold": 5}
+{"image_id": 168686, "file_name": "000000168686.jpg", "url": "http://images.cocodataset.org/train2017/000000168686.jpg", "class": "orange", "gold": 5}
+{"image_id": 96215, "file_name": "000000096215.jpg", "url": "http://images.cocodataset.org/train2017/000000096215.jpg", "class": "person", "gold": 5}
+{"image_id": 360721, "file_name": "000000360721.jpg", "url": "http://images.cocodataset.org/train2017/000000360721.jpg", "class": "pizza", "gold": 5}
+{"image_id": 46418, "file_name": "000000046418.jpg", "url": "http://images.cocodataset.org/train2017/000000046418.jpg", "class": "sheep", "gold": 5}
+{"image_id": 240080, "file_name": "000000240080.jpg", "url": "http://images.cocodataset.org/train2017/000000240080.jpg", "class": "teddy bear", "gold": 5}
+{"image_id": 235925, "file_name": "000000235925.jpg", "url": "http://images.cocodataset.org/train2017/000000235925.jpg", "class": "umbrella", "gold": 5}
+{"image_id": 141604, "file_name": "000000141604.jpg", "url": "http://images.cocodataset.org/train2017/000000141604.jpg", "class": "vase", "gold": 5}
+{"image_id": 369848, "file_name": "000000369848.jpg", "url": "http://images.cocodataset.org/train2017/000000369848.jpg", "class": "wine glass", "gold": 5}
+{"image_id": 117897, "file_name": "000000117897.jpg", "url": "http://images.cocodataset.org/train2017/000000117897.jpg", "class": "zebra", "gold": 5}
+{"image_id": 360020, "file_name": "000000360020.jpg", "url": "http://images.cocodataset.org/train2017/000000360020.jpg", "class": "apple", "gold": 5}
+{"image_id": 351404, "file_name": "000000351404.jpg", "url": "http://images.cocodataset.org/train2017/000000351404.jpg", "class": "banana", "gold": 5}
+{"image_id": 104669, "file_name": "000000104669.jpg", "url": "http://images.cocodataset.org/val2017/000000104669.jpg", "class": "broccoli", "gold": 5}
+{"image_id": 151945, "file_name": "000000151945.jpg", "url": "http://images.cocodataset.org/train2017/000000151945.jpg", "class": "cake", "gold": 5}
+{"image_id": 530369, "file_name": "000000530369.jpg", "url": "http://images.cocodataset.org/train2017/000000530369.jpg", "class": "carrot", "gold": 5}
+{"image_id": 503472, "file_name": "000000503472.jpg", "url": "http://images.cocodataset.org/train2017/000000503472.jpg", "class": "chair", "gold": 5}
+{"image_id": 54718, "file_name": "000000054718.jpg", "url": "http://images.cocodataset.org/train2017/000000054718.jpg", "class": "elephant", "gold": 5}
+{"image_id": 152774, "file_name": "000000152774.jpg", "url": "http://images.cocodataset.org/train2017/000000152774.jpg", "class": "giraffe", "gold": 5}
+{"image_id": 222831, "file_name": "000000222831.jpg", "url": "http://images.cocodataset.org/train2017/000000222831.jpg", "class": "horse", "gold": 5}
+{"image_id": 200862, "file_name": "000000200862.jpg", "url": "http://images.cocodataset.org/train2017/000000200862.jpg", "class": "orange", "gold": 5}
+{"image_id": 248879, "file_name": "000000248879.jpg", "url": "http://images.cocodataset.org/train2017/000000248879.jpg", "class": "person", "gold": 5}
+{"image_id": 457205, "file_name": "000000457205.jpg", "url": "http://images.cocodataset.org/train2017/000000457205.jpg", "class": "pizza", "gold": 5}
+{"image_id": 269196, "file_name": "000000269196.jpg", "url": "http://images.cocodataset.org/val2017/000000269196.jpg", "class": "sheep", "gold": 5}
+{"image_id": 298132, "file_name": "000000298132.jpg", "url": "http://images.cocodataset.org/train2017/000000298132.jpg", "class": "teddy bear", "gold": 5}
+{"image_id": 480575, "file_name": "000000480575.jpg", "url": "http://images.cocodataset.org/train2017/000000480575.jpg", "class": "umbrella", "gold": 5}
+{"image_id": 429530, "file_name": "000000429530.jpg", "url": "http://images.cocodataset.org/val2017/000000429530.jpg", "class": "vase", "gold": 5}
+{"image_id": 197850, "file_name": "000000197850.jpg", "url": "http://images.cocodataset.org/train2017/000000197850.jpg", "class": "zebra", "gold": 5}
+{"image_id": 472462, "file_name": "000000472462.jpg", "url": "http://images.cocodataset.org/train2017/000000472462.jpg", "class": "apple", "gold": 5}
+{"image_id": 468925, "file_name": "000000468925.jpg", "url": "http://images.cocodataset.org/val2017/000000468925.jpg", "class": "banana", "gold": 5}
+{"image_id": 370329, "file_name": "000000370329.jpg", "url": "http://images.cocodataset.org/train2017/000000370329.jpg", "class": "broccoli", "gold": 5}
+{"image_id": 474155, "file_name": "000000474155.jpg", "url": "http://images.cocodataset.org/train2017/000000474155.jpg", "class": "cake", "gold": 5}
+{"image_id": 69733, "file_name": "000000069733.jpg", "url": "http://images.cocodataset.org/train2017/000000069733.jpg", "class": "elephant", "gold": 5}
+{"image_id": 172004, "file_name": "000000172004.jpg", "url": "http://images.cocodataset.org/train2017/000000172004.jpg", "class": "giraffe", "gold": 5}
+{"image_id": 416510, "file_name": "000000416510.jpg", "url": "http://images.cocodataset.org/train2017/000000416510.jpg", "class": "horse", "gold": 5}
+{"image_id": 231527, "file_name": "000000231527.jpg", "url": "http://images.cocodataset.org/val2017/000000231527.jpg", "class": "orange", "gold": 5}
+{"image_id": 264358, "file_name": "000000264358.jpg", "url": "http://images.cocodataset.org/train2017/000000264358.jpg", "class": "person", "gold": 5}
+{"image_id": 460568, "file_name": "000000460568.jpg", "url": "http://images.cocodataset.org/train2017/000000460568.jpg", "class": "pizza", "gold": 5}
+{"image_id": 459437, "file_name": "000000459437.jpg", "url": "http://images.cocodataset.org/val2017/000000459437.jpg", "class": "sheep", "gold": 5}
+{"image_id": 422270, "file_name": "000000422270.jpg", "url": "http://images.cocodataset.org/train2017/000000422270.jpg", "class": "teddy bear", "gold": 5}
+{"image_id": 235642, "file_name": "000000235642.jpg", "url": "http://images.cocodataset.org/train2017/000000235642.jpg", "class": "zebra", "gold": 5}
+{"image_id": 548957, "file_name": "000000548957.jpg", "url": "http://images.cocodataset.org/train2017/000000548957.jpg", "class": "apple", "gold": 5}

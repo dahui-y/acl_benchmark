@@ -61,11 +61,14 @@ Answer with this JSON and nothing else:
 STORE_FLOOR = 0.05
 
 
-def fetch(file_name, cache):
-    path = cache / file_name
+def fetch(cell, cache):
+    """Cells carry their own URL: LVIS spans both COCO splits, so the val2017
+    path cannot be assumed."""
+    path = cache / cell["file_name"]
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
-        with urlopen(COCO_URL.format(file_name), timeout=60) as r:
+        url = cell.get("url") or COCO_URL.format(cell["file_name"])
+        with urlopen(url, timeout=60) as r:
             path.write_bytes(r.read())
     return path
 
@@ -259,7 +262,7 @@ def main():
     ap.add_argument("--cells", type=Path,
                     default=Path(__file__).parent / "data" / "cells.jsonl")
     ap.add_argument("--cache", type=Path,
-                    default=Path(__file__).parent / "data" / "val2017")
+                    default=Path(__file__).parent / "data" / "images")
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--device", default=None,
                     help="default cuda when available, else cpu")
@@ -295,7 +298,7 @@ def main():
         for n, cell in enumerate(todo, 1):
             rec = dict(cell, detector=args.detector)
             try:
-                image = Image.open(fetch(cell["file_name"], args.cache)).convert("RGB")
+                image = Image.open(fetch(cell, args.cache)).convert("RGB")
                 if hasattr(det, "count_for"):
                     # An MLLM emits the number itself, so there is no threshold
                     # to sweep. report.py prefers `count` when it is present.

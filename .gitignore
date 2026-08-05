@@ -2,3 +2,5 @@
 __pycache__/
 calibrate/data/val2017/
 calibrate/data/annotations/
+calibrate/data/images/
+calibrate/data/lvis_v1_val.json

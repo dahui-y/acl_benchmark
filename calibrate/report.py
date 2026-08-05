@@ -191,6 +191,64 @@ def confusion(rows, thr, cap=6):
         print(f"{g:>4}: " + "".join(f"{m[g][c]:>6}" for c in cols))
 
 
+def plurality(rows, thr, iters=2000, seed=0):
+    """The binary question: more than one, or exactly one?
+
+    Exact counting is the wrong question to put to a detector, and asking it was
+    my mistake. The contrast the benchmark is built on -- "the three girls are
+    each holding a balloon" against "...holding a balloon together" -- is at
+    bottom plural against singular. Three is entailed, but what separates the
+    two readings is one versus more-than-one, and that is a question detectors
+    answer far better than "exactly how many".
+
+    This keeps the property the direction was chosen for: both answers are known
+    in advance from the semantics, so the headline stays an absolute rate
+    against programmatic truth rather than a difference needing an interval to
+    survive. What it gives up is resolution -- a model that draws two balloons
+    for three girls passes -- and that belongs in the limitations, not in a
+    footnote.
+
+    NOT pre-registered. The criteria in README.md were written for exact counts;
+    this is a different measurement and is labelled as such wherever it appears.
+    """
+    import random  # noqa: PLC0415
+    print(f"\nplurality (>1 vs =1) -- NOT the pre-registered measurement")
+    print(f"{'thr':>6}{'acc':>8}{'kappa':>9}{'FP 1->many':>12}{'FN many->1':>12}")
+    best = None
+    for t in thr:
+        pr = [(r["gold"] >= 2, sum(1 for s in r["scores"] if s >= t) >= 2)
+              for r in rows]
+        acc = sum(a == b for a, b in pr) / len(pr)
+        ones = [p for p in pr if not p[0]]
+        many = [p for p in pr if p[0]]
+        fp = sum(b for _, b in ones) / len(ones) if ones else float("nan")
+        fn = sum(not b for _, b in many) / len(many) if many else float("nan")
+        print(f"{t:>6.2f}{acc:>8.3f}{kappa(pr):>9.3f}{fp:>12.3f}{fn:>12.3f}")
+        # Pick the balanced point, not the most accurate one: the two error
+        # directions land on different conditions of the suite, so a threshold
+        # that trades collective-condition errors for distributive ones would
+        # bias the comparison the benchmark exists to make.
+        if best is None or abs(fp - fn) < best[1]:
+            best = (t, abs(fp - fn))
+    t = best[0]
+    pr = [(r["gold"] >= 2, sum(1 for s in r["scores"] if s >= t) >= 2)
+          for r in rows]
+    rng = random.Random(seed)
+    bs = sorted(sum(a == b for a, b in d) / len(d) for d in
+                ([pr[rng.randrange(len(pr))] for _ in pr] for _ in range(iters)))
+    acc = sum(a == b for a, b in pr) / len(pr)
+    print(f"\n  balanced threshold {t:.2f}: acc {acc:.3f} "
+          f"95% CI [{bs[int(0.025 * iters)]:.3f}, {bs[int(0.975 * iters)]:.3f}], "
+          f"kappa {kappa(pr):.3f}")
+    print(f"  {'gold N':>8}{'n':>6}{'correct':>10}")
+    for n in sorted({r["gold"] for r in rows}):
+        sub = [r for r in rows if r["gold"] == n]
+        ok = sum((sum(1 for s in r["scores"] if s >= t) >= 2) == (n >= 2)
+                 for r in sub)
+        print(f"  {n:>8}{len(sub):>6}{ok / len(sub):>10.3f}")
+    return t, acc
+
+
 def bootstrap(rows, thr, bands=None, iters=2000, seed=0):
     """Cluster bootstrap over CELLS for the separation rate and for kappa.
 
@@ -300,6 +358,7 @@ def main():
         discrimination(rows, thr)
         bootstrap(rows, thr)
         bootstrap(rows, thr, bands={3, 4, 5})
+        plurality(rows, args.thresholds)
         if args.screen:
             per_class_screen(rows, thr, set(args.screen_bands),
                              args.screen_floor)

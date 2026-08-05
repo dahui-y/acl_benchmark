@@ -70,9 +70,36 @@ def rate(matches, total):
     return f"{matches}/{total} = {matches / total:.3f}" if total else "n/a"
 
 
+def kappa(pairs):
+    """Cohen's kappa over the (a, b) answer pairs.
+
+    Raw agreement is not reportable on its own here. Several of these questions
+    have skewed answer distributions -- most videos are not in the target state
+    -- and two raters who both answer "no" nine times in ten agree 82% of the
+    time by chance alone. Kappa divides that out; a reviewer will ask for it,
+    and rightly."""
+    if not pairs:
+        return None
+    n = len(pairs)
+    observed = sum(a == b for a, b in pairs) / n
+    labels = {a for a, _ in pairs} | {b for _, b in pairs}
+    expected = sum((sum(a == c for a, _ in pairs) / n) *
+                   (sum(b == c for _, b in pairs) / n) for c in labels)
+    if expected >= 1.0:            # one label used throughout; kappa undefined
+        return None
+    return (observed - expected) / (1 - expected)
+
+
+def fmt(matches, total, pairs):
+    k = kappa(pairs)
+    return rate(matches, total) + (f"  kappa {k:.3f}" if k is not None
+                                   else "  kappa n/a")
+
+
 def test_retest(judged):
     """Same video, two passes. Anything that differs here is the judge alone."""
     per_q = defaultdict(lambda: [0, 0])
+    pairs = defaultdict(list)
     for (item, cond, seed, p) in list(judged):
         if p != 1:
             continue
@@ -84,12 +111,14 @@ def test_retest(judged):
             if q in first and q in other:
                 per_q[q][1] += 1
                 per_q[q][0] += first[q] == other[q]
-    return per_q
+                pairs[q].append((first[q], other[q]))
+    return per_q, pairs
 
 
 def pairwise(judged, cond_a, cond_b, judge_pass=1):
     """Agreement between two conditions of the same item and seed."""
     per_q = defaultdict(lambda: [0, 0])
+    pairs = defaultdict(list)
     for (item, cond, seed, p), answers in judged.items():
         if cond != cond_a or p != judge_pass:
             continue
@@ -100,7 +129,8 @@ def pairwise(judged, cond_a, cond_b, judge_pass=1):
             if q in answers and q in other:
                 per_q[q][1] += 1
                 per_q[q][0] += answers[q] == other[q]
-    return per_q
+                pairs[q].append((answers[q], other[q]))
+    return per_q, pairs
 
 
 def action_rate(judged, judge_pass=1, condition="prog"):
@@ -130,7 +160,7 @@ def main():
     print("=" * 66)
     print("1. judge noise -- same video judged twice")
     print("=" * 66)
-    retest = test_retest(judged)
+    retest, retest_pairs = test_retest(judged)
     if not retest:
         print("  not measured: run judge.py with --repeat 2")
         noise = {}
@@ -139,16 +169,18 @@ def main():
         for q in QUESTION_IDS:
             m, t = retest[q]
             noise[q] = 1 - m / t if t else None
-            print(f"  {q:8s} agreement {rate(m, t)}")
+            print(f"  {q:8s} agreement {fmt(m, t, retest_pairs[q])}")
         print("\n  This is the reliability number human evaluation would "
-              "otherwise supply.")
+              "otherwise supply. Report kappa, not raw agreement:\n"
+              "  these answers are skewed, and two raters who both say 'no'\n"
+              "  nine times in ten agree 82% of the time by chance.")
 
     print()
     print("=" * 66)
     print("2. control conditions -- must agree, by what the sentences mean")
     print("=" * 66)
     for cond_a, cond_b, why in MUST_AGREE:
-        per_q = pairwise(judged, cond_a, cond_b)
+        per_q, pairs = pairwise(judged, cond_a, cond_b)
         if not per_q:
             print(f"  {cond_a} vs {cond_b}: no overlapping items")
             continue
@@ -157,7 +189,7 @@ def main():
             m, t = per_q[q]
             if not t:
                 continue
-            line = f"    {q:8s} agreement {rate(m, t)}"
+            line = f"    {q:8s} agreement {fmt(m, t, pairs[q])}"
             if noise.get(q) is not None:
                 # Disagreement above the judge's own noise is the video model
                 # answering a meaning-preserving edit differently.
@@ -186,7 +218,7 @@ def main():
     print("3. discrimination -- must differ, or the judge just says yes")
     print("=" * 66)
     for cond_a, cond_b, question, why in MUST_DIFFER:
-        per_q = pairwise(judged, cond_a, cond_b)
+        per_q, _ = pairwise(judged, cond_a, cond_b)
         m, t = per_q[question]
         if not t:
             print(f"  {cond_a} vs {cond_b}: no overlapping items")

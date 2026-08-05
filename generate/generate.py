@@ -358,7 +358,11 @@ def cmd_run(args):
     already = done_keys(manifest)
     todo = [j for j in jobs
             if (j["item_id"], j["condition"], j["seed"]) not in already]
-    print(f"{len(jobs)} videos planned, {len(already)} already done, {len(todo)} to go")
+    # Count the overlap with this plan, not the whole manifest: a manifest built
+    # up over several pilot runs holds rows for conditions this run never asked
+    # for, and reporting those made "planned / done / to go" fail to add up.
+    print(f"{len(jobs)} videos planned, {len(jobs) - len(todo)} already done, "
+          f"{len(todo)} to go  ({len(already)} rows in the manifest overall)")
     if args.limit:
         todo = todo[:args.limit]
         print(f"  --limit {args.limit}: running {len(todo)}")

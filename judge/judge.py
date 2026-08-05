@@ -174,6 +174,10 @@ def main():
 
     client = OpenAI(api_key=os.environ.get("JUDGE_API_KEY"), base_url=args.base_url)
 
+    # Token totals, so the cost of the full run is extrapolated from measured
+    # usage rather than guessed. 20 frames per call is the dominant cost and it
+    # is worth knowing the real number before committing to thousands of calls.
+    tokens = {"prompt": 0, "completion": 0}
     t0 = time.time()
     with out_path.open("a") as fh:
         for n, job in enumerate(todo, 1):
@@ -192,6 +196,8 @@ def main():
                            **answers)
                 if usage is not None:
                     rec["usage"] = usage.model_dump()
+                    tokens["prompt"] += getattr(usage, "prompt_tokens", 0) or 0
+                    tokens["completion"] += getattr(usage, "completion_tokens", 0) or 0
             except Exception as exc:  # one bad video must not kill the batch
                 rec.update(status="error", error=f"{type(exc).__name__}: {exc}")
                 print(f"  ERROR item{job['item_id']:04d} {job['condition']}: "
@@ -203,7 +209,15 @@ def main():
                 print(f"  {n}/{len(todo)}  {rate:.1f}s/video  "
                       f"eta {(len(todo) - n) * rate / 60:.0f}min")
 
+    done = max(len(todo), 1)
     print(f"done. judgments: {out_path}")
+    if tokens["prompt"]:
+        print(f"  tokens: {tokens['prompt']:,} prompt + "
+              f"{tokens['completion']:,} completion")
+        print(f"  per call: {tokens['prompt'] // done:,} prompt "
+              f"({args.max_frames} frames)")
+        print(f"  extrapolated to 9,000 calls: "
+              f"{tokens['prompt'] // done * 9000 / 1e6:.0f}M prompt tokens")
 
 
 if __name__ == "__main__":

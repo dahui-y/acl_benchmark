@@ -166,7 +166,21 @@ def main():
     jobs = find_videos(args.frames, args.seeds, args.conditions)
     if not jobs:
         raise SystemExit(f"no frame folders under {args.frames}")
-    jobs = [j for j in jobs if j["item_id"] in items]
+
+    # Item ids are positions in a particular build of the suite. Frames carry
+    # those ids in their paths, so frames and stimuli have to come from the same
+    # build -- a mismatch does not error, it judges the wrong video against a
+    # plausible-looking question. Copy stimuli.jsonl alongside the frames rather
+    # than rebuilding it on the second machine.
+    unknown = sorted({j["item_id"] for j in jobs} - set(items))
+    if unknown:
+        raise SystemExit(
+            f"{len(unknown)} frame folders have item ids that are not in "
+            f"{args.stimuli.name}: {unknown[:8]}...\n"
+            f"  The frames and the stimuli file come from different builds. "
+            f"Copy the stimuli.jsonl\n  that was used to generate these videos, "
+            f"do not rebuild it here."
+        )
 
     probe = "known_negative" if args.known_negative else "target"
     out_path = args.out or args.frames / "judgments.jsonl"

@@ -146,6 +146,14 @@ python judge.py --frames ... --model gpt-5.2 --known-negative
 抽帧要搬到 Mac 上：111 个视频 × 20 帧 ≈ 2200 张图、一两百 MB。
 判官脚本只依赖 `openai`，不需要 torch。
 
+**`stimuli.jsonl` 只在生成机上 build，其他机器一律从生成机拷，不要就地重新生成。**
+item 编号是某一次 build 里的位置，视频路径里刻着这个编号——两边 build 不一致，
+不会报错，只会**拿着 A 的问题去判 B 的视频**，而答案看起来还挺像回事。
+`judge.py` 现在会检查帧目录里的 item 编号是否都在 stimuli 里，
+对不上直接停下，但它挡不住"编号都在、内容错位"那种情形。
+
+每次传**两个文件，一起传**：`frames.tgz` 和与之配套的 `stimuli.jsonl`。
+
 ```bash
 # 生成机：打包抽帧
 tar czf frames.tgz -C $FRAMES wan2.2-ti2v-5b-480p

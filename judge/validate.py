@@ -173,6 +173,42 @@ def pairwise(judged, cond_a, cond_b, judge_pass=1):
     return per_q, pairs
 
 
+def disagreement(judged, cond_a, cond_b, question, judge_pass=1):
+    """Fraction of items where the two conditions get different answers."""
+    per_q, _ = pairwise(judged, cond_a, cond_b, judge_pass)
+    m, t = per_q[question]
+    return (1 - m / t, t) if t else (None, 0)
+
+
+def effects_against_floor(judged, floor_condition="paraphrase_min",
+                          reference="prog"):
+    """Every condition's distance from `prog`, divided by the paraphrase floor.
+
+    The floor is not zero -- swapping one preposition already moves the judged
+    answer -- so a raw condition difference says nothing on its own. This is the
+    video-side counterpart of the SNS statistic the text-side probe arrived at
+    after its own retraction:
+
+        effect = disagreement(prog, C) / disagreement(prog, paraphrase_min)
+
+    A ratio near 1 means the condition moves the video no more than a
+    meaning-preserving reword does, which is the same as saying the aspect
+    manipulation did nothing detectable."""
+    conditions = sorted({k[1] for k in judged} - {reference, floor_condition})
+    out = {}
+    for q in QUESTION_IDS:
+        floor, n_floor = disagreement(judged, reference, floor_condition, q)
+        rows = []
+        for cond in conditions:
+            effect, n = disagreement(judged, reference, cond, q)
+            if effect is None:
+                continue
+            ratio = effect / floor if floor else None
+            rows.append((cond, effect, n, ratio))
+        out[q] = (floor, n_floor, rows)
+    return out
+
+
 def action_rate(judged, judge_pass=1, condition="prog"):
     """The first-level result: how often the model renders the event at all."""
     yes = total = 0
@@ -281,6 +317,34 @@ def main():
     print(f"  action executed in `prog`: {rate(yes, total)}")
     print("  Items answered 'no' here carry no information about culmination:")
     print("  with no process there is nothing for an endpoint to be the end of.")
+
+    print()
+    print("=" * 66)
+    print("4b. aspect effects, divided by the paraphrase floor")
+    print("=" * 66)
+    effects = effects_against_floor(judged)
+    any_rows = False
+    for q in QUESTION_IDS:
+        floor, n_floor, rows = effects[q]
+        if floor is None or not rows:
+            continue
+        any_rows = True
+        print(f"  {q}   floor: prog vs paraphrase_min = {floor:.3f} (n={n_floor})")
+        for cond, effect, n, ratio in rows:
+            flag = ""
+            if ratio is not None:
+                flag = ("  <- at the floor" if ratio <= 1.2 else
+                        "  <- clears the floor" if ratio >= 2.0 else "")
+            print(f"    prog vs {cond:16s} {effect:.3f} (n={n})"
+                  + (f"   ratio {ratio:.2f}" if ratio is not None else "")
+                  + flag)
+    if not any_rows:
+        print("  no conditions besides the floor have been judged yet")
+    else:
+        print("\n  A ratio near 1 means the condition moved the video no more "
+              "than a\n  meaning-preserving reword did -- which is the same as "
+              "no detectable\n  aspect effect. Only ratios well above 1 are "
+              "evidence of anything.")
 
     if len(models) > 1:
         print()

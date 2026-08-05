@@ -77,7 +77,14 @@ implementations"，Table 6 只给分辨率/帧数/FPS/时长，**不给步数和
 **选择性缺陷不会被"你模型太小"解释掉，笼统的失败会。**
 
 `paraphrase`（语序重排）与 `filler`（长度配平）仍只在文本侧，
-它们是用来校准编码器距离的，视频侧没有对应的标注问题。要全部 18 条：`--conditions all`。
+它们是用来校准编码器距离的，视频侧没有对应的标注问题。`--conditions` 接受 `video`（默认 16 条）、`all`（18 条），或**直接点名**：
+
+```bash
+python generate.py --model ... --conditions prog perf other_verb paraphrase_min
+```
+
+点名这件事比看起来重要：`--limit` 是按列表顺序截断的，
+所以 `--conditions all --limit 8` 给的是**列表里的前 8 条**，不是你心里想的那 8 条。
 
 ---
 

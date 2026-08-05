@@ -69,6 +69,23 @@ DEFAULT_SEEDS = [42, 43, 44]
 VIDEO_CONDITIONS = TARGET_CONDITIONS + ["other_verb", "paraphrase_min"]
 
 
+def resolve_conditions(spec):
+    """'video' (default), 'all', or an explicit list of condition names.
+
+    Naming conditions explicitly matters more than it looks: with --limit, the
+    jobs run in list order, so asking for 'all' and limiting to 8 silently gives
+    you the first eight conditions rather than the eight you had in mind."""
+    if spec == ["video"]:
+        return VIDEO_CONDITIONS
+    if spec == ["all"]:
+        return ALL_CONDITIONS
+    unknown = [c for c in spec if c not in ALL_CONDITIONS]
+    if unknown:
+        raise SystemExit(f"unknown condition(s) {unknown}; "
+                         f"known: {', '.join(ALL_CONDITIONS)}")
+    return spec
+
+
 def load_items(stimuli_path, all_items=False):
     items = [json.loads(line) for line in stimuli_path.read_text().splitlines() if line]
     if not all_items:
@@ -292,7 +309,7 @@ def determinism_check(backend, job, check_dir, tolerance=1e-3):
 
 def cmd_list(args):
     items = load_items(args.stimuli, args.all_items)
-    conditions = ALL_CONDITIONS if args.conditions == "all" else VIDEO_CONDITIONS
+    conditions = resolve_conditions(args.conditions)
     n = len(items) * len(conditions) * len(args.seeds)
     print(f"stimuli: {len(items)} items x {len(conditions)} conditions "
           f"x {len(args.seeds)} seeds = {n} videos per model\n")
@@ -316,7 +333,7 @@ def cmd_list(args):
 def cmd_run(args):
     cfg = resolve(args.model)
     items = load_items(args.stimuli, args.all_items)
-    conditions = ALL_CONDITIONS if args.conditions == "all" else VIDEO_CONDITIONS
+    conditions = resolve_conditions(args.conditions)
 
     out_dir = args.out_dir
     jobs = plan(items, conditions, args.seeds, out_dir, args.model)
@@ -405,8 +422,9 @@ def main():
                     default=Path(os.environ.get("VIDEO_OUT", "videos")))
     ap.add_argument("--seeds", type=int, nargs="+", default=DEFAULT_SEEDS,
                     help="shared across conditions within an item (default 42 43 44)")
-    ap.add_argument("--conditions", choices=["video", "all"], default="video",
-                    help="'video' drops the three text-only controls (default)")
+    ap.add_argument("--conditions", nargs="+", default=["video"],
+                    help="'video' (default, 16 conditions), 'all' (18), or an "
+                         "explicit list of condition names")
     ap.add_argument("--all-items", action="store_true",
                     help="ignore in_generation_subset and render every item")
     ap.add_argument("--shard", help="i/n, split by item across GPUs")

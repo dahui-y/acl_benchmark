@@ -53,6 +53,17 @@ def fetch(file_name, cache):
     return path
 
 
+# This checkpoint labels six classes with their older VOC names, so a plain
+# string comparison against the COCO category silently returns zero detections
+# for all six -- which reads as "the detector cannot find a sofa" rather than as
+# a naming mismatch. Derived by diffing the model's id2label against the COCO
+# categories; the assertion below keeps it honest if a checkpoint changes.
+COCO_TO_MODEL_LABEL = {
+    "airplane": "aeroplane", "couch": "sofa", "dining table": "diningtable",
+    "motorcycle": "motorbike", "potted plant": "pottedplant", "tv": "tvmonitor",
+}
+
+
 class Mask2Former:
     """Closed-vocabulary instance segmentation over COCO's 80 classes."""
 
@@ -67,15 +78,25 @@ class Mask2Former:
         self.device = device
         self.label = self.model.config.id2label
 
+    def name_for(self, class_name):
+        """The label this checkpoint uses for a COCO category, verified."""
+        name = COCO_TO_MODEL_LABEL.get(class_name, class_name)
+        if name not in self.label.values():
+            raise KeyError(
+                f"{class_name!r} maps to {name!r}, which this checkpoint does "
+                f"not know. Its labels are: {sorted(self.label.values())}")
+        return name
+
     def scores_for(self, image, class_name):
         """All detection scores for `class_name` in this image."""
+        target = self.name_for(class_name)
         inputs = self.proc(images=image, return_tensors="pt").to(self.device)
         with self.torch.no_grad():
             out = self.model(**inputs)
         res = self.proc.post_process_instance_segmentation(
             out, target_sizes=[image.size[::-1]], threshold=STORE_FLOOR)[0]
         return ([s["score"] for s in res["segments_info"]
-                 if self.label[s["label_id"]] == class_name], None)
+                 if self.label[s["label_id"]] == target], None)
 
 
 class OwlV2:

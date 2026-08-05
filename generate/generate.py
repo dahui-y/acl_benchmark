@@ -63,10 +63,17 @@ DEFAULT_SEEDS = [42, 43, 44]
 # to lexical content but is selectively blind to aspect morphology". A selective
 # deficit is not explained away by model scale; a flat failure is.
 #
-# `paraphrase` (reordering) and `filler` (length matching) stay text-only: they
-# exist to calibrate encoder distances and have no annotation question here.
-# Override with --conditions all.
-VIDEO_CONDITIONS = TARGET_CONDITIONS + ["other_verb", "paraphrase_min"]
+# `filler` is the third: it is length-matched and meaning-preserving, and the
+# pilot showed why the video side needs it. `failed` ("tried to X but failed")
+# is by far the longest prompt, and it was the one condition whose whole scene
+# drifted away from the shared-seed composition. That drift has two candidate
+# causes -- the negation semantics, or the prompt length -- and without a
+# length-matched control they cannot be separated, which leaves the `failed`
+# cell uninterpretable.
+#
+# `paraphrase` (reordering) stays text-only: it calibrates encoder distances and
+# has no annotation question here. Override with --conditions all.
+VIDEO_CONDITIONS = TARGET_CONDITIONS + ["other_verb", "paraphrase_min", "filler"]
 
 
 def resolve_conditions(spec):

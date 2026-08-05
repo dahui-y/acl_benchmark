@@ -128,11 +128,18 @@ def plan(items, conditions, seeds, out_dir, model):
     return jobs
 
 
-def done_keys(manifest_path):
-    """Jobs already finished, by (item, condition, seed). A manifest row only
-    counts if the file it points at still exists -- a run killed mid-write leaves
-    a truncated mp4 behind."""
-    done = set()
+def done_prompts(manifest_path):
+    """Finished jobs as (item, condition, seed) -> the prompt that produced them.
+
+    The prompt has to be part of the key, not just the coordinates. Rebuilding
+    the suite renumbers items -- blocking one noun reshuffles every id after it
+    -- and the videos on disk keep the old numbering. Matching on coordinates
+    alone silently accepts a stale file as done, which is how a pilot ended up
+    with `rolling a crust` illustrated by a video of someone grating a carrot.
+
+    A row only counts if the file it points at still exists; a run killed
+    mid-write leaves a truncated mp4 behind."""
+    done = {}
     if not manifest_path.exists():
         return done
     for line in manifest_path.read_text().splitlines():
@@ -140,7 +147,7 @@ def done_keys(manifest_path):
             continue
         rec = json.loads(line)
         if rec.get("status") == "ok" and Path(rec["path"]).exists():
-            done.add((rec["item_id"], rec["condition"], rec["seed"]))
+            done[(rec["item_id"], rec["condition"], rec["seed"])] = rec.get("prompt")
     return done
 
 
@@ -355,9 +362,21 @@ def cmd_run(args):
 
     manifest = out_dir / args.model / "manifest.jsonl"
     manifest.parent.mkdir(parents=True, exist_ok=True)
-    already = done_keys(manifest)
-    todo = [j for j in jobs
-            if (j["item_id"], j["condition"], j["seed"]) not in already]
+    already = done_prompts(manifest)
+    todo, stale = [], []
+    for j in jobs:
+        key = (j["item_id"], j["condition"], j["seed"])
+        if key not in already:
+            todo.append(j)
+        elif already[key] != j["prompt"]:
+            stale.append(j)
+            todo.append(j)
+    if stale:
+        print(f"  {len(stale)} existing videos have a different prompt than the "
+              f"current suite and will be regenerated (item ids shift when the "
+              f"suite is rebuilt):")
+        for j in stale[:5]:
+            print(f"    item{j['item_id']:04d} {j['condition']}: {j['prompt']}")
     # Count the overlap with this plan, not the whole manifest: a manifest built
     # up over several pilot runs holds rows for conditions this run never asked
     # for, and reporting those made "planned / done / to go" fail to add up.

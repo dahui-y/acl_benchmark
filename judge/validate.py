@@ -180,6 +180,50 @@ def disagreement(judged, cond_a, cond_b, question, judge_pass=1):
     return (1 - m / t, t) if t else (None, 0)
 
 
+def per_item_disagreement(judged, cond_a, cond_b, question, judge_pass=1):
+    """item -> 1 if the two conditions disagree on this question, else 0."""
+    out = {}
+    for (item, cond, seed, p), answers in judged.items():
+        if cond != cond_a or p != judge_pass or question not in answers:
+            continue
+        other = judged.get((item, cond_b, seed, p))
+        if other is None or question not in other:
+            continue
+        out[item] = int(answers[question] != other[question])
+    return out
+
+
+def ratio_ci(judged, condition, floor_condition, question, n_boot=4000, seed=0):
+    """Bootstrap CI for effect/floor, resampling ITEMS.
+
+    A point ratio of 1.4 is not a result. The two disagreement rates are
+    measured on the same items, so the items are the unit to resample -- that
+    keeps the pairing and is the only way to tell 14-out-of-37 versus
+    10-out-of-37 from noise. An interval that contains 1 means the condition has
+    not been shown to move the video more than a meaning-preserving reword."""
+    import random  # noqa: PLC0415
+
+    eff = per_item_disagreement(judged, "prog", condition, question)
+    flo = per_item_disagreement(judged, "prog", floor_condition, question)
+    items = sorted(set(eff) & set(flo))
+    if len(items) < 5:
+        return None
+    rng = random.Random(seed)
+    ratios = []
+    for _ in range(n_boot):
+        sample = [items[rng.randrange(len(items))] for _ in items]
+        e = sum(eff[i] for i in sample) / len(sample)
+        f = sum(flo[i] for i in sample) / len(sample)
+        if f > 0:
+            ratios.append(e / f)
+    if len(ratios) < n_boot // 2:      # floor was zero in most resamples
+        return None
+    ratios.sort()
+    lo = ratios[int(0.025 * len(ratios))]
+    hi = ratios[int(0.975 * len(ratios))]
+    return lo, hi, len(items)
+
+
 def effects_against_floor(judged, floor_condition="paraphrase_min",
                           reference="prog"):
     """Every condition's distance from `prog`, divided by the paraphrase floor.
@@ -331,20 +375,25 @@ def main():
         any_rows = True
         print(f"  {q}   floor: prog vs paraphrase_min = {floor:.3f} (n={n_floor})")
         for cond, effect, n, ratio in rows:
-            flag = ""
+            line = f"    prog vs {cond:16s} {effect:.3f} (n={n})"
             if ratio is not None:
-                flag = ("  <- at the floor" if ratio <= 1.2 else
-                        "  <- clears the floor" if ratio >= 2.0 else "")
-            print(f"    prog vs {cond:16s} {effect:.3f} (n={n})"
-                  + (f"   ratio {ratio:.2f}" if ratio is not None else "")
-                  + flag)
+                line += f"   ratio {ratio:.2f}"
+                ci = ratio_ci(judged, cond, "paraphrase_min", q)
+                if ci:
+                    lo, hi, _ = ci
+                    line += f"  95% CI [{lo:.2f}, {hi:.2f}]"
+                    line += ("  <- CI contains 1: not distinguishable "
+                             "from the floor" if lo <= 1.0 <= hi
+                             else "  <- clears the floor")
+            print(line)
     if not any_rows:
         print("  no conditions besides the floor have been judged yet")
     else:
         print("\n  A ratio near 1 means the condition moved the video no more "
-              "than a\n  meaning-preserving reword did -- which is the same as "
-              "no detectable\n  aspect effect. Only ratios well above 1 are "
-              "evidence of anything.")
+              "than a\n  meaning-preserving reword did -- the same as no "
+              "detectable aspect effect.\n  Read the interval, not the point "
+              "estimate: with a few dozen items a\n  ratio of 1.4 is entirely "
+              "compatible with 1.")
 
     if len(models) > 1:
         print()

@@ -219,6 +219,9 @@ def build(taxonomy_dir, n_items, n_generate, seed):
         item = {
             "item_id": idx,
             "gerund": verb["gerund"],
+            # The judge is shown the bare verb, never the aspect-marked
+            # sentence, so the base form has to travel with the item.
+            "verb_base": VERB_FORMS[verb["gerund"]][0],
             "action_category": verb["action_category"],
             "aspectual_class": VERB_ASPECTUAL_CLASS[verb["gerund"]],
             "noun": noun["noun"],

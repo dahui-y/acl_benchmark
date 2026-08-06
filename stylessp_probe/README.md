@@ -87,3 +87,83 @@ style leakage**"* —— **和我们的强版假设是同一句话。**
 **这是第四次"以为是空位、查了才知道有人"**（state change / MMDiT 文本流 /
 调制空间 / 频域坐标轴）。四次里有三次是在花掉 GPU 或环境成本之前查到的。
 流程有效——但**命中率本身是个信号**，见下。
+
+---
+
+## 跑 StyleSSP：环境与运行方案
+
+目标是**看输出、找失效**，不是复现指标。顺序严格如下，每步都有停下来的理由。
+
+### 第 0 步：查已有权重（先跑这个，别盲下 26 GB）
+
+```bash
+cd stylessp_probe
+python check_assets.py                      # 扫默认路径
+python check_assets.py --roots /openbayes/input /openbayes/home ~/.cache
+```
+
+它按 HF 缓存名和 README 的目录名两种形式找，报 `ok / PARTIAL / MISSING`
+（体积不足预期 60% 判 PARTIAL，并单独报悬空符号链接），
+然后**只为缺的那些**打印带 `--include` 的下载命令，以及可从服务器直连的
+ModelScope 镜像。
+
+> **不要照 README 跑 `huggingface-cli download h94/IP-Adapter`**——
+> 那个仓库 40 GB+，真正要的单文件只有 700 MB。`check_assets.py` 打印的命令带过滤。
+
+### 第 1 步：建独立环境
+
+**必须独立**：StyleSSP 要 torch 2.3 / diffusers 0.30 / transformers 4.44 / py3.9，
+当前 `aspect` 环境是 2.13 / 0.39 / 5.14。**就地降级会打死 `mmdit_probe`。**
+
+```bash
+conda env create -f ../help_code/StyleSSP/environment.yaml   # env 名 StyleSSP
+conda activate StyleSSP
+```
+
+`pip install git+https://github.com/openai/CLIP.git` **跳过**——
+`infer_style.py` 有 `import clip` 但全仓库无 `clip.` 调用。
+用 `pip install openai-clip`，装不上就注释掉那一行。
+
+### 第 2 步：改 `src/config.py` 的路径
+
+`base_model_path` / `IP_path` / `tile_controlnet_path` / `canny_controlnet_path`
+指向第 0 步确认的实际位置。**`style_image_dir` / `content_image_dir` 不用改**——
+`run_batch.py` 从 pair 列表读，不走这两个字段。
+
+### 第 3 步：分层输入 → 跑 → 看
+
+```bash
+python stratify.py --content DIR --style DIR --per-bucket 3
+python run_batch.py --pairs pairs.jsonl --out results --limit 1   # 先跑一对
+python run_batch.py --pairs pairs.jsonl --out results
+python sheet.py --pairs pairs.jsonl --out-dir results
+```
+
+### `run_batch.py` 为什么不是"循环调用 infer_style.py"
+
+他们的 `__main__` 是给**单对**写的：BLIP2 → instruct 管线 → 反演管线 →
+ControlNet 管线，一对跑完就结束。用 subprocess 循环等于**每对重载 ~26 GB**，
+30 对要多花一个多小时纯加载。
+
+`run_batch.py` **import 他们的函数**（不复制、不改动 vendored 目录），
+把日程重排成四段，换来两件东西：
+
+1. **显存。** 原顺序里 BLIP2(~8GB) + instruct(~10GB) + 反演管线(~7GB)
+   在反演期同时驻留 ≈ 25 GB，**24 GB 卡装不下**。
+   这里先把所有 caption 出完并**释放 BLIP2**，反演全部做完再**释放反演管线**，
+   最后才建 ControlNet 管线——两个最重的阶段**永不共存**。
+2. **α 消融。** `--alpha 1.0` 关掉频率操纵、其他零件全不动，
+   这是 `sheet.py` 归因所必需的内部对照。`d_s/d_t/filter_type` 全部照发布值，
+   **只有 α 是我们动的**。
+
+**未测试。** 本机无 GPU、无 diffusers，代码是照着读到的接口写的。
+每段都打印加载了什么、峰值多少 GB。**先 `--limit 1`，读完输出再往下。**
+
+### 看图的时候看什么
+
+**不要先看指标。** 按 `sheet_content_hi.png` → `mid` → `lo` 的顺序看，
+重点盯**细结构**：栏杆、电线、文字、发丝、密集树叶。
+然后问 StyleSSP 自己那两个问题——**布局变了吗？风格图的东西漏进来了吗？**
+以及第三个只有跑起来才看得见的：**还有什么它没命名的错？**
+
+那个"没命名的错"，才是我们要找的东西。

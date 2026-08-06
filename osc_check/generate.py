@@ -37,7 +37,17 @@ def load_pipeline(cfg, offload, sequential):
             f"{cfg['pipeline_class']}. The class needs diffusers >= 0.36; "
             f"upgrade with: pip install -U diffusers")
     dtype = getattr(torch, cfg["dtype"])
-    pipe = cls.from_pretrained(cfg["repo_id"], torch_dtype=dtype)
+    kwargs = {"torch_dtype": dtype}
+    # Wan ships a bespoke VAE that has to be loaded separately and kept in fp32:
+    # at the pipeline dtype it silently produces black frames rather than
+    # erroring, so this is not an optimisation, it is required for the Wan
+    # entries to produce anything at all.
+    if cfg.get("vae_class"):
+        vae_cls = getattr(diffusers, cfg["vae_class"])
+        kwargs["vae"] = vae_cls.from_pretrained(
+            cfg["repo_id"], subfolder="vae",
+            torch_dtype=getattr(torch, cfg.get("vae_dtype", "float32")))
+    pipe = cls.from_pretrained(cfg["repo_id"], **kwargs)
     if sequential:
         pipe.enable_sequential_cpu_offload()
     elif offload:

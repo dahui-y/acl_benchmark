@@ -34,8 +34,12 @@ FLUX 的 single block 是单流 `[text; image]` 拼接，按 token 下标切分�
 
 ```bash
 cd mmdit_probe
+export HF_HUB_OFFLINE=1        # 见下
 
-# 1. 先跑自检（~2 分钟）。不过不要往下走。
+# 0. 环境 + 权重体检（几秒，不加载权重）
+python preflight.py
+
+# 1. 自检（~2 分钟）。不过不要往下走。
 python run.py --selftest --model sd35
 
 # 2. 主实验：6 组 (风格, 内容) × 2 seed × 4 条件
@@ -49,6 +53,26 @@ python analyze.py --model flux
 ```
 
 显存不够就 `--sequential-offload` 或 `--size 768`。
+
+### 环境 / 权重
+
+**大概率不用重建环境。** 这里比跑 Wan2.2 的要求低：SD3.5 只要 `diffusers>=0.31`、
+FLUX 要 `>=0.30`，而 Wan2.2 要 `>=0.36`。唯一可能缺的是 T5 分词器要的
+`sentencepiece` + `protobuf`——缺了会在很后面才炸出一个看不懂的 tokenizer 错误，
+所以 `preflight.py` 单独查这两个。
+
+**权重路径已经写死在 `run.py` 的 `MODELS` 里**，`resolve_path()` 同时接受
+普通模型目录和 HF hub 缓存目录（自动进 `snapshots/*` 找 `model_index.json`）。
+路径不对就 `--path` 覆盖。
+
+`preflight.py` 会逐个组件核对，重点抓两件事：
+
+1. **下载不全**。SD3.5 的 `text_encoder_3` 是 T5-XXL，约 9GB，是最常缺的一个。
+   缓存目录里是指向 `../../blobs` 的符号链接，**没下完的 blob 会留下悬空链接**，
+   目录看起来存在但读不出来——单独查了这个。
+2. **`HF_HUB_OFFLINE=1` 没设**。即使路径完全在本地，`from_pretrained` 仍会去
+   huggingface.co 复核一次。这台服务器连不上外网，结果是**长时间挂起**而不是快速报错。
+   设了就变成立刻、可读的错误。
 
 ### `--selftest` 在测什么
 

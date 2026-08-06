@@ -70,3 +70,52 @@ StyleID→StyleSSP、HD-Painter→FreeInpaint 都是这个形状。
    单独可发 NeurIPS），但窄很多。
 3. **DRF 若中会**（现在无 venue），②那条失效轴的坐标系要换成对 DRF 比。
 4. 3 个月做完 4 步偏紧；第 4 步若赶不上 CVPR 2027，顺延 ICCV 2027（2027-03）。
+
+---
+
+## 第 0 步结果（2026-08-06）：旋钮已被半占，方案修订
+
+逐篇读了机制。四个原嫌疑人全部排除，但检索甩出来一个新的、致命度更高的：
+
+| 工作 | 它的"modulation"实际是什么 | 与 AdaLN 通路 |
+|---|---|---|
+| SADis (NeurIPS 2025) | CLIP image embedding 加性 + 白化/上色，**经 IP-Adapter 的 cross-attention 注入** | 无关（adapter 通路；白化技巧可借用） |
+| RB-Modulation (CVPR 2025) | 反向 SDE 漂移的随机最优控制 | 无关 |
+| ColorCtrl | 文本→视觉注意力分数缩放 | 无关 |
+| Unraveling MMDiT Blocks | 逐 block 移除/增强**文本 hidden-states** | 无关（14 个 `gate` 命中是 investi**gate** 的碎片） |
+| DRF | StyleID 式注意力注入搬到 SD3 | 无关（全文 AdaLN/modulat 0 次） |
+| **Modulation Guidance（Rethinking Global Text Conditioning, ICLR 2026, Yandex+Adobe, 开源 `quickjkee/modulation-guidance`）** | **就是调制空间**：y(p,t) → ŷ(p,p⁺,p⁻)，在调制空间做文本驱动的 guidance，training-free，用于生成质量/属性控制和指令编辑 | **同一空间** |
+
+### Modulation Guidance 占了什么、没占什么
+
+占了：**"调制空间是可干预点"这个机制主张本身**——ICLR 2026 已录用+开源。
+"我们发现了这条通路"这句话从此不能作为贡献。
+
+没占：
+1. **信号源是文本**（p⁺/p⁻ prompt），不是参考图像。图像派生的调制信号没做。
+2. **任务是质量/属性增强和指令编辑**，不是参考图风格迁移，没进 StyleSSP 坐标系。
+3. 他们顺带证明了两件对我们有用的事：常规用法下 pooled 贡献小，
+   但**放大后能造成全局外观改变（他们自己的例子：car style）**——
+   即这条通路确实载得动"风格"级别的信号。
+
+### 修订后的立论（从"新旋钮"降级为"新信号源+新任务+独有测量"）
+
+三个差异化零件，缺一不可：
+1. **不可能性测量**（独有）：MMDiT 上 K/V 替换无迁移区间（sweep，corr 0.874）
+   ——论文的动机图，别人没有；
+2. **图像派生的调制信号**（Modulation Guidance 只做了文本）；
+3. **任务与坐标系**：参考图风格迁移，StyleSSP 的 benchmark/指标。
+
+先例支持这个形状：StyleSSP 自己就是"InitNO 的起点旋钮 + FlexiEdit 的频率观察
++ 风格迁移任务"组合成的 CVPR。**旋钮被 ICLR 2026 合法化，反而降低了审稿人
+对"调制空间干预是否合理"的质疑成本。**
+
+### 判定：第 1 步探针照跑，framing 按上面修订
+
+- 探针问题不变：**图像派生的调制移植，能否落在权衡线之外**。
+  Modulation Guidance 的放大实验提高了它的先验成功率。
+- 新增一条 kill 判据：若探针成功但效果与"文本 prompt 描述该风格 + Modulation
+  Guidance"无法区分，则图像信号源这个零件不成立，方向死。
+- 风险登记：这是**第三次**"以为是空位、查了才知道有人"（state change、
+  MMDiT 文本流、调制空间）。但这次是在 GPU 时间之前查到的——第 0 步的存在
+  就是为了这个。流程有效，保持"先查再跑"。

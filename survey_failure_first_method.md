@@ -100,3 +100,56 @@ OmniVTON (ICCV 2025) / ConsistEdit (SIGGRAPH Asia 2025) / ZeST (ECCV 2024)
    那个负结论到底是"我的复现失败"还是"方法本身迁不过去"）
 2. #1 跑的同时，把 #2–#5 的"后续工作已修没修"检索做完（不占 GPU）
 3. 按检索结果重排 #2–#5，逐个 break test，5 GPU 天封顶
+
+---
+
+## 附：Style Transfer 这一格的时间线核实（2026-08-06，回答"StyleID 之后是谁"）
+
+用 Westlake-AGI-Lab 的专门清单（维护到 2026-06）交叉核对——**又一次证明
+littlewhitesea 那份索引的薄格不可信**：它给 Style Transfer 记 18 条，专门清单里
+2025 一年就有 5 篇已录用。
+
+### 已录用 + 时间线（training-free 参考图/文本风格迁移）
+
+| 年份 | 工作 | venue | 代码 |
+|---|---|---|---|
+| 2024 | StyleID | CVPR 2024 | ✅ |
+| 2024 | Cross-Image Attention | SIGGRAPH 2024 | ✅ |
+| 2024 | Ctrl-X | NeurIPS 2024 | ✅ |
+| 2025 | **StyleSSP**（字节） | **CVPR 2025** | ✅ `bytedance/StyleSSP` |
+| 2025 | StyleStudio / RB-Modulation / Attention Distillation | CVPR 2025 | ✅ |
+| 2025 | Semantix | ICLR 2025 | — |
+| 2025 | **SADis（Free-Lunch Color-Texture Disentanglement）** | **NeurIPS 2025** | ✅ `deepffff/SADis` |
+| 2026 | HAM | CVPR 2026（据清单，未自行核实） | 未见 |
+
+**最新的已录用+开源在位者是 StyleSSP（CVPR 2025）**，不是 StyleID。
+它做的正是"初始噪声/起点增强 + 频率操纵 + 负引导"，声称专修 content leakage。
+
+### "free-lunch 引入 style transfer 了吗"——早就有了
+
+- **FreeStyle**（arXiv 2024-01，标题就叫 *Free Lunch for Text-guided Style
+  Transfer*）：FreeU 同款思路，利用 U-Net 双流编码结构。期刊 Pattern
+  Recognition 2026 发表，无顶会 venue。
+- **SADis / Free-Lunch Color-Texture Disentanglement：NeurIPS 2025 poster，开源。**
+- 实质上整条 StyleID→StyleSSP 线都是 free-lunch（training-free）做风格迁移。
+
+**"把 free-lunch 带进风格迁移"作为立论，2023–2024 就没了。**
+
+### 两条要命的预印本动态
+
+1. **Scheduled Style Injection**（arXiv 2605.26538）：副标题就是
+   *Expanding the Style-Content **Pareto Frontier** in Training-Free
+   Diffusion-based Style Transfer*——**和我们 sweep 第二轮独立推出的
+   "权衡线/脱线"框架是同一个东西**。好消息：框架被独立印证。
+   坏消息：这个框架本身已不新。
+2. **Dual Rectified Flows**（2511.20986）：inversion-free 风格迁移做在
+   rectified flow 上——**MMDiT/流匹配那边的空正在被预印本填**，
+   进一步确认杀掉那个方向是对的。
+
+### 对流水线的修订
+
+- 失效搜索 #1 的**在位者从 StyleID 升级为 StyleSSP**：它是最新已录用+开源，
+  而且**自称修好了 content leakage**——它修剩下的残余失效才是最值钱的靶子。
+- 阳性对照仍可用 StyleID（配方最简、引用最canonical），但 break test 的
+  "在位者坐标系"应该是 StyleSSP 的 benchmark 和指标。
+- StyleSSP 的基座是哪个（SD1.5/SDXL）**未核实**，动手前先看仓库。

@@ -119,3 +119,66 @@ StyleID→StyleSSP、HD-Painter→FreeInpaint 都是这个形状。
 - 风险登记：这是**第三次**"以为是空位、查了才知道有人"（state change、
   MMDiT 文本流、调制空间）。但这次是在 GPU 时间之前查到的——第 0 步的存在
   就是为了这个。流程有效，保持"先查再跑"。
+
+---
+
+## 修正（2026-08-06，用户指出）：本方案的动机类型是错的
+
+### 两篇在位者的动机，逐字对照
+
+**StyleID（CVPR 2024）**
+- 问题：风格迁移要训练或逐样本优化。
+- 观察：self-attention 里 **K,V 载风格、Q 载结构**。
+- 干预：把风格图的 K,V 换进去。
+- 其内部零件（query preservation、注意力温度缩放、初始 AdaIN）**也各自对应一个它自己观察到的输出缺陷**。
+
+**StyleSSP（CVPR 2025）** —— 原文链条：
+1. **先看到输出错了**："layout changes of original content and content leakage
+   from style images"，Fig.1 (a)(b) 各配一组图（那条被草坪盖掉的河）。
+2. **做实验定位病因**："Through a series of experiments, we discovered that an
+   effective startpoint in the sampling stage significantly enhances the style
+   transfer process"；再做频域分析确认 "high-frequency components in z_T are
+   more crucial in determining the layout"。
+3. **干预点由病因推出**，不是由"哪个旋钮没人用"推出：布局病在起点频谱 → 削低频；
+   泄漏病在反演轨迹被风格图污染 → 反演期负引导。
+4. 评测沿用 StyleID 的 benchmark 与指标。
+
+**它为什么跟 StyleID 比**：同任务、同 benchmark（MS-COCO×WikiArt）、同指标
+（ArtFID/FID/LPIPS）、同 training-free 约束。**比较本身就是论证**——
+"你没修的，我修了，用你的尺子量"。
+
+### 我们方案的动机是什么类型
+
+"U-Net 的 K/V 配方在 MMDiT 上没有对应形式。"
+
+这是**方法可移植性**的陈述，不是**输出错了**的陈述。没有任何用户会因为
+"K/V 替换在 MMDiT 上无迁移区间"而抱怨——他们抱怨的是图里布局丢了、风格图的
+东西漏进来了。**我们继承了他们的任务和指标，唯独没继承他们的问题类型。**
+
+### 更糟的一点：我把已经废弃的搜索方式换层重新引入了
+
+`survey_free_lunch_round2.md` 的结论是"不要在清单里找空白"。然后本方案：
+- 第 1 节挑架构轴，理由是 "SD3/FLUX 生态没有对应物" —— **架构层的空白**；
+- 第 2 节挑调制通路，理由是 "**唯一没人碰过的旋钮**" —— **旋钮层的空白**。
+
+**同一个错误换了两层。** 而 StyleSSP 选起点频率不是因为没人用过，
+是因为它做实验测出布局病在那里。
+
+### 一个方法论上的连带问题
+
+当"换基座"本身就是卖点时，与在位者的比较无法隔离贡献：我们在 SD3.5 上拿到
+ArtFID 更好，审稿人问的是"这是你的方法还是 SD3.5 比 SDXL 强"。
+（诚实补充：StyleSSP 自己是 SDXL 对 StyleID 的 SD1.5，这个混淆该领域一定程度上
+容忍。但那里基座只是背景；在我们这里基座**就是**论点，混淆会吃掉整篇论文。）
+
+### 正确的推导顺序（本方案作废，按此重来）
+
+1. **跑 StyleSSP 原代码，看它的输出还有什么可见的错。** 这不是"校准尺子"，
+   是**找失效**——失效优先流水线第 4 步的原意。
+2. 给失效命名，配一组像 StyleSSP Fig.1 那样的对照图。
+3. **做定位实验找病因**（这才是 StyleSSP 那个 "series of experiments"）。
+4. **干预点由病因决定**。若病因恰好指向架构或调制，那时 sweep 的测量和
+   `mod_probe.py` 才有位置——作为**支持证据**，不是作为动机。
+
+`mod_probe.py` 暂不跑：它是一个没有失效要解释的机制探针。
+sweep 的权衡线测量仍然是真实结果，只是**不能当动机用**。

@@ -53,3 +53,37 @@ python sheet.py --pairs pairs.jsonl --out-dir RESULTS --ablation RESULTS_alpha1
 | delta 大但**各格均匀** | 是一笔统一的税，**不是频谱竞争**，最多算 errata |
 | **两个边际趋势都为正** | 预测的模式，往下走 |
 | 只有一个趋势为正 | 有东西，但不是这个假设，先诊断 |
+
+---
+
+## 第 0 步（占位核查）结果：**强版假设已被占，探针不跑**
+
+2026-08-06 检索。
+
+**[FreSCo: Joint Frequency-Aware and Spatial Control for Image Zero-Shot Style
+Transfer](https://dl.acm.org/doi/10.1145/3805622.3810798)（ICMR 2026，training-free）**
+
+它的问题陈述：*"a key oversight being the **neglect of frequency-domain
+distinctions in visual signals**, which leads to issues like **content drift and
+style leakage**"* —— **和我们的强版假设是同一句话。**
+
+它的解法正是我们会提的那个：**Dynamic Wavelet Latent Fusion**——用 **DWT**
+分解 latent（小波 = 空间局部化的频率，恰恰是"全局标量分不开"的标准答案），
+**只把风格注入高频纹理子带**；外加 VAE-Compressed Masking 做空间控制。
+而且**直接对比 StyleSSP**：结构保持上声称大幅胜出，风格化上与 StyleSSP 持平。
+
+另有 **FFTDiff**（tuning-free）在频域解耦纹理/内容/颜色。
+
+### 判定
+
+| 版本 | 状态 |
+|---|---|
+| 弱版：StyleSSP 发布代码用带通、削了自己论证要保的最高频 | **仍是我们的发现，但它是 errata，不是论文** |
+| **强版：频率不是分离内容与风格的正确坐标轴，需空间自适应** | **被 FreSCo 占**（问题陈述 + 解法 + 对 StyleSSP 的对比全中） |
+
+**探针不跑，SDXL 环境不建。** 这正是第 0 步存在的意义——
+在 26 GB 下载和 conda 环境之前，用一轮检索杀掉它。
+
+**这是第四次"以为是空位、查了才知道有人"**（state change / MMDiT 文本流 /
+调制空间 / 频域坐标轴）。四次里有三次是在花掉 GPU 或环境成本之前查到的。
+流程有效——但**命中率本身是个信号**，见下。

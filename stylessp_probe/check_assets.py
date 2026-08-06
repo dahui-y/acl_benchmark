@@ -20,6 +20,12 @@ import argparse
 import os
 from pathlib import Path
 
+# Assets StyleSSP loads with variant="fp16". A cache holding only the fp32
+# safetensors passes every size check and then fails at from_pretrained, twenty
+# minutes into a run, with an error that does not say "wrong variant". So the
+# presence of *.fp16.safetensors is checked separately from the size.
+NEEDS_FP16 = {"stabilityai/stable-diffusion-xl-base-1.0", "TheMistoAI/MistoLine"}
+
 # name, HF repo, what StyleSSP wants it at, approx GB, include-filter, notes
 ASSETS = [
     ("SDXL base", "stabilityai/stable-diffusion-xl-base-1.0",
@@ -116,6 +122,13 @@ def main():
             if sz < gb * args.min_gb:
                 status = "PARTIAL"
                 detail = f"{best}  ({sz:.2f} GB, expected ~{gb} GB)"
+            elif repo in NEEDS_FP16 and not any(best.rglob("*.fp16.safetensors")):
+                status = "NO-FP16"
+                detail = (f"{best}  ({sz:.2f} GB, but no *.fp16.safetensors)\n"
+                          f"          StyleSSP loads this with variant='fp16'. "
+                          f"Either re-download the fp16\n"
+                          f"          variant, or drop variant='fp16' at the "
+                          f"call site and accept fp32 VRAM.")
             else:
                 status = "  ok  "
                 detail = f"{best}  ({sz:.2f} GB)"

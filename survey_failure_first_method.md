@@ -153,3 +153,48 @@ littlewhitesea 那份索引的薄格不可信**：它给 Style Transfer 记 18 �
 - 阳性对照仍可用 StyleID（配方最简、引用最canonical），但 break test 的
   "在位者坐标系"应该是 StyleSSP 的 benchmark 和指标。
 - StyleSSP 的基座是哪个（SD1.5/SDXL）**未核实**，动手前先看仓库。
+
+---
+
+## 附 2：StyleID → StyleSSP 拆解（同一格连中两次顶会的机制）
+
+读了 StyleSSP 全文（arXiv 2501.11319v2）。
+
+### StyleSSP 相对 StyleID 的增量
+
+| | StyleID (CVPR 2024) | StyleSSP (CVPR 2025) |
+|---|---|---|
+| 干预点 | **采样期的注意力**（decoder self-attn 注入风格 K/V + query preservation + 初始 AdaIN） | **采样的起点 z_T**（DDIM 反演产物）+ **反演过程本身** |
+| 命名的失效 | （它自己是开创者之一） | ① 布局被改（content preservation）② 风格图内容泄漏（content leakage） |
+| 机制 ① | — | FFT 分解反演 latent：**低频 ×α=0.7 削弱、高频保留**、按 1−α 补高斯噪声。依据 FlexiEdit 的观察：latent 的高频载轮廓/布局 |
+| 机制 ② | — | **反演阶段加负引导**（ω=1.5，风格图作负条件），让起点远离风格图内容 |
+| 基座 | SD1.5 | **SDXL + tile ControlNet + InstantStyle 式注入 + CLIP ViT-L**（注意：training-free ≠ adapter-free，它用了现成训练好的 ControlNet/IP 组件） |
+| 对 StyleID 的数字 | — | ArtFID 28.80→**21.50**，FID 18.13→**13.45**，LPIPS 0.5055→**0.4881**，**指标和实验设置全部沿用 StyleID**（"consistent with StyleID"） |
+
+### 为什么这一格能连续出顶会——四个结构性原因
+
+1. **任务目标本身是权衡（Pareto 前沿），不是可解问题。** 风格 vs 内容此消彼长，
+   没有方法能"做完"它——每篇已录用工作都只是推一下前沿，**必然留下可测量的残余失效**。
+   权衡型任务不会像可解型任务那样饱和，它持续产出论文位。
+2. **每一任继任者都开在前任的命名失效上，且用前任自己的坐标系。**
+   StyleSSP 的指标、数据、设置逐项沿用 StyleID——审稿风险极低：
+   动机是已发表、可复现的失效；尺子是已被接受的尺子。
+3. **干预点清单还没用完。** 扩散管线有一排互相独立的旋钮：
+   初始噪声 / 反演 / 注意力 K,V / 引导项 / 频域 / 调度器。
+   StyleID 拿走"注意力"，StyleSSP 拿走"起点 + 反演引导"。
+   **同一个失效 × 一个新旋钮 = 一篇新论文。**
+4. **评测全程序化**（ArtFID/FID/LPIPS，零标注），复现便宜，审稿人可自己验证。
+
+### 一个跨任务的重复模式（值得记住）
+
+**StyleSSP 之于 StyleID，恰好等于 FreeInpaint 之于 HD-Painter**：
+前任在采样期动注意力 → 继任者**优化起点噪声 + 在采样中加引导**，双双中会。
+"起点优化 + 采样引导"是 2025–2026 这条线的胜型，且是**按任务逐个套用**的。
+
+### 对我们流水线的印证与提示
+
+- 这正是失效优先四环链的活例：失效命名 → 对比内部量（z_T 的频率成分 /
+  反演轨迹被风格污染）→ 免费信号（内容图自身、风格图作负条件）→ 推理期干预。
+- StyleSSP 留下的口子（break test 靶点）：它把生态绑在 **SDXL + ControlNet +
+  IP-Adapter** 上——这套组件在 SD3/FLUX 生态**不成熟**，架构迁移轴依然打得到它；
+  另外 Scheduled Style Injection（2605.26538）说明前沿仍未收敛。

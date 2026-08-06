@@ -130,6 +130,22 @@ conda activate StyleSSP
 指向第 0 步确认的实际位置。**`style_image_dir` / `content_image_dir` 不用改**——
 `run_batch.py` 从 pair 列表读，不走这两个字段。
 
+### 第 2.5 步：三个硬编码的 repo id
+
+`infer_style.py` 里有三个权重**不走 config，直接写死成 HF repo id**：
+`Salesforce/blip2-flan-t5-xl`、`laion/CLIP-ViT-H-14-laion2B-s32B-b79K`、
+`madebyollin/sdxl-vae-fp16-fix`。服务器连不上 HF，它们只有恰好躺在本地 HF 缓存里
+才解析得了——环境自检那条 *"You are offline and the cache … has been updated"*
+警告就是在预告这件事。
+
+`run_batch.py` 用三个参数绕开，指到实际目录即可，**不改他们的代码**：
+
+```bash
+--blip2 /path/to/blip2-flan-t5-xl \
+--clip-h /path/to/CLIP-ViT-H-14-laion2B-s32B-b79K \
+--vae /path/to/sdxl-vae-fp16-fix
+```
+
 ### 第 3 步：分层输入 → 跑 → 看
 
 ```bash

@@ -63,6 +63,19 @@ def main():
     ap.add_argument("--steps", type=int, default=50)
     ap.add_argument("--seed", type=int, default=1234)
     ap.add_argument("--limit", type=int)
+    # Three checkpoints are hardcoded as HF repo ids inside infer_style.py
+    # rather than read from config.py, so with no route to huggingface.co they
+    # resolve only if they happen to sit in the local HF cache in the current
+    # format. Passing explicit directories removes that dependency entirely --
+    # which also silences the "you are offline and the cache ... has been
+    # updated" warning, since nothing is looked up by id any more.
+    ap.add_argument("--blip2", default="Salesforce/blip2-flan-t5-xl",
+                    help="local dir for BLIP2 (hardcoded id upstream)")
+    ap.add_argument("--clip-h",
+                    default="laion/CLIP-ViT-H-14-laion2B-s32B-b79K",
+                    help="local dir for the IP-Adapter image encoder")
+    ap.add_argument("--vae", default="madebyollin/sdxl-vae-fp16-fix",
+                    help="local dir for the fp16-fix SDXL VAE")
     args = ap.parse_args()
 
     # Their modules resolve `src.*` and the pipeline files relative to the repo
@@ -102,9 +115,9 @@ def main():
     # ---------------------------------------------------------------- captions
     # First and alone: BLIP2 is ~8 GB and is never needed again after this.
     print("\n[1/4] BLIP2 -> captions")
-    proc = AutoProcessor.from_pretrained("Salesforce/blip2-flan-t5-xl")
+    proc = AutoProcessor.from_pretrained(args.blip2)
     blip = Blip2ForConditionalGeneration.from_pretrained(
-        "Salesforce/blip2-flan-t5-xl", device_map="cuda",
+        args.blip2, device_map="cuda",
         torch_dtype=torch.float16).eval()
     S.processor, S.model = proc, blip          # generate_caption reads globals
     caps = {}
@@ -174,9 +187,8 @@ def main():
                                         variant="fp16").to(cfg.device),
     ]
     image_encoder = CLIPVisionModelWithProjection.from_pretrained(
-        "laion/CLIP-ViT-H-14-laion2B-s32B-b79K",
-        torch_dtype=cfg.dtype).to(cfg.device)
-    vae = AutoencoderKL.from_pretrained("madebyollin/sdxl-vae-fp16-fix",
+        args.clip_h, torch_dtype=cfg.dtype).to(cfg.device)
+    vae = AutoencoderKL.from_pretrained(args.vae,
                                         torch_dtype=cfg.dtype).to(cfg.device)
     pipe = S.StableDiffusionXLControlNetInpaintPipeline.from_pretrained(
         cfg.base_model_path, controlnet=controlnet, vae=vae,

@@ -177,47 +177,70 @@ def main():
     base_L = agg("baseline", "L")
     print(f"\nbaseline: S {base_S:.3f}  C 1.000  L {base_L:.3f}\n")
     print(f"{'setting':<26}{'S':>8}{'dS':>9}{'C':>8}{'L':>8}{'dL':>9}"
-          f"{'  usable?':>10}")
-    print("-" * 78)
-    best = []
+          f"{'resid':>9}{'  off?':>8}")
+    print("-" * 86)
+    # Absolute thresholds are not enough, and the first version of this report
+    # was wrong because of it. Every setting sits somewhere on one line running
+    # from "no effect" (dS 0, C 1) to "pixel copy of the style image" (dS max,
+    # C ~0.1): you buy style with content, one for one. A cell that clears
+    # dS > 0.05 and C > 0.5 can be sitting squarely ON that line, i.e. doing
+    # nothing a lower guidance scale would not also do.
+    #
+    # Style transfer is the claim that you can get OFF the line -- a lot of dS
+    # at high C. So the test that matters is the residual against the line, not
+    # the raw numbers. The line is anchored at the observed extremes rather than
+    # fitted, so it cannot be dragged around by the cluster of null cells.
+    cells = []
     for name, *_ in grid:
         S, C, L = (agg(name, k) for k in "SCL")
-        dS, dL = base_S - S, L - base_L
-        # A cell is usable only if all three hold at once. S alone rewards
-        # copying the style image; C alone rewards doing nothing.
-        ok = dS > 0.05 and C > 0.5 and dL < 0.3
-        if ok:
-            best.append((dS, C, dL, name))
+        cells.append([name, S, base_S - S, C, L, L - base_L])
+    ds_max = max(c[2] for c in cells)
+    for c in cells:
+        c.append(c[2] - ds_max * (1.0 - c[3]))          # residual off the line
+    for name, S, dS, C, L, dL, res in cells:
+        ok = res > 0.15 and C > 0.5 and dL < 0.3
         print(f"{name:<26}{S:>8.3f}{dS:>+9.3f}{C:>8.3f}{L:>8.3f}{dL:>+9.3f}"
-              f"{'  YES' if ok else '  -':>10}")
+              f"{res:>+9.3f}{'  YES' if ok else '  -':>8}")
 
+    xs = np.array([1.0 - c[3] for c in cells])
+    ys = np.array([c[2] for c in cells])
+    r = float(np.corrcoef(xs, ys)[0, 1]) if len(cells) > 2 else float("nan")
+    off = sorted((c for c in cells if c[6] > 0.15 and c[3] > 0.5 and c[5] < 0.3),
+                 key=lambda c: -c[6])
+
+    print(f"\n  corr(1-C, dS) = {r:.3f} across {len(cells)} cells   "
+          f"(near 1.0 means every setting is on the tradeoff line)")
     print("\nverdict:")
-    if not best:
-        print("  NO usable cell anywhere in the grid. K/V substitution does not"
-              " restyle in MMDiT --\n  it either does nothing or overwrites. "
-              "That kills the port reading too: the finding\n  becomes 'the "
-              "U-Net recipe has no MMDiT form', which is a result but not the\n"
-              "  method this was scouting for.")
+    if not off:
+        print("  NO cell escapes the style/content tradeoff. K/V substitution "
+              "in MMDiT does not\n  restyle -- it interpolates between doing "
+              "nothing and copying the style image, and\n  the middle of that "
+              "range is degradation, not stylisation. This kills the PORT "
+              "reading\n  as well: the finding is 'the U-Net recipe has no "
+              "MMDiT form'. A result, but not the\n  method this was scouting "
+              "for. Check the sheet -- mid-range cells should look like\n"
+              "  speckle or mosaic artefacts with some palette shift.")
     else:
-        best.sort(reverse=True)
-        img_best = [b for b in best if b[3].startswith("img")]
-        txt_best = [b for b in best if b[3].startswith("txt")]
-        print(f"  {len(img_best)} usable image-stream cell(s), "
-              f"{len(txt_best)} usable text-stream cell(s)")
-        for dS, C, dL, name in best[:6]:
-            print(f"    {name:<26} dS {dS:+.3f}  C {C:.3f}  dL {dL:+.3f}")
-        if txt_best and (not img_best or txt_best[0][0] >= img_best[0][0]):
-            print("  TEXT stream works at least as well -> U-Net has no "
-                  "counterpart. PROCEED, and\n  build the 4-way processor "
-                  "version to separate txt->img from txt->txt.")
+        img = [c for c in off if c[0].startswith("img")]
+        txt = [c for c in off if c[0].startswith("txt")]
+        print(f"  {len(img)} image-stream and {len(txt)} text-stream cell(s) "
+              f"sit off the line:")
+        for c in off[:6]:
+            print(f"    {c[0]:<26} residual {c[6]:+.3f}  dS {c[2]:+.3f}  "
+                  f"C {c[3]:.3f}")
+        if txt and (not img or txt[0][6] >= img[0][6]):
+            print("  TEXT stream escapes it -> U-Net has no counterpart. "
+                  "PROCEED, and build the 4-way\n  processor version to "
+                  "separate txt->img from txt->txt.")
         else:
-            print("  Only the IMAGE stream works -> that is StyleID's swap "
-                  "with different plumbing.\n  PORT. Direction dies here, as "
+            print("  Only the IMAGE stream escapes it -> StyleID's swap with "
+                  "different plumbing.\n  PORT. Direction dies here, as "
                   "agreed.")
 
     # one sheet per seed, columns = baseline refs + the usable cells (or the
     # best six by dS if none passed, so a failure is still inspectable)
-    show = [b[3] for b in best[:6]] or [n for n, *_ in grid][:6]
+    show = [c[0] for c in off[:6]] or \
+        [c[0] for c in sorted(cells, key=lambda c: -c[6])[:6]]
     for seed in args.seeds:
         cols = ["content", "style"] + show
         tile, pad, head = 300, 26, 30

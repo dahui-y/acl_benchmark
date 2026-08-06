@@ -195,3 +195,33 @@ diffusers build 用的不是 `to_k`）。
 
 产物是一个**负结果 + 三条机制事实**。负结果本身不构成 CVPR 论文——除非配上
 "那什么才行"，而我们没有。
+
+---
+
+## 第三轮：调制通路探针（`mod_probe.py`）
+
+sweep 杀死了 K/V 路线之后，唯一没探过的条件通路是**调制**
+（pooled + timestep → 每 block 的 scale/shift/gate，全局、无空间信息）。
+Modulation Guidance（ICLR 2026）已证明文本驱动的调制空间干预能改变全局外观，
+所以先验不低。探针问题只有一个：**风格分支的调制移植进内容分支，
+有没有格子落在 K/V 权衡线之外**（残差 > 0.15 且 C > 0.5 且 dL < 0.3，
+线锚点自动从 sweep 的 metrics.jsonl 重新推导，没有就用 0.467）。
+
+```bash
+python mod_probe.py --selftest --model sd35     # ~2 分钟，先跑
+python mod_probe.py --model sd35                # 60 次生成，~30–40 分钟
+```
+
+**这个探针只验证通道，不验证图像信号源**：此处风格分支是文本驱动的，
+移植它的调制 = 把风格 prompt 的 pooled embedding 喂给内容分支，文本方法也做得到。
+"图像派生信号有没有独立价值"在第 3 步（真实风格图）才可测。
+通道不通，第 3 步不用做。
+
+hook 点：`norm1.linear`（image 流）/ `norm1_context.linear`（text 流，
+末 block 的 AdaLayerNormContinuous 同样暴露 `.linear`）/ `norm_out.linear`。
+注意力和归一化的数学一行没动。九个设置里含 λ=0.5 的半强度档——
+调制是全局信号，"部分强度能否避开复制塌缩"正是要问的。
+
+selftest 的第三条 FAIL 有专门话术：内容分支不动**可能是真的**
+（Modulation Guidance 报告过 pooled 常规用法贡献小），
+先用 λ≫1 放大验证 hook 没挂错，再下"通道无效"的结论。

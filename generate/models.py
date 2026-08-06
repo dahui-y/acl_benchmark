@@ -61,7 +61,13 @@ MODELS = {
         "verified": False,
     },
     "hunyuanvideo-1.5": {
-        "repo_id": "tencent/HunyuanVideo-1.5",
+        # NOT the official tencent/HunyuanVideo-1.5 repo: that one ships raw
+        # weights with no model_index.json, so diffusers cannot load it as a
+        # pipeline. The hunyuanvideo-community conversions are per-mode
+        # (480p/720p x t2v/i2v); this is the 720p t2v one. Verified against the
+        # hub 2026-08-06: _class_name HunyuanVideo15Pipeline, requires
+        # diffusers >= 0.36.
+        "repo_id": "hunyuanvideo-community/HunyuanVideo-1.5-Diffusers-720p_t2v",
         "pipeline_class": "HunyuanVideo15Pipeline",
         # Kept as the Table 6 reference row. 720p is affordable here only in
         # principle: 1665 videos at the 720p rate is 10 days for this model
@@ -72,8 +78,7 @@ MODELS = {
         "width": 1280,
         "num_frames": 121,
         "fps": 24,
-        "source": f"{OSCBENCH_TABLE6} (HunyuanVideo-1.5 row); CHECK the diffusers "
-                  f"class name and repo id against your version",
+        "source": f"{OSCBENCH_TABLE6} (HunyuanVideo-1.5 row)",
         "verified": False,
     },
     # ---- fallback, not part of the main comparison --------------------------
@@ -131,7 +136,10 @@ MODELS = {
         "verified": True,
     },
     "hunyuanvideo-1.5-480p": {
-        "repo_id": "tencent/HunyuanVideo-1.5",
+        # The 480p t2v community conversion -- see the note on the 720p entry.
+        # Its text encoder is Qwen2.5-VL, which is most of the VRAM: on a 24GB
+        # card run with --offload.
+        "repo_id": "hunyuanvideo-community/HunyuanVideo-1.5-Diffusers-480p_t2v",
         "pipeline_class": "HunyuanVideo15Pipeline",
         "dtype": "bfloat16",
         # Same 832x480 as the Wan entry, deliberately: holding resolution equal

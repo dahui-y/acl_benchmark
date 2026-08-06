@@ -1,0 +1,24 @@
+{"id": "osc000", "band": "weak", "verb": "peeling", "split": "regular", "prompt": "A woman in a red uniform is peeling potato in the kitchen."}
+{"id": "osc001", "band": "weak", "verb": "peeling", "split": "regular", "prompt": "A robot is peeling beet in the kitchen."}
+{"id": "osc002", "band": "weak", "verb": "peeling", "split": "novel", "prompt": "A chef is peeling strawberry in a home kitchen."}
+{"id": "osc003", "band": "weak", "verb": "peeling", "split": "compositional", "prompt": "A chef wearing gloves is peeling and slicing garlic in a cafe kitchen."}
+{"id": "osc004", "band": "weak", "verb": "coating", "split": "regular", "prompt": "A woman with a white apron is coating carrot in the kitchen."}
+{"id": "osc005", "band": "weak", "verb": "coating", "split": "regular", "prompt": "A man is coating potato in the kitchen."}
+{"id": "osc006", "band": "weak", "verb": "coating", "split": "novel", "prompt": "A woman with a white apron is coating banana at a street food stand."}
+{"id": "osc007", "band": "weak", "verb": "coating", "split": "novel", "prompt": "A man in a blue shirt is coating tofu in the bakery."}
+{"id": "osc008", "band": "weak", "verb": "squeezing", "split": "regular", "prompt": "A chef wearing gloves is squeezing spinach in a home kitchen."}
+{"id": "osc009", "band": "weak", "verb": "crushing", "split": "regular", "prompt": "A man wearing gloves is crushing vegetable at the market."}
+{"id": "osc010", "band": "weak", "verb": "mashing", "split": "regular", "prompt": "A woman with a white apron is mashing leaf in a cafe kitchen."}
+{"id": "osc011", "band": "weak", "verb": "mashing", "split": "novel", "prompt": "A man in a blue shirt is mashing oreo in an outdoor cooking area."}
+{"id": "osc012", "band": "mid", "verb": "chopping", "split": "regular", "prompt": "A man in casual clothes is chopping kale in the kitchen."}
+{"id": "osc013", "band": "mid", "verb": "chopping", "split": "novel", "prompt": "A chef in a red uniform is chopping celery at the market."}
+{"id": "osc014", "band": "mid", "verb": "slicing", "split": "regular", "prompt": "A robot with metallic arms is slicing radish at a street food stand."}
+{"id": "osc015", "band": "mid", "verb": "slicing", "split": "compositional", "prompt": "A chef is peeling and slicing pear in a home kitchen."}
+{"id": "osc016", "band": "strong", "verb": "rolling", "split": "regular", "prompt": "A man wearing gloves is rolling meatball in the bakery."}
+{"id": "osc017", "band": "strong", "verb": "rolling", "split": "regular", "prompt": "A woman is rolling sausage in the bakery."}
+{"id": "osc018", "band": "strong", "verb": "rolling", "split": "novel", "prompt": "A robot with a stainless surface is rolling bacon in a kitchen."}
+{"id": "osc019", "band": "strong", "verb": "rolling", "split": "compositional", "prompt": "A woman is rolling and roasting a pastry in the bakery."}
+{"id": "osc020", "band": "strong", "verb": "melting", "split": "regular", "prompt": "A chef in a black coat is melting cream in the bakery."}
+{"id": "osc021", "band": "strong", "verb": "melting", "split": "regular", "prompt": "A woman wearing a chef hat is melting cream in the bakery."}
+{"id": "osc022", "band": "strong", "verb": "browning", "split": "regular", "prompt": "A man in a black coat is browning potato in a home kitchen."}
+{"id": "osc023", "band": "strong", "verb": "browning", "split": "regular", "prompt": "A man in a red uniform is browning onion outdoor."}

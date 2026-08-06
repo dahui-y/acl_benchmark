@@ -25,9 +25,14 @@ HOW THE SWAP IS DONE, AND WHY THIS WAY
 Not by rewriting the attention processor. Reimplementing FLUX's RoPE, its fused
 projections and its single-block layout is exactly the kind of change that
 produces a plausible-looking image from wrong maths, and a wrong image here is
-worse than no experiment. Instead the two branches are generated in ONE batch
-sharing one initial noise, and a forward hook on the K/V *projection modules*
-copies the style row over the content row. The attention maths is untouched.
+worse than no experiment. Instead the two branches are generated in ONE batch,
+and a forward hook on the K/V *projection modules* copies the style row over the
+content row. The attention maths is untouched.
+
+Each branch gets its own initial noise. Round 1 shared it, which turned out to
+be degenerate -- see generate() -- and produced a pixel copy of the style image
+under every condition. Use sweep.py, not this script's defaults, to find the
+setting at which an injection restyles instead of overwriting.
 
   double / joint blocks   attn.to_k, attn.to_v          -> image stream
                           attn.add_k_proj, add_v_proj   -> text stream
@@ -197,14 +202,24 @@ def load_pipeline(cfg, path, offload, sequential):
 
 
 def generate(pipe, cfg, style_prompt, content_prompt, seed, mode,
-             blocks, step_lo, step_hi, steps, size):
-    """Both branches, one batch, one shared initial noise.
+             blocks, step_lo, step_hi, steps, size, share_noise=False):
+    """Both branches in one batch, each with its own initial noise by default.
 
-    Two generators seeded identically -- not one generator for a batch of two --
-    so the branches start from the same latent and every pixel of difference is
-    attributable to the prompt or the swap.
+    Round 1 of this probe shared one latent between the branches, reasoning that
+    identical noise makes every difference attributable. It does the opposite.
+    With a shared latent the two image streams are the SAME tensor at block 0,
+    so overwriting the K/V drives the content branch onto the style branch
+    exactly: `both` came back as a pixel copy of the style image, which is the
+    mathematically required outcome, not a measurement. There is no content to
+    preserve, so C measures nothing.
+
+    Independent noise gives the content branch a layout of its own, which is the
+    thing a partial injection is supposed to keep. `share_noise` restores the
+    degenerate case for anyone who wants to reproduce it on purpose.
     """
-    gens = [torch.Generator("cpu").manual_seed(seed) for _ in range(2)]
+    gens = [torch.Generator("cpu").manual_seed(seed),
+            torch.Generator("cpu").manual_seed(
+                seed if share_noise else seed + 10_000)]
     swapper = Swapper(mode, step_lo, step_hi)
     n_j = n_s = 0
     if mode != "none":
@@ -299,6 +314,13 @@ def main():
     ap.add_argument("--offload", action="store_true", default=True)
     ap.add_argument("--no-offload", dest="offload", action="store_false")
     ap.add_argument("--sequential-offload", action="store_true")
+    ap.add_argument("--share-noise", action="store_true",
+                    help="same initial latent for both branches. The "
+                         "degenerate case -- see generate() -- kept only so it "
+                         "can be reproduced deliberately.")
+    ap.add_argument("--tag", default="",
+                    help="subdirectory under images/<model>/ so runs at "
+                         "different settings do not overwrite each other")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--limit", type=int)
     args = ap.parse_args()
@@ -320,7 +342,7 @@ def main():
     if args.steps_range:
         step_lo, step_hi = (int(x) for x in args.steps_range.split(":"))
 
-    root = args.out / args.model
+    root = args.out / args.model / args.tag if args.tag else args.out / args.model
     root.mkdir(parents=True, exist_ok=True)
     manifest = root / "manifest.jsonl"
 
@@ -365,7 +387,7 @@ def main():
         for n, (pid, sp, cp, seed, cond) in enumerate(todo, 1):
             imgs, fired, (n_j, n_s) = generate(
                 pipe, cfg, sp, cp, seed, cond, blocks, step_lo, step_hi,
-                cfg["steps"], cfg["size"])
+                cfg["steps"], cfg["size"], args.share_noise)
             if cond == "none":
                 imgs[0].save(root / f"{pid}__seed{seed}__style.png")
                 imgs[1].save(root / f"{pid}__seed{seed}__content.png")
@@ -377,7 +399,8 @@ def main():
                 "hooks_joint": n_j, "hooks_single": n_s, "hook_calls": fired,
                 "steps": cfg["steps"], "size": cfg["size"],
                 "guidance": cfg["guidance"],
-                "blocks": args.blocks or "all",
+                "blocks": args.blocks or "all", "tag": args.tag,
+                "share_noise": args.share_noise,
                 "step_range": args.steps_range or "all"}) + "\n")
             fh.flush()
             rate = (time.time() - t0) / n

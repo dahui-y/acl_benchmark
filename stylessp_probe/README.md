@@ -94,13 +94,28 @@ style leakage**"* —— **和我们的强版假设是同一句话。**
 
 目标是**看输出、找失效**，不是复现指标。顺序严格如下，每步都有停下来的理由。
 
-### 第 0 步：查已有权重（先跑这个，别盲下 26 GB）
+### 第 0 步：设缓存路径 + 查已有权重（别盲下 26 GB）
 
 ```bash
+conda activate StyleSSP
 cd stylessp_probe
-python check_assets.py                      # 扫默认路径
-python check_assets.py --roots /openbayes/input /openbayes/home ~/.cache
+source env.sh          # 每次开跑前都要 source，不是可选项
+python check_assets.py --roots "$HF_HOME" /openbayes/input /openbayes/home
 ```
+
+`env.sh` 把 `HF_HOME` 指到 `.../temp/weights/hf`——服务器上**唯一可写且有空间**
+的盘，而已有的 SDXL 缓存正好已经在它的 `hub/` 下，所以新下载落在旧的旁边，
+**不用软链、不用搬 6.7 GB**。它同时设 `HF_HUB_OFFLINE=1`、把输出目录也放到同一个盘，
+并自检可写性和剩余空间（<20 GB 会警告）。
+
+**这样一来 `config.py` 的 `base_model_path` 一个字都不用改**，
+`from_pretrained("stabilityai/stable-diffusion-xl-base-1.0")` 离线直接命中缓存；
+那三个写死的 repo id（BLIP2 / CLIP-ViT-H / VAE）下到同一缓存后也自动解析，
+`--blip2 / --clip-h / --vae` 三个覆盖参数就用不上了。
+
+**已确认可用**：SDXL base fp16 变体齐全（unet 5.14 GB / text_encoder_2 1.39 GB /
+text_encoder 246 MB / vae 167 MB），无非-fp16 文件，无悬空链接，6.7 GB。
+8 项里第 1 项（最大的那个）已拿下。
 
 它按 HF 缓存名和 README 的目录名两种形式找，报 `ok / PARTIAL / MISSING`
 （体积不足预期 60% 判 PARTIAL，并单独报悬空符号链接），

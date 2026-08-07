@@ -1,0 +1,325 @@
+header {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.section {
+    padding: 3rem 1.5rem;
+    }
+
+.hero {
+    align-items: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    }
+
+.hero.is-light {
+color: rgba(0,0,0,.7);
+}
+
+.hero-body {
+    flex-grow: 1;
+    flex-shrink: 0;
+    padding: 3rem 1.5rem;
+    }
+
+.container {
+    flex-grow: 1;
+    margin: 0 auto;
+    position: relative;
+    width: auto;
+}
+
+
+.columns {
+    margin-left: -.75rem;
+    margin-right: -.75rem;
+    margin-top: -.75rem;
+}
+
+.columns.is-centered {
+    justify-content: center;
+}
+
+.column {
+    display: block;
+    flex-basis: 0;
+    flex-grow: 1;
+    flex-shrink: 1;
+    padding: .75rem;
+}
+
+.column.is-four-fifths, .column.is-four-fifths-tablet {
+    flex: none;
+    width: 80%;
+    }
+
+.buttons {
+    margin: 20px 0;
+}
+
+.buttons button {
+    margin: 0 10px;
+    padding: 10px 20px;
+    cursor: pointer;
+}
+
+.content {
+    max-width: 800px;
+    text-align: center;
+}
+
+.images-selection {
+    display: flex;
+    justify-content: flex-start; /* Let images flow naturally without centering */
+    overflow: hidden;
+    width: 100%; /* Expand to the container's width */
+}
+
+.images-selection img {
+    width: 150px;
+    height: 150px;
+    cursor: pointer;
+}
+
+.images-comparison {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 20px auto;
+    border: 1px solid #000;
+    overflow: hidden;
+    width: 100%; /* Ensure the container expands properly */
+    max-width: 800px; /* Adjust the max width */
+    height: auto;
+}
+
+.background-image, .foreground-image {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* Center the images horizontally and vertically */
+    object-fit: cover;
+    width: auto; /* Maintain aspect ratio */
+    height: 100%; /* Ensure it fills the container */
+}
+
+.foreground-image {
+    clip-path: inset(0 100% 0 0); /* Initially hides the foreground image */
+}
+
+.slider {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    height: 100%;
+    width: 2px;
+    background-color: black;
+    cursor: ew-resize;
+    z-index: 2;
+}
+
+.carousel-container {
+    display: flex;
+    transition: transform 0s linear; /* Continuous smooth scrolling with no snapping */
+    overflow: hidden; /* Hide overflow to show one image at a time */
+    width: max-content; /* Ensure the container expands to fit all images */
+}
+
+.carousel-container img {
+    flex-shrink: 0; /* Prevent shrinking */
+    width: auto;
+    height: 150px;
+    margin-right: 10px; /* Optional: Add spacing between images */
+}
+
+.static-carousel-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+}
+
+
+.static-carousel-container {
+    display: inline-block;
+    position: relative;
+  }
+
+#static-carousel {
+    display: block;
+    max-width: 100%; /* Adjust image size to fit container */
+    height: auto;
+    object-fit: cover;
+}
+
+#static-carousel-caption {
+    width: 100%; /* Ensure it spans the entire width of the container */
+    height: 100px; /* Fixed height for the caption */
+    overflow: hidden; /* Hide overflow if the text exceeds the container height */
+    /* padding: 10px; */
+    box-sizing: border-box; /* Ensure padding doesn't affect height */
+}
+
+.arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%); /* Center the arrows vertically */
+    cursor: pointer;
+    font-size: 2em;
+    z-index: 1;
+}
+
+.arrow.left {
+    left: -40px; /* Adjust positioning if needed */
+}
+
+.arrow.right {
+    right: -40px; /* Adjust positioning if needed */
+}
+
+.background-text-box, .foreground-text-box {
+    position: absolute;
+    top: 10px;
+    background-color: rgba(0, 0, 0, 0.5); /* Semitransparent black */
+    color: white;
+    padding: 10px;
+    border-radius: 5px;
+    z-index: 3;
+}
+
+.background-text-box {
+    left: 10px;
+}
+
+.foreground-text-box {
+    right: 10px;
+}
+
+/* Zoom lens styles */
+.zoom-lens {
+    position: absolute;
+    border: 2px solid #000;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%; /* This makes the lens circular */
+    visibility: hidden;
+    background-repeat: no-repeat;
+}
+
+.mini-slider-container {
+    position: relative;
+    width: 80%; /* This can be adjusted based on your design needs */
+    margin: 20px auto; /* Ensures some space around the slider */
+  }
+
+.mini-slider-wrapper {
+position: relative;
+overflow: hidden;
+width: 100%; /* Full width to center the image properly */
+text-align: center; /* Centers the image horizontally */
+}
+
+.mini-slider {
+display: flex;
+/* width: calc(100% * (7 / 2)); Example for 3 unique slides */
+width: 220%;
+animation: slide 20s linear infinite;
+}
+
+
+.giga-container {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 20px auto;
+    border: 1px solid #000;
+    overflow: hidden;
+    width: 100%; /* Ensure the container expands properly */
+    max-width: 1024px; /* Adjust the max width */
+    height: auto;
+}
+
+.giga-zoom-lens {
+    position: absolute;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    width: 400px; /* Width of the lens */
+    height: 400px; /* Height of the lens */
+    overflow: hidden;
+    visibility: hidden;
+    display: flex;
+    pointer-events: none; /* Add this line */
+}
+
+#giga-zoom-lens-left, #giga-zoom-lens-right {
+    width: 50%;
+    height: 100%;
+    background-repeat: no-repeat;
+    pointer-events: none; /* Add this line */
+}
+
+#giga-lens-divider {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    background-color: rgba(255, 255, 255, 0.7);
+    z-index: 1;
+    pointer-events: none; /* Add this line */
+}
+
+#giga-zoom-lens-left {
+    border-right: 1px solid rgba(255, 255, 255, 0.7); /* Optional line between the halves */
+}
+
+#giga-zoom-lens-right {
+    border-left: 1px solid rgba(255, 255, 255, 0.7); /* Optional line between the halves */
+}
+
+.giga-zoom-lens, #giga-zoom-lens-left, #giga-zoom-lens-right, #giga-lens-divider {
+    pointer-events: none;
+}
+
+.images-slider-demo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+.image-slider-demo-container {
+margin: 0 20px;
+}
+.image-slider-demo-container img {
+max-width: 512px;
+height: auto;
+}
+
+#slider-demo {
+    width: 400px; /* Adjust this value for a longer slider bar */
+    margin-top: 20px;
+  }
+
+#sliderValue {
+    top: -30px;
+    left: 50%;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.bar-container {
+    display: flex;
+    align-items: center; /* Vertically centers the content */
+    justify-content: space-between;
+    width: 100%; /* Adjust this width as needed */
+    max-width: 500px; /* Adjust max width for the slider container */
+    margin: 0px auto; /* Center the slider on the page */
+  }
+  .bar-label {
+    font-size: 12px;
+    margin: 0; /* Remove margin to keep text aligned vertically */
+  }

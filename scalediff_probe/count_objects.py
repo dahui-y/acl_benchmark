@@ -233,6 +233,7 @@ def main():
     ap = argparse.ArgumentParser()
     out_default = Path(os.environ.get("SD_OUT", "./scalediff_out"))
     ap.add_argument("--batch", default=str(out_default / "batch"))
+    ap.add_argument("--subject", default="person")
     ap.add_argument("--check", action="store_true",
                     help="阳性对照：只跑 run_one 的 seed77，看能不能找到那 3 个已确认的人")
     ap.add_argument("--box-thr", type=float, default=0.30)
@@ -240,6 +241,8 @@ def main():
     ap.add_argument("--tile", type=int, default=1024)
     ap.add_argument("--stride", type=int, default=512)
     ap.add_argument("--iou", type=float, default=0.40)
+    ap.add_argument("--image", default=None,
+                    help="只查一张图：给路径，逐框存原分辨率裁块")
     ap.add_argument("--max-aspect", type=float, default=2.0,
                     help="宽/高 超过这个值的框丢掉（站立的人不会是横条）；0 关闭")
     ap.add_argument("--min-base-px", type=float, default=8.0,
@@ -247,6 +250,30 @@ def main():
     a = ap.parse_args()
 
     det = Detector(box_thr=a.box_thr, text_thr=a.text_thr)
+
+    if a.image:
+        # 逐框存裁块。30 条那一批里 empty/texture 类的计数是否可信，只能靠
+        # 肉眼核对每一个框 —— 在缩略图上猜是我们已经栽过的做法。
+        p = Path(a.image)
+        im = Image.open(p).convert("RGB")
+        crops = p.parent / f"crops_{p.stem}"
+        crops.mkdir(exist_ok=True)
+        det.dropped_aspect = det.dropped_small = 0
+        b, s_ = det.detect(im, a.subject, a.tile, a.stride, a.iou,
+                           a.max_aspect, a.min_base_px)
+        print(f"{p.name}  {im.width}²  {a.subject} x{len(b)}  "
+              f"(长宽比丢 {det.dropped_aspect}，尺度门槛丢 {det.dropped_small})")
+        for j, (bb, ss) in enumerate(sorted(zip(b, s_), key=lambda z: -z[1])):
+            cx, cy = (bb[0]+bb[2])/2/im.width, (bb[1]+bb[3])/2/im.height
+            w, h = bb[2]-bb[0], bb[3]-bb[1]
+            print(f"    #{j:<2} ({cx:.3f}, {cy:.3f})  {w:.0f}x{h:.0f}px  {ss:.2f}")
+            pad = max(w, h)
+            im.crop((int(max(0, bb[0]-pad)), int(max(0, bb[1]-pad)),
+                     int(min(im.width, bb[2]+pad)), int(min(im.height, bb[3]+pad)))
+                    ).save(crops / f"{j:02d}_{cx:.3f}_{cy:.3f}_{ss:.2f}.png")
+        annotate(im, b, s_).save(p.parent / f"D_{p.stem}.png")
+        print(f"\n逐框裁块 {crops}/    标注图 {p.parent}/D_{p.stem}.png")
+        return
 
     if a.check:
         d = out_default / "run_one"

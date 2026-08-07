@@ -56,6 +56,51 @@ def nms(boxes, scores, iou_thr=0.5):
     return keep
 
 
+def merge_split(boxes, scores, gap=24, overlap=0.6, rounds=3):
+    """把被 tile 边界切开的同一个物体接回去。
+
+    NMS 做不到这件事，实测就是证据：主角在 4096² 上高 583 px，拿到的是
+    (0.404,0.471) 214x238 和 (0.405,0.542) 220x345 —— 上半身和下半身，
+    y 只差 1 px 就接上了，但交集几乎为零，所以 IoU≈0，两个框都留了下来。
+    加整图那一遍也救不回来：完整框和下半身框 IoU=0.59 会被后者吃掉，
+    而上半身框谁也吃不掉。所以必须专门认"紧邻且另一轴对齐"这个模式。
+    """
+    B = [list(map(float, b)) for b in boxes]
+    S = [float(s) for s in scores]
+    for _ in range(rounds):
+        merged, used = [], set()
+        for i in range(len(B)):
+            if i in used:
+                continue
+            a = B[i]
+            for j in range(i + 1, len(B)):
+                if j in used:
+                    continue
+                b = B[j]
+                # 纵向紧邻 + 横向重叠够多（或反过来）
+                vgap = max(a[1], b[1]) - min(a[3], b[3])
+                hov = (min(a[2], b[2]) - max(a[0], b[0])) / max(
+                    1e-6, min(a[2] - a[0], b[2] - b[0]))
+                hgap = max(a[0], b[0]) - min(a[2], b[2])
+                vov = (min(a[3], b[3]) - max(a[1], b[1])) / max(
+                    1e-6, min(a[3] - a[1], b[3] - b[1]))
+                if (-gap <= vgap <= gap and hov >= overlap) or \
+                   (-gap <= hgap <= gap and vov >= overlap):
+                    a = [min(a[0], b[0]), min(a[1], b[1]),
+                         max(a[2], b[2]), max(a[3], b[3])]
+                    S[i] = max(S[i], S[j])
+                    used.add(j)
+            merged.append((a, S[i]))
+            used.add(i)
+        if len(merged) == len(B):
+            B = [m[0] for m in merged]
+            S = [m[1] for m in merged]
+            break
+        B = [m[0] for m in merged]
+        S = [m[1] for m in merged]
+    return np.asarray(B) if B else np.zeros((0, 4)), np.asarray(S) if S else np.zeros((0,))
+
+
 class Detector:
     def __init__(self, device="cuda", box_thr=0.30, text_thr=0.25):
         from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
@@ -81,7 +126,8 @@ class Detector:
                 text_threshold=self.text_thr, target_sizes=[img.size[::-1]])[0]
         return res["boxes"].cpu().numpy(), res["scores"].cpu().numpy()
 
-    def detect(self, img, text, tile=1024, stride=512, iou=0.40, max_aspect=2.0):
+    def detect(self, img, text, tile=1024, stride=512, iou=0.40, max_aspect=2.0,
+               min_base_px=8, base_res=1024):
         """整图 + 分块两遍，合并后 NMS。
 
         为什么必须两遍。阳性对照里主角在 4096² 上高 582 px，而 tile=1024 /
@@ -129,7 +175,20 @@ class Detector:
                 return np.zeros((0, 4)), np.zeros((0,))
 
         k = nms(B, S, iou_thr=iou)
-        return B[k], S[k]
+        B, S = merge_split(B[k], S[k])
+
+        # 尺度门槛。判据是"下采样回基图分辨率后多出来的东西"，所以一个
+        # 下采样后不足 min_base_px 的检测【不构成证据】—— 基图物理上就画不出
+        # 那么小的东西。实测 4096² 上高 17-24 px 的那一批（#6-#12），
+        # 折回 1024² 只剩 4-6 px，全是纹理噪点被读成人形。
+        # 用"基图像素"表述而不是绝对像素，2048² 和 4096² 的计数才可比。
+        if min_base_px and len(B):
+            k = img.width / base_res
+            side = np.maximum(B[:, 2] - B[:, 0], B[:, 3] - B[:, 1]) / k
+            keep = side >= min_base_px
+            self.dropped_small = int((~keep).sum())
+            B, S = B[keep], S[keep]
+        return B, S
 
 
 def annotate(img, boxes, scores, view=1400, color=(255, 0, 0)):
@@ -155,6 +214,8 @@ def main():
     ap.add_argument("--iou", type=float, default=0.40)
     ap.add_argument("--max-aspect", type=float, default=2.0,
                     help="宽/高 超过这个值的框丢掉（站立的人不会是横条）；0 关闭")
+    ap.add_argument("--min-base-px", type=float, default=8.0,
+                    help="折算回基图分辨率后短于这个值的检测丢掉；0 关闭")
     a = ap.parse_args()
 
     det = Detector(box_thr=a.box_thr, text_thr=a.text_thr)
@@ -166,9 +227,10 @@ def main():
         crops = d / "det_crops"
         crops.mkdir(exist_ok=True)
         for name, im in (("base1024", base), ("hi4096", hi)):
-            det.dropped_aspect = 0
-            b, s = det.detect(im, "person", a.tile, a.stride, a.iou, a.max_aspect)
-            print(f"\n{name}  person x{len(b)}   (按长宽比丢掉 {det.dropped_aspect} 个)")
+            det.dropped_aspect = det.dropped_small = 0
+            b, s = det.detect(im, "person", a.tile, a.stride, a.iou, a.max_aspect, a.min_base_px)
+            print(f"\n{name}  person x{len(b)}   "
+                  f"(长宽比丢掉 {det.dropped_aspect}，尺度门槛丢掉 {det.dropped_small})")
             for j, (bb, ss) in enumerate(sorted(zip(b, s), key=lambda z: -z[1])):
                 cx, cy = (bb[0] + bb[2]) / 2 / im.width, (bb[1] + bb[3]) / 2 / im.height
                 w, h = bb[2] - bb[0], bb[3] - bb[1]
@@ -187,7 +249,7 @@ def main():
         # 所以看提高阈值会不会先杀掉垃圾、后杀掉真幻影
         print("\n阈值敏感度（hi 4096）：")
         det.dropped_aspect = 0
-        b_all, s_all = det.detect(hi, "person", a.tile, a.stride, a.iou, a.max_aspect)
+        b_all, s_all = det.detect(hi, "person", a.tile, a.stride, a.iou, a.max_aspect, a.min_base_px)
         for t in (0.30, 0.40, 0.50, 0.60, 0.70, 0.80):
             print(f"    thr {t:.2f} -> {int((s_all >= t).sum())} 个")
         print("\n已确认的三个幻影：(0.76,0.40) (0.61,0.93) (0.97,0.62)")
@@ -209,7 +271,7 @@ def main():
         counts = {}
         for res, fn in sorted(r["files"].items(), key=lambda kv: int(kv[0])):
             im = Image.open(batch / fn).convert("RGB")
-            b, s = det.detect(im, r["subject"], a.tile, a.stride, a.iou, a.max_aspect)
+            b, s = det.detect(im, r["subject"], a.tile, a.stride, a.iou, a.max_aspect, a.min_base_px)
             counts[int(res)] = len(b)
             if int(res) == max(int(k) for k in r["files"]):
                 annotate(im, b, s).save(batch / f"{tag}_det_{res}.png")

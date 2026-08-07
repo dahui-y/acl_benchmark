@@ -18,8 +18,8 @@
                      4096²，query 块在图像空间上都是 512 px 一格。所以若真有
                      接缝，它应当落在 512 的整数倍上。对齐了才算证实。
 
-    python scalediff_probe/inspect.py                       # 用 SD_OUT/run_one
-    python scalediff_probe/inspect.py --dir <某个目录> --seed 77
+    python scalediff_probe/view.py                       # 用 SD_OUT/run_one
+    python scalediff_probe/view.py --dir <某个目录> --seed 77
 """
 
 import argparse

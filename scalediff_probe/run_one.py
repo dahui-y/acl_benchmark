@@ -87,6 +87,9 @@ def main():
     for st in a.stages:
         res = 1024 * (2 ** st)
         torch.cuda.empty_cache()
+        # 见 batch_run.py 里的说明：放大阶段的噪声走全局 RNG
+        torch.manual_seed(a.seed)
+        torch.cuda.manual_seed_all(a.seed)
         torch.cuda.reset_peak_memory_stats()
         t0 = time.time()
         try:

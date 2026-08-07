@@ -79,6 +79,13 @@ def main():
                 tag = f"{idx:02d}_{cat}_s{seed}"
                 if (idx, seed) in done:
                     continue
+                # 钉全局 RNG，不是只传 generator。ScaleDiff 放大阶段的
+                #     noise = torch.randn_like(latents_LFM)     (pipeline:547)
+                # 没传 generator，走全局 RNG。实测同 seed 两次跑，基图逐像素
+                # 一致而 4096² 是两张不同的图。不钉住，这批数据既不可复现，
+                # 也没法和后面的方法版本做同噪声对照。
+                torch.manual_seed(seed)
+                torch.cuda.manual_seed_all(seed)
                 torch.cuda.reset_peak_memory_stats()
                 t0 = time.time()
                 try:

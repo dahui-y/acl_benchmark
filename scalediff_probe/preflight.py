@@ -52,7 +52,17 @@ def c_pkgs():
             "einops": ("0.8.1", einops.__version__),
             "numpy": ("2.", numpy.__version__)}
     off = [f"{k}: 要 {v[0]} 实际 {v[1]}" for k, v in want.items() if not v[1].startswith(v[0])]
-    detail = f"diffusers {diffusers.__version__}, transformers {transformers.__version__}, numpy {numpy.__version__}"
+    detail = (f"diffusers {diffusers.__version__}, transformers {transformers.__version__}, "
+              f"numpy {numpy.__version__}")
+
+    # transformers 5.x 会让 `from diffusers import StableDiffusionXLPipeline` 直接炸：
+    # diffusers 0.35.1 从 transformers.utils 导入 FLAX_WEIGHTS_NAME，v5 删了它。
+    # 报错栈指向 diffusers，真正的原因是 transformers 太新 —— 所以单独查一条。
+    if int(transformers.__version__.split(".")[0]) >= 5:
+        return BAD, (detail + "\n       transformers 必须 < 5（diffusers 0.35.1 要 "
+                     "FLAX_WEIGHTS_NAME，v5 已删）。\n"
+                     '       修：pip install -i https://pypi.tuna.tsinghua.edu.cn/simple '
+                     '"transformers<5"')
     return (WARN, detail + "  << " + "; ".join(off)) if off else (OK, detail)
 
 

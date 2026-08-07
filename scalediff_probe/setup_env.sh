@@ -33,8 +33,19 @@ pip install -i $MIRROR \
     numpy==2.3.4
 
 # requirements.txt 漏掉但实际必需的
+#
+# transformers 必须钉在 4.x：diffusers 0.35.1 的 pipeline_loading_utils.py 里有
+#     from transformers.utils import FLAX_WEIGHTS_NAME
+# 而这个常量在 transformers v5 被删了。不钉版本 pip 会装 5.x，然后在
+#     from diffusers import StableDiffusionXLPipeline
+# 报 ImportError: cannot import name 'FLAX_WEIGHTS_NAME'
+# —— 报错指向 diffusers，真正的原因却是 transformers 太新。第一次装就踩了。
+#
+# torchvision 0.21.0 是配 torch 2.6.0 的版本。不装的话 transformers 会退回
+# PIL 后端并每次打印两条警告，不致命但吵。
 pip install -i $MIRROR \
-    transformers accelerate safetensors \
+    "transformers<5" torchvision==0.21.0 \
+    accelerate safetensors \
     sentencepiece protobuf \
     pillow
 

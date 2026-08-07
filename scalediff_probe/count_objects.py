@@ -154,7 +154,7 @@ class Detector:
         return res["boxes"].cpu().numpy(), res["scores"].cpu().numpy()
 
     def detect(self, img, text, tile=1024, stride=512, iou=0.40, max_aspect=2.0,
-               min_base_px=8, base_res=1024):
+               min_base_px=8, base_res=1024, min_score=0.50, max_area_frac=0.25):
         """整图 + 分块两遍，合并后 NMS。
 
         为什么必须两遍。阳性对照里主角在 4096² 上高 582 px，而 tile=1024 /
@@ -216,6 +216,33 @@ class Detector:
             keep = side >= min_base_px
             self.dropped_small = int((~keep).sum())
             B, S = B[keep], S[keep]
+
+        # 退化框。GroundingDINO 拿到一块无特征的图（冰面、沙丘）会吐出一个
+        # 覆盖【整块 tile】或整张图的低分框：实测 14_empty 的 4096² 上拿到
+        # 1023x1023 / 1022x1019 / 1022x1022 / 2047x2046，分数 0.31-0.42，
+        # 而 11_empty 的 1024² 上是 1022x937 —— 就是整幅画面。
+        # 一个恰好等于 tile 边界的"人"不是人，是检测器没东西可框。
+        self.dropped_degenerate = 0
+        if len(B):
+            w, h = B[:, 2] - B[:, 0], B[:, 3] - B[:, 1]
+            sizes = [tile, 2 * tile, img.width, img.height]
+            near = np.zeros(len(B), bool)
+            for t in sizes:
+                near |= (np.abs(w - t) < 0.03 * t) & (np.abs(h - t) < 0.03 * t)
+            too_big = (w * h) > max_area_frac * img.width * img.height
+            keep = ~(near | too_big)
+            self.dropped_degenerate = int((~keep).sum())
+            B, S = B[keep], S[keep]
+
+        # 分数下限。阳性对照里三个已确认的幻影是 0.91/0.89/0.83，垃圾框
+        # 全在 0.50 以下 —— 两者不重叠。这个阈值是【看着 seed 77 定的】，
+        # 是全套参数里唯一一个靠标定而非机制的，写论文时要单独做敏感度分析。
+        if min_score and len(B):
+            keep = S >= min_score
+            self.dropped_score = int((~keep).sum())
+            B, S = B[keep], S[keep]
+        else:
+            self.dropped_score = 0
         return B, S
 
 
@@ -245,6 +272,8 @@ def main():
                     help="只查一张图：给路径，逐框存原分辨率裁块")
     ap.add_argument("--max-aspect", type=float, default=2.0,
                     help="宽/高 超过这个值的框丢掉（站立的人不会是横条）；0 关闭")
+    ap.add_argument("--min-score", type=float, default=0.50)
+    ap.add_argument("--max-area-frac", type=float, default=0.25)
     ap.add_argument("--min-base-px", type=float, default=8.0,
                     help="折算回基图分辨率后短于这个值的检测丢掉；0 关闭")
     a = ap.parse_args()
@@ -260,9 +289,9 @@ def main():
         crops.mkdir(exist_ok=True)
         det.dropped_aspect = det.dropped_small = 0
         b, s_ = det.detect(im, a.subject, a.tile, a.stride, a.iou,
-                           a.max_aspect, a.min_base_px)
+                           a.max_aspect, a.min_base_px, 1024, a.min_score, a.max_area_frac)
         print(f"{p.name}  {im.width}²  {a.subject} x{len(b)}  "
-              f"(长宽比丢 {det.dropped_aspect}，尺度门槛丢 {det.dropped_small})")
+              f"(长宽比 {det.dropped_aspect}，尺度 {det.dropped_small}，退化框 {det.dropped_degenerate}，低分 {det.dropped_score})")
         for j, (bb, ss) in enumerate(sorted(zip(b, s_), key=lambda z: -z[1])):
             cx, cy = (bb[0]+bb[2])/2/im.width, (bb[1]+bb[3])/2/im.height
             w, h = bb[2]-bb[0], bb[3]-bb[1]
@@ -283,7 +312,7 @@ def main():
         crops.mkdir(exist_ok=True)
         for name, im in (("base1024", base), ("hi4096", hi)):
             det.dropped_aspect = det.dropped_small = 0
-            b, s = det.detect(im, "person", a.tile, a.stride, a.iou, a.max_aspect, a.min_base_px)
+            b, s = det.detect(im, "person", a.tile, a.stride, a.iou, a.max_aspect, a.min_base_px, 1024, a.min_score, a.max_area_frac)
             print(f"\n{name}  person x{len(b)}   "
                   f"(长宽比丢掉 {det.dropped_aspect}，尺度门槛丢掉 {det.dropped_small})")
             for j, (bb, ss) in enumerate(sorted(zip(b, s), key=lambda z: -z[1])):
@@ -304,7 +333,7 @@ def main():
         # 所以看提高阈值会不会先杀掉垃圾、后杀掉真幻影
         print("\n阈值敏感度（hi 4096）：")
         det.dropped_aspect = 0
-        b_all, s_all = det.detect(hi, "person", a.tile, a.stride, a.iou, a.max_aspect, a.min_base_px)
+        b_all, s_all = det.detect(hi, "person", a.tile, a.stride, a.iou, a.max_aspect, a.min_base_px, 1024, a.min_score, a.max_area_frac)
         for t in (0.30, 0.40, 0.50, 0.60, 0.70, 0.80):
             print(f"    thr {t:.2f} -> {int((s_all >= t).sum())} 个")
         print("\n已确认的三个幻影：(0.76,0.40) (0.61,0.93) (0.97,0.62)")
@@ -326,7 +355,7 @@ def main():
         counts = {}
         for res, fn in sorted(r["files"].items(), key=lambda kv: int(kv[0])):
             im = Image.open(batch / fn).convert("RGB")
-            b, s = det.detect(im, r["subject"], a.tile, a.stride, a.iou, a.max_aspect, a.min_base_px)
+            b, s = det.detect(im, r["subject"], a.tile, a.stride, a.iou, a.max_aspect, a.min_base_px, 1024, a.min_score, a.max_area_frac)
             counts[int(res)] = len(b)
             if int(res) == max(int(k) for k in r["files"]):
                 annotate(im, b, s).save(batch / f"{tag}_det_{res}.png")

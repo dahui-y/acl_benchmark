@@ -71,6 +71,13 @@ def load_pipe():
 
 def run(pipe, out, tag, seed, stage, prompt=PROMPT, steps=50):
     import torch
+    # 必须钉全局 RNG，不是只传 generator。ScaleDiff 的放大阶段用
+    #     noise = torch.randn_like(latents_LFM)          (pipeline:547)
+    # 没有传 generator，走的是全局 RNG。实测：同 seed 两次运行，基图逐像素
+    # 一致（generator 管的那段），4096² 却是两张不同的图。不钉全局 RNG，
+    # 先跑的和后跑的拿到不同噪声，任何 A/B 对照都是被污染的。
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
     torch.cuda.reset_peak_memory_stats()
     t0 = time.time()
     try:

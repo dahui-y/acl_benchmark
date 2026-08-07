@@ -101,6 +101,33 @@ def merge_split(boxes, scores, gap=24, overlap=0.6, rounds=3):
     return np.asarray(B) if B else np.zeros((0, 4)), np.asarray(S) if S else np.zeros((0,))
 
 
+def suppress_contained(boxes, scores, ios_thr=0.75):
+    """删掉基本被别的框包住的小框。
+
+    NMS 用 IoU，抓不到包含关系：实测 nosubj 那张的主角给出 226x590 和
+    216x242 两个框，小的完全落在大的里面，IoU = 0.39 恰好低于 0.40 的阈值，
+    于是主角被数成两个人。这里改用 交集/较小框面积（IoS）。
+    """
+    if len(boxes) == 0:
+        return boxes, scores
+    B, S = np.asarray(boxes, float), np.asarray(scores, float)
+    area = np.maximum(0, B[:, 2] - B[:, 0]) * np.maximum(0, B[:, 3] - B[:, 1])
+    order = area.argsort()[::-1]                 # 从大到小，大的留下
+    keep = []
+    for i in order:
+        drop = False
+        for j in keep:
+            xx1, yy1 = max(B[i, 0], B[j, 0]), max(B[i, 1], B[j, 1])
+            xx2, yy2 = min(B[i, 2], B[j, 2]), min(B[i, 3], B[j, 3])
+            inter = max(0, xx2 - xx1) * max(0, yy2 - yy1)
+            if inter / max(min(area[i], area[j]), 1e-9) > ios_thr:
+                drop = True
+                break
+        if not drop:
+            keep.append(int(i))
+    return B[keep], S[keep]
+
+
 class Detector:
     def __init__(self, device="cuda", box_thr=0.30, text_thr=0.25):
         from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
@@ -176,6 +203,7 @@ class Detector:
 
         k = nms(B, S, iou_thr=iou)
         B, S = merge_split(B[k], S[k])
+        B, S = suppress_contained(B, S)
 
         # 尺度门槛。判据是"下采样回基图分辨率后多出来的东西"，所以一个
         # 下采样后不足 min_base_px 的检测【不构成证据】—— 基图物理上就画不出

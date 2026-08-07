@@ -81,30 +81,55 @@ class Detector:
                 text_threshold=self.text_thr, target_sizes=[img.size[::-1]])[0]
         return res["boxes"].cpu().numpy(), res["scores"].cpu().numpy()
 
-    def detect(self, img, text, tile=1024, stride=512):
-        """原分辨率分块检测；小于 tile 的图直接单次前向。"""
+    def detect(self, img, text, tile=1024, stride=512, iou=0.40, max_aspect=2.0):
+        """整图 + 分块两遍，合并后 NMS。
+
+        为什么必须两遍。阳性对照里主角在 4096² 上高 582 px，而 tile=1024 /
+        stride=512 意味着任何高于 stride 的物体都会被某条 tile 边界切开：
+        实测拿到的是 (0.404,0.471) 214x238 和 (0.405,0.542) 220x345 —— 上半身
+        和下半身两个框，y 几乎不重叠，IoU≈0，NMS 合不掉。**每个大物体都被数
+        了两次。** 整图那一遍能给出完整的框（主角缩放后仍有 ~114 px，检得到），
+        NMS 就能把两个半身框吃掉。分块那一遍负责小幻影（60 px 的人整图检测时
+        只剩 12 px，必漏）。两遍各管一头。
+
+        max_aspect 过滤横条：站立的人不可能宽远大于高。实测误检的
+        (0.197,0.113) 218x63（宽高比 3.5）和 (0.533,0.075) 72x26（2.8）都在
+        天空里，是云。
+        """
         W, H = img.size
-        if W <= tile and H <= tile:
-            b, s = self._one(img, text)
-            k = nms(b, s)
-            return b[k], s[k]
-        xs = list(range(0, max(W - tile, 0) + 1, stride)) or [0]
-        ys = list(range(0, max(H - tile, 0) + 1, stride)) or [0]
-        if xs[-1] != W - tile:
-            xs.append(W - tile)
-        if ys[-1] != H - tile:
-            ys.append(H - tile)
         B, S = [], []
-        for y in ys:
-            for x in xs:
-                b, s = self._one(img.crop((x, y, x + tile, y + tile)), text)
-                for bb, ss in zip(b, s):
-                    B.append([bb[0] + x, bb[1] + y, bb[2] + x, bb[3] + y])
-                    S.append(float(ss))
+
+        # 第一遍：整图。大物体靠它。
+        b, s = self._one(img, text)
+        B += [list(map(float, x)) for x in b]
+        S += [float(x) for x in s]
+
+        # 第二遍：原分辨率分块。小物体靠它。
+        if W > tile or H > tile:
+            xs = sorted(set(list(range(0, max(W - tile, 0) + 1, stride)) + [max(W - tile, 0)]))
+            ys = sorted(set(list(range(0, max(H - tile, 0) + 1, stride)) + [max(H - tile, 0)]))
+            for y in ys:
+                for x in xs:
+                    b, s = self._one(img.crop((x, y, x + tile, y + tile)), text)
+                    for bb, ss in zip(b, s):
+                        B.append([float(bb[0]) + x, float(bb[1]) + y,
+                                  float(bb[2]) + x, float(bb[3]) + y])
+                        S.append(float(ss))
+
         if not B:
             return np.zeros((0, 4)), np.zeros((0,))
-        k = nms(B, S)
-        return np.asarray(B)[k], np.asarray(S)[k]
+        B, S = np.asarray(B), np.asarray(S)
+
+        if max_aspect:
+            w, h = B[:, 2] - B[:, 0], np.maximum(B[:, 3] - B[:, 1], 1e-6)
+            keep = (w / h) <= max_aspect
+            self.dropped_aspect = int((~keep).sum())
+            B, S = B[keep], S[keep]
+            if len(B) == 0:
+                return np.zeros((0, 4)), np.zeros((0,))
+
+        k = nms(B, S, iou_thr=iou)
+        return B[k], S[k]
 
 
 def annotate(img, boxes, scores, view=1400, color=(255, 0, 0)):
@@ -127,6 +152,9 @@ def main():
     ap.add_argument("--text-thr", type=float, default=0.25)
     ap.add_argument("--tile", type=int, default=1024)
     ap.add_argument("--stride", type=int, default=512)
+    ap.add_argument("--iou", type=float, default=0.40)
+    ap.add_argument("--max-aspect", type=float, default=2.0,
+                    help="宽/高 超过这个值的框丢掉（站立的人不会是横条）；0 关闭")
     a = ap.parse_args()
 
     det = Detector(box_thr=a.box_thr, text_thr=a.text_thr)
@@ -135,16 +163,36 @@ def main():
         d = out_default / "run_one"
         base = Image.open(d / "s77_stage2_1024.png").convert("RGB")
         hi = Image.open(d / "s77_stage2_4096.png").convert("RGB")
-        for name, im in (("base 1024", base), ("hi 4096", hi)):
-            b, s = det.detect(im, "person", a.tile, a.stride)
-            print(f"{name:<12} person x{len(b)}   scores {np.round(s, 2).tolist()}")
-            annotate(im, b, s).save(d / f"D_det_{im.width}.png")
-            for bb, ss in zip(b, s):
+        crops = d / "det_crops"
+        crops.mkdir(exist_ok=True)
+        for name, im in (("base1024", base), ("hi4096", hi)):
+            det.dropped_aspect = 0
+            b, s = det.detect(im, "person", a.tile, a.stride, a.iou, a.max_aspect)
+            print(f"\n{name}  person x{len(b)}   (按长宽比丢掉 {det.dropped_aspect} 个)")
+            for j, (bb, ss) in enumerate(sorted(zip(b, s), key=lambda z: -z[1])):
                 cx, cy = (bb[0] + bb[2]) / 2 / im.width, (bb[1] + bb[3]) / 2 / im.height
-                print(f"    ({cx:.3f}, {cy:.3f})  {bb[2]-bb[0]:.0f}x{bb[3]-bb[1]:.0f}px  {ss:.2f}")
-        print("\n已确认的三个幻影位置：(0.76,0.40) (0.61,0.93) (0.97,0.62)")
-        print("检测器必须把它们都框出来，且基图上【不能】框出它们 —— 这是阳性对照。")
-        print(f"标注图：{d}/D_det_*.png")
+                w, h = bb[2] - bb[0], bb[3] - bb[1]
+                print(f"    #{j:<2} ({cx:.3f}, {cy:.3f})  {w:.0f}x{h:.0f}px  "
+                      f"w/h={w/max(h,1):.2f}  {ss:.2f}")
+                # 每个框存一张原分辨率裁块 —— 每一个都要能被肉眼核对，
+                # 不能靠我在缩略图上猜
+                pad = max(w, h)
+                box = (max(0, bb[0] - pad), max(0, bb[1] - pad),
+                       min(im.width, bb[2] + pad), min(im.height, bb[3] + pad))
+                im.crop(tuple(map(int, box))).save(
+                    crops / f"{name}_{j:02d}_{cx:.3f}_{cy:.3f}_{ss:.2f}.png")
+            annotate(im, b, s).save(d / f"D_det_{im.width}.png")
+
+        # 阈值敏感度：三个已确认的幻影分别是 0.91 / 0.89 / 0.83，
+        # 所以看提高阈值会不会先杀掉垃圾、后杀掉真幻影
+        print("\n阈值敏感度（hi 4096）：")
+        det.dropped_aspect = 0
+        b_all, s_all = det.detect(hi, "person", a.tile, a.stride, a.iou, a.max_aspect)
+        for t in (0.30, 0.40, 0.50, 0.60, 0.70, 0.80):
+            print(f"    thr {t:.2f} -> {int((s_all >= t).sum())} 个")
+        print("\n已确认的三个幻影：(0.76,0.40) (0.61,0.93) (0.97,0.62)")
+        print("要求：这三个都在，基图上只有主角一个，且每个框的裁块肉眼看得过去。")
+        print(f"标注图 {d}/D_det_*.png    逐框裁块 {crops}/")
         return
 
     batch = Path(a.batch)
@@ -161,7 +209,7 @@ def main():
         counts = {}
         for res, fn in sorted(r["files"].items(), key=lambda kv: int(kv[0])):
             im = Image.open(batch / fn).convert("RGB")
-            b, s = det.detect(im, r["subject"], a.tile, a.stride)
+            b, s = det.detect(im, r["subject"], a.tile, a.stride, a.iou, a.max_aspect)
             counts[int(res)] = len(b)
             if int(res) == max(int(k) for k in r["files"]):
                 annotate(im, b, s).save(batch / f"{tag}_det_{res}.png")

@@ -6,7 +6,12 @@
 TEMP=/openbayes/input/input0/Sim2Struct-1000/temp
 
 export HF_HOME=$TEMP/weights/hf          # 已有的 SDXL 缓存就在 $HF_HOME/hub 下
-export HF_HUB_OFFLINE=1                  # 服务器连不上 huggingface.co
+# 跑实验时钉成离线：避免 from_pretrained 静默去网上摸一遍，也让缺权重时
+# 快速报错而不是挂住。**这不代表下不了东西** —— hf-mirror.com 在国内是通的
+# （SDXL 就是这么来的），要下新权重用 scalediff_probe/fetch_weights.sh，
+# 它会临时把这个变量置 0。
+export HF_HUB_OFFLINE=1
+export HF_ENDPOINT=${HF_ENDPOINT:-https://hf-mirror.com}
 export SD_OUT=$TEMP/scalediff_out        # 结果也写到唯一有空间的盘
 export FLUX_PATH=$TEMP/weights/FLUX.1-dev
 

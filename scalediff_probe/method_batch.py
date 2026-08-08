@@ -56,6 +56,11 @@ def main():
     ap.add_argument("--restart-ratio", type=float, default=0.4)
     ap.add_argument("--scale-factor", type=float, default=0.125)
     ap.add_argument("--only", nargs="*", default=None)
+    ap.add_argument("--norm", default="rel", choices=["rel", "minmax"],
+                    help="rel = 相对均匀分布的倍数（v2）；minmax = v1 的逐图归一化")
+    ap.add_argument("--k", type=float, default=1.0,
+                    help="rel 模式的界：注意力高于全图平均 k 倍的位置用完整 prompt")
+    ap.add_argument("--width", type=float, default=0.5, help="rel 模式过渡带宽度")
     a = ap.parse_args()
 
     import torch
@@ -105,7 +110,8 @@ def main():
             done.add((r["idx"], r["seed"]))
         print(f"manifest 里已有 {len(done)} 条，跳过\n")
 
-    print(f"{'tag':<22}{'head':<13}{'cov':>7}{'sec':>8}{'GB':>6}")
+    print(f"norm={a.norm}  k={a.k}  width={a.width}\n")
+    print(f"{'tag':<22}{'head':<13}{'cov':>7}{'过渡带':>8}{'sec':>8}{'GB':>6}")
     t_all = time.time()
     with manifest_path.open("a") as mf:
         for idx, cat, subj, prompt, head in items:
@@ -116,7 +122,8 @@ def main():
 
                 alt_prompt, removed = strip_subject(prompt, head)
                 tok_ids = subject_token_ids(pipe, prompt, head) if head else []
-                gate = BlendGate(tok_ids, strength=a.s)
+                gate = BlendGate(tok_ids, strength=a.s, norm=a.norm,
+                                 k=a.k, width=a.width)
                 holder["gate"] = gate
 
                 if tok_ids and a.s > 0:
@@ -154,9 +161,9 @@ def main():
                     continue
                 dt = time.time() - t0
 
-                cov = -1.0
+                cov, band = -1.0, -1.0
                 if gate is not None and gate.map is not None:
-                    cov = float((gate.map > 0.5).float().mean())
+                    cov, _lo, band = gate.stats()
 
                 paths = {}
                 for im in images:
@@ -178,11 +185,13 @@ def main():
                     "peak_gb": round(peak, 2), "strength": a.s, "head": head,
                     "alt_prompt": alt_prompt, "removed": removed,
                     "applied": bool(tok_ids and a.s > 0),
-                    "cov": round(cov, 4),
+                    "cov": round(cov, 4), "band": round(band, 4),
+                    "norm": a.norm, "k": a.k, "width": a.width,
                 }, ensure_ascii=False) + "\n")
                 mf.flush()
                 covs = f"{cov:6.1%}" if cov >= 0 else "     -"
-                print(f"{tag:<22}{str(head):<13}{covs}{dt:8.1f}{peak:6.1f}")
+                bs = f"{band:7.1%}" if band >= 0 else "      -"
+                print(f"{tag:<22}{str(head):<13}{covs}{bs}{dt:8.1f}{peak:6.1f}")
 
     print(f"\n总计 {(time.time() - t_all) / 60:.1f} 分钟")
     print(f"下一步:  python scalediff_probe/count_objects.py --batch {out}")

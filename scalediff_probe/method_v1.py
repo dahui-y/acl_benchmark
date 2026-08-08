@@ -64,10 +64,29 @@ assert PROMPT_NOSUBJ == ("a photograph of a rocky ridge, vast forested valley "
 
 
 class BlendGate:
-    def __init__(self, token_ids, strength=1.0, canon=64):
+    """主体位置图。norm 决定它怎么从原始注意力变成混合权重。
+
+    minmax（v1，已知有问题）：逐图 (m - min) / (max - min)。
+        只保留相对高低，**同一个 0.5 在不同图上代表完全不同的注意力强度**。
+        实测两类失败同源：
+          08_sheep  cov 11%，图太集中 —— 羊群处处注意力不低，但 min-max 拉伸后
+                    只有峰值过 0.5，89% 的画面拿到去羊群嵌入，羊群被删光
+          26/23     过渡带占 49% / 61%，图太弥散 —— 大半张画面拿到的既不是完整
+                    prompt 也不是去主体 prompt，而是任意插值，条件混乱
+        方法的实际行为因此只在 lone 上（cov 1.6~10%）符合设计。
+
+    rel（v2）：r = m / mean(m)，**相对均匀分布的倍数**，有绝对含义 ——
+        "这个位置对主体的注意力是全图平均的几倍"。以 k 倍为界，两侧留一条
+        宽 width 的过渡带。一个改动治两头：羊群处处高于均值 -> 保住；
+        肖像的弥散梯度被压成清晰的界 -> 过渡带收窄。
+    """
+
+    def __init__(self, token_ids, strength=1.0, canon=64,
+                 norm="rel", k=1.0, width=0.5):
         self.tok = token_ids
         self.s = strength
         self.canon = canon
+        self.norm, self.k, self.width = norm, k, width
         self.phase = 1
         self.alt = None           # (B, 77, D) 去主体 prompt 的嵌入，与 batch 同序
         self._acc, self._n, self.map = None, 0, None
@@ -88,8 +107,21 @@ class BlendGate:
         if self._acc is None or not self._n:
             return
         m = self._acc / self._n
-        self.map = (m - m.min()) / (m.max() - m.min() + 1e-8)
+        if self.norm == "rel":
+            r = m / (m.mean() + 1e-8)
+            self.map = ((r - self.k) / max(self.width, 1e-6) + 0.5).clamp(0, 1)
+        else:
+            self.map = (m - m.min()) / (m.max() - m.min() + 1e-8)
         self._acc, self._n = None, 0
+
+    def stats(self):
+        """cov / 低权重区 / 过渡带。过渡带太宽就是 v1 那个病。"""
+        if self.map is None:
+            return None
+        m = self.map
+        return (float((m > 0.5).float().mean()),
+                float((m < 0.3).float().mean()),
+                float(((m >= 0.3) & (m <= 0.7)).float().mean()))
 
     def weights(self, hw, device, dtype):
         """(1, HW, 1) 的混合权重：1 = 用完整 prompt，0 = 用去主体版本。"""

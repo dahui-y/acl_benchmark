@@ -162,7 +162,8 @@ class Detector:
         return res["boxes"].cpu().numpy(), res["scores"].cpu().numpy()
 
     def detect(self, img, text, tile=None, stride=None, iou=0.40, max_aspect=0.0,
-               min_base_px=8, base_res=1024, min_score=0.50, max_area_frac=0.0):
+               min_base_px=8, base_res=1024, min_score=0.50, max_area_frac=0.0,
+               degenerate_max_score=0.50):
         """整图 + 分块两遍，合并后 NMS。
 
         tile=None -> 取 img.width/4，stride 取 tile/2。**这不是调参，是修一处
@@ -257,12 +258,22 @@ class Detector:
         # 而 11_empty 的 1024² 上是 1022x937 —— 就是整幅画面。
         # 一个恰好等于 tile 边界的"人"不是人，是检测器没东西可框。
         self.dropped_degenerate = 0
+        self.degenerate_boxes = []
         if len(B):
             w, h = B[:, 2] - B[:, 0], B[:, 3] - B[:, 1]
             sizes = [tile, 2 * tile, img.width, img.height]
             near = np.zeros(len(B), bool)
             for t in sizes:
                 near |= (np.abs(w - t) < 0.03 * t) & (np.abs(h - t) < 0.03 * t)
+            # **判据是尺寸【加】低分，不是只看尺寸。** 只看尺寸时，特写肖像、
+            # 大教堂立面、俯拍键盘的主体全被删光（20/22/24/25/28/29 的 4096²
+            # 计数是 0，逐图核对确认各自恰好一个框被判成退化框）。
+            # 依据在上面：无特征区域的整图框分数 0.31-0.42，真主体 0.9 —— 两者
+            # 不重叠。低分那一批本来就过不了 min_score，所以这条规则加上分数
+            # 条件之后基本是冗余的，留着只为把"尺寸恰好等于 tile"这个模式
+            # 显式记下来。
+            if degenerate_max_score:
+                near &= S < degenerate_max_score
             # max_area_frac 是退化框规则的粗暴版本，而且有害：特写肖像、
             # 大教堂立面、俯拍键盘的主体本来就占满画面，一律被当成退化框删掉。
             # 实测 20/21/22/24/25/28/29 的 4096² 主体计数全是 0，excess 全是 -1。
@@ -272,6 +283,8 @@ class Detector:
                        if max_area_frac else np.zeros(len(B), bool))
             keep = ~(near | too_big)
             self.dropped_degenerate = int((~keep).sum())
+            self.degenerate_boxes = [(list(map(float, bb)), float(ss))
+                                     for bb, ss in zip(B[~keep], S[~keep])]
             B, S = B[keep], S[keep]
 
         # 分数下限。阳性对照里三个已确认的幻影是 0.91/0.89/0.83，垃圾框
@@ -334,6 +347,8 @@ def main():
                            a.max_aspect, a.min_base_px, 1024, a.min_score, a.max_area_frac)
         print(f"{p.name}  {im.width}²  {a.subject} x{len(b)}  "
               f"(长宽比 {det.dropped_aspect}，尺度 {det.dropped_small}，退化框 {det.dropped_degenerate}，低分 {det.dropped_score})")
+        for bb, ss in det.degenerate_boxes:
+            print(f"    [判为退化框] {bb[2]-bb[0]:.0f}x{bb[3]-bb[1]:.0f}px  分数 {ss:.2f}")
         for j, (bb, ss) in enumerate(sorted(zip(b, s_), key=lambda z: -z[1])):
             cx, cy = (bb[0]+bb[2])/2/im.width, (bb[1]+bb[3])/2/im.height
             w, h = bb[2]-bb[0], bb[3]-bb[1]

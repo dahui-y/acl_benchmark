@@ -48,16 +48,19 @@ sys.path.insert(0, str(REPO / "help_code" / "ScaleDiff" / "SDXL"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from method_v0 import subject_token_ids          # noqa: E402
+from subject_phrases import strip_subject        # noqa: E402
 
 CKPT = "stabilityai/stable-diffusion-xl-base-1.0"
 NEG = "blurry, ugly, duplicate, poorly drawn, deformed, mosaic"
 PROMPT = ("a photograph of a lone hiker standing on a rocky ridge, vast forested valley "
           "and distant snow mountains behind, golden hour")
-# 同一句去掉主体短语。景物词一个不改 —— 与 diag prompt 那个消融用的完全一致，
-# 那次的结果是幻影 5 -> 0，所以这一套嵌入的效力是已知的。
-PROMPT_NOSUBJ = ("a photograph of a rocky ridge, vast forested valley "
-                 "and distant snow mountains behind, golden hour")
 SUBJECT = "hiker"
+# 去主体 prompt 现在由规则自动生成，不再手写 —— 手写的版本证明不了方法。
+# 这个 assert 是回归护栏：规则的输出与当初手写、并已跑出 5->0 的那一句逐字相同，
+# 所以换成自动化没有改变已有结果。
+PROMPT_NOSUBJ, _REMOVED = strip_subject(PROMPT, SUBJECT)
+assert PROMPT_NOSUBJ == ("a photograph of a rocky ridge, vast forested valley "
+                         "and distant snow mountains behind, golden hour"), PROMPT_NOSUBJ
 
 
 class BlendGate:

@@ -13,11 +13,16 @@ InceptionV3 要把 4096² 压到 299²（于是看不见多一个人），而这
 
 分块是必须的，不是优化：
     GroundingDINO 内部把输入缩到 ~800 px。整张 4096² 丢进去，一个 60 px 的
-    幻影缩完只剩 12 px，必然漏检。切成 1024² 的块（步长 512，保证任何小于
-    1024 px 的物体至少被某一块完整包含）再检测，同一个幻影有 ~47 px，能测到。
+    幻影缩完只剩 12 px，必然漏检。切成块再检测，同一个幻影有 ~47 px，能测到。
+
+    tile 取 **图像边长的 1/4**（步长 tile/2），不是固定 1024。固定值会让不同
+    分辨率的表观物体尺寸差 4 倍，delta 天然为正 —— 详见 detect() 的注释，
+    这是一处已修的结构性偏差。4096² 下 width/4 恰好还是 1024，所以 4096 的
+    计数没有变化，只有基图和 2048 被修正。
 
     python scalediff_probe/count_objects.py --check      # 阳性对照：seed77 那张
     python scalediff_probe/count_objects.py              # 跑整个 batch
+    python scalediff_probe/scale_check.py                # 尺度不变性自检
 """
 
 import argparse
@@ -153,9 +158,26 @@ class Detector:
                 text_threshold=self.text_thr, target_sizes=[img.size[::-1]])[0]
         return res["boxes"].cpu().numpy(), res["scores"].cpu().numpy()
 
-    def detect(self, img, text, tile=1024, stride=512, iou=0.40, max_aspect=2.0,
+    def detect(self, img, text, tile=None, stride=None, iou=0.40, max_aspect=2.0,
                min_base_px=8, base_res=1024, min_score=0.50, max_area_frac=0.25):
         """整图 + 分块两遍，合并后 NMS。
+
+        tile=None -> 取 img.width/4，stride 取 tile/2。**这不是调参，是修一处
+        结构性偏差。** 原来 tile 固定 1024，而分块那一遍有 `if W > tile`，
+        于是 1024² 的基图根本不分块，只走整图一遍被缩到 ~800px；4096² 走整图
+        一遍 + 49 块原分辨率 tile。同一个相对大小 f 的物体，检测器实际看到：
+
+            4096²：1024 的 tile -> 缩到 800（x0.78）   f x 4096 x 0.78 = f x 3200
+            1024²：整图 1024   -> 缩到 800（x0.78）   f x 1024 x 0.78 = f x 800
+
+        **4 倍差。** delta = 高分辨率计数 - 基图计数 于是天然为正 —— 不是模型
+        多画了东西，是我们在高分辨率上看得更仔细。"rush hour, many cars" 基图
+        数出 0 辆车、"a colony of penguins" 基图 0 只，都是这么来的。
+
+        tile = width/4 之后：1024² 的 tile 是 256，被处理器放大到 800（x3.125），
+        f x 1024 x 3.125 = f x 3200 —— 与 4096² 一致。而 4096² 下 width/4 恰好
+        就是原来的 1024，**4096 的计数一个字不变**，只修基图和 2048。
+        正确性由 scale_check.py 验证：同一张图降采样后计数应当一致。
 
         为什么必须两遍。阳性对照里主角在 4096² 上高 582 px，而 tile=1024 /
         stride=512 意味着任何高于 stride 的物体都会被某条 tile 边界切开：
@@ -170,6 +192,10 @@ class Detector:
         天空里，是云。
         """
         W, H = img.size
+        if not tile:
+            tile = max(64, W // 4)
+        if not stride:
+            stride = max(32, tile // 2)
         B, S = [], []
 
         # 第一遍：整图。大物体靠它。
@@ -265,8 +291,9 @@ def main():
                     help="阳性对照：只跑 run_one 的 seed77，看能不能找到那 3 个已确认的人")
     ap.add_argument("--box-thr", type=float, default=0.30)
     ap.add_argument("--text-thr", type=float, default=0.25)
-    ap.add_argument("--tile", type=int, default=1024)
-    ap.add_argument("--stride", type=int, default=512)
+    ap.add_argument("--tile", type=int, default=0,
+                    help="0 = 自动取 width/4（尺度匹配）。给非零值会重现旧的尺度偏差")
+    ap.add_argument("--stride", type=int, default=0, help="0 = 自动取 tile/2")
     ap.add_argument("--iou", type=float, default=0.40)
     ap.add_argument("--image", default=None,
                     help="只查一张图：给路径，逐框存原分辨率裁块")

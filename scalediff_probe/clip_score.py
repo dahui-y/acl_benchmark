@@ -181,8 +181,54 @@ def sanity(clip, A, d):
     wgap = match.mean() - np.nanmean(within)
     print(f"\n  逐图判对的比例（配对 > 错配）   "
           f"{(match > shift).mean():.0%}   同类内 {(match > within).mean():.0%}")
+    # 负余弦被 max(0,·) 截到 0，所以那个"量程"被地板效应放大了。报一下原始余弦。
+    print(f"  （错配 {int((shift <= 0.01).sum())}/{n} 条被 max(0,cos) 截到 0，"
+          "所以上面的落差含地板效应）")
     print(f"\n判据: 跨类落差 {gap:.2f} 分。我们量到的干预效应是 "
           f"{0.02*match.mean()/100:+.3f} 分（+0.02%）。")
+    # ---- 第二个对照：已知的质量退化能让 CLIP 动多少 ----
+    # 上面三个数测的都是"图讲的是不是另一件事"，没有一个在测"图讲得好不好"。
+    # 而我们担心的恰恰是后者（细节糊没糊）。参照物取【RGB 双三次上采样】——
+    # LSRNA 和 ScaleDiff 的核心论据之一就是"直接双三次放大会过糊"，
+    # 这是这条线上公认的一种质量退化。
+    #   掉 5%   -> CLIP 对细节有分辨力，+0.02% 才能读作"细节没塌"
+    #   掉 0.3% -> CLIP 对细节几乎免疫，只能证明语义不变，细节要另找指标
+    deg = {"双三次 1024->4096": [], "高斯模糊 r=8": [], "JPEG q=15": []}
+    import io
+    from PIL import ImageFilter
+    for i in sorted(A):
+        f1, f4 = A[i]["files"].get("1024"), A[i]["files"].get("4096")
+        if not (f1 and f4):
+            continue
+        t = A[i]["prompt"]
+        base1k = Image.open(d / f1).convert("RGB")
+        hi = Image.open(d / f4).convert("RGB")
+        deg["双三次 1024->4096"].append(
+            clip.score(base1k.resize((4096, 4096), Image.BICUBIC), t))
+        deg["高斯模糊 r=8"].append(
+            clip.score(hi.filter(ImageFilter.GaussianBlur(8)), t))
+        buf = io.BytesIO()
+        hi.resize((1024, 1024), Image.LANCZOS).save(buf, "JPEG", quality=15)
+        buf.seek(0)
+        deg["JPEG q=15"].append(clip.score(Image.open(buf).convert("RGB"), t))
+
+    print(f"\n===== 已知质量退化的参照   n={len(deg['高斯模糊 r=8'])} =====")
+    print(f"  {'退化':<22}{'分数':>8}{'Δ':>9}{'Δ%':>9}")
+    for k, v in deg.items():
+        v = np.array(v)
+        print(f"  {k:<22}{v.mean():>8.3f}{v.mean()-match.mean():>+9.3f}"
+              f"{100*(v.mean()-match.mean())/match.mean():>+8.2f}%")
+    bic = 100 * (np.mean(deg["双三次 1024->4096"]) - match.mean()) / match.mean()
+    print(f"\n  双三次那一行是关键：领域公认它'过糊'。CLIP 对它只掉 {bic:+.2f}%。")
+    if abs(bic) < 1.0:
+        print("  -> **CLIP score 对细节几乎免疫。** 我们的 +0.02% 只能读作"
+              "'语义没变'，\n     不能读作'细节没塌' —— 细节要另找指标"
+              "（FID_c / patch 级）。\n     而这一行本身就是'现有指标看不见'的"
+              "又一个自产实例，可直接进论文。")
+    else:
+        print(f"  -> CLIP 对细节有 {abs(bic):.1f}% 的分辨力，"
+              "我们的 +0.02% 可以读作细节没塌。")
+
     if gap < 1.0:
         print("  **落差 <1 分 —— 尺子在这批图上没有量程，+0.02% 不能解读为'没变'**")
     else:

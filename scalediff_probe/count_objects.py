@@ -35,6 +35,9 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from subject_phrases import CARD          # noqa: E402
+
 MODEL_ID = "IDEA-Research/grounding-dino-base"
 
 
@@ -360,8 +363,10 @@ def main():
         # 所以看提高阈值会不会先杀掉垃圾、后杀掉真幻影
         print("\n阈值敏感度（hi 4096）：")
         det.dropped_aspect = 0
-        b_all, s_all = det.detect(hi, "person", a.tile, a.stride, a.iou, a.max_aspect, a.min_base_px, 1024, a.min_score, a.max_area_frac)
-        for t in (0.30, 0.40, 0.50, 0.60, 0.70, 0.80):
+        # min_score=0 重新检一遍。原来在已经过了 0.50 筛的分数上扫，
+        # 0.50 以下那两行是假的 —— 扫描必须从没设地板的结果出发。
+        b_all, s_all = det.detect(hi, "person", a.tile, a.stride, a.iou, a.max_aspect, a.min_base_px, 1024, 0.0, a.max_area_frac)
+        for t in (0.0, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80):
             print(f"    thr {t:.2f} -> {int((s_all >= t).sum())} 个")
         print("\n已确认的三个幻影：(0.76,0.40) (0.61,0.93) (0.97,0.62)")
         print("要求：这三个都在，基图上只有主角一个，且每个框的裁块肉眼看得过去。")
@@ -374,8 +379,9 @@ def main():
         sys.exit(f"没有 {manifest}，先跑 batch_run.py")
 
     rows = []
-    print(f"{'tag':<22}{'cat':<10}{'subject':<10}{'base':>6}{'2048':>6}{'4096':>6}{'delta':>7}")
-    print("-" * 70)
+    print(f"{'tag':<22}{'cat':<10}{'subject':<10}{'base':>6}{'2048':>6}{'4096':>6}"
+          f"{'delta':>7}{'card':>5}{'excess':>7}")
+    print("-" * 82)
     for line in manifest.open():
         r = json.loads(line)
         tag = f"{r['idx']:02d}_{r['cat']}_s{r['seed']}"
@@ -388,19 +394,32 @@ def main():
                 annotate(im, b, s).save(batch / f"{tag}_det_{res}.png")
         base_n = counts.get(1024, 0)
         hi_n = counts.get(max(counts), 0)
+        card = CARD[r["idx"]] if r["idx"] < len(CARD) else None
+        exc = None if card is None else hi_n - card
         rows.append({**{k: r[k] for k in ("idx", "cat", "subject", "seed", "prompt")},
-                     "counts": counts, "delta": hi_n - base_n})
+                     "counts": counts, "delta": hi_n - base_n,
+                     "card": card, "excess": exc})
         print(f"{tag:<22}{r['cat']:<10}{r['subject']:<10}"
               f"{counts.get(1024, 0):>6}{counts.get(2048, 0):>6}{counts.get(4096, 0):>6}"
-              f"{hi_n - base_n:>+7}")
+              f"{hi_n - base_n:>+7}"
+              f"{'  -' if card is None else f'{card:>5}'}"
+              f"{'      -' if exc is None else f'{exc:>+7}'}")
 
     (batch / "counts.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1))
     print("\n按类别汇总（delta = 4096 的个数 - 基图的个数）：")
     for cat in sorted({r["cat"] for r in rows}):
         d = [r["delta"] for r in rows if r["cat"] == cat]
+        e = [r["excess"] for r in rows if r["cat"] == cat and r["excess"] is not None]
         pos = sum(1 for x in d if x > 0)
+        es = (f"   平均 excess {np.mean(e):+.2f}   超出 prompt 基数的 "
+              f"{sum(1 for x in e if x > 0)}/{len(e)}") if e else "   （prompt 未给基数）"
         print(f"  {cat:<10} n={len(d):<3} 平均 delta {np.mean(d):+.2f}   "
-              f"有新增的 {pos}/{len(d)}")
+              f"有新增的 {pos}/{len(d)}{es}")
+    ex = [r["excess"] for r in rows if r["excess"] is not None]
+    if ex:
+        print(f"\n  主指标（excess = 4096 计数 - prompt 基数，不跨分辨率，无尺度偏差）")
+        print(f"    n={len(ex)}   平均 {np.mean(ex):+.2f}   "
+              f"超出的 {sum(1 for x in ex if x > 0)}/{len(ex)}")
     print(f"\n明细：{batch/'counts.json'}")
 
 

@@ -42,6 +42,27 @@ QUANT = {
     "handful", "cluster", "swarm", "crowd", "lot",
 }
 
+# prompt 自己声明的主体个数。**这是免费的真值标签，它写在输入里。**
+#
+# 为什么需要它：`delta = 高分辨率计数 - 基图计数` 要跨分辨率比较，而
+# scale_check 实测两档之间还有 2.00 个物体的残余漂移（tile=width/4 已经把
+# 它从 4.25 压下来了，但压不到 0）—— 基图被系统性少数，delta 被系统性做高。
+# 换成 `excess = 高分辨率计数 - 基数`，参照物是 prompt 而不是另一张图，
+# 尺度偏差整个消失。
+#
+# "a lone hiker" / "a single surfer" / "one astronaut" -> 1
+# "an empty snow field, no people"                     -> 0
+# "two hands"                                          -> 2
+# crowd / texture 的 prompt 没说数量 -> None，不进主指标
+CARD = [
+    1, 1, 1, 1, 1,                    # lone: lone / single / one / a ... boat / a single eagle
+    None, None, None, None, None,     # crowd: 没给数量
+    0, 0, 0, 0, 0,                    # empty: no people / nothing else / no landmarks
+    None, None, None, None, None,     # texture: thousands of ... 没给确切数量
+    1, 1, 1, 2, 1,                    # portrait: 一个渔夫 / 一个女子 / 一只眼 / 两只手 / 一张猫脸
+    1, 1, 1, 1, 1,                    # structure: 单个建筑物 / 桥 / 表 / 键盘 / 楼梯
+]
+
 # (idx, head)。None = prompt 里没有可数主体
 HEADS = [
     "hiker", "surfer", "astronaut", "boat", "eagle",                 # lone

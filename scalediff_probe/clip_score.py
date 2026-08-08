@@ -137,17 +137,77 @@ def rows(d):
     return {json.loads(l)["idx"]: json.loads(l) for l in p.open()}
 
 
+def sanity(clip, A, d):
+    """尺子的阳性对照 —— 和检测器那个是同一套纪律。
+
+    问题不是"CLIP score 算得对不对"，是"它有多少动态范围"。
+    +0.02% 这个结果，只有在尺子能分辨"配对 vs 错配"时才有意义：
+
+        错配掉到 ~20  -> 量程约 10 分，+0.02% 是真的"没变"
+        错配还是 ~29  -> 尺子饱和了，+0.02% 什么也没说
+
+    错配用【环形移位】而不是随机打乱：确定性，同输入同输出，
+    且保证每张图都配到别人的 prompt。同时报同类内错配 ——
+    "一个登山者"配"一个冲浪者"比配"一张猫脸"难分，同类内的落差
+    才是这把尺子在我们这个任务上的真实分辨力。
+    """
+    ii = sorted(A)
+    imgs, texts, cats = [], [], []
+    for i in ii:
+        f = A[i]["files"].get("4096")
+        if not f:
+            continue
+        imgs.append(Image.open(d / f).convert("RGB"))
+        texts.append(A[i]["prompt"])
+        cats.append(A[i]["cat"])
+    n = len(imgs)
+
+    match = np.array([clip.score(imgs[k], texts[k]) for k in range(n)])
+    shift = np.array([clip.score(imgs[k], texts[(k + 1) % n]) for k in range(n)])
+    # 同类内错配：同一 cat 里换下一条
+    within = []
+    for k in range(n):
+        same = [j for j in range(n) if cats[j] == cats[k] and j != k]
+        within.append(clip.score(imgs[k], texts[same[0]]) if same else np.nan)
+    within = np.array(within)
+
+    print(f"\n===== 尺子的阳性对照   n={n}   4096² =====")
+    print(f"  配对（图 + 自己的 prompt）      {match.mean():7.3f}")
+    print(f"  错配（图 + 下一条 prompt）      {shift.mean():7.3f}"
+          f"   落差 {shift.mean()-match.mean():+.3f}")
+    print(f"  同类内错配（同 cat 换一条）     {np.nanmean(within):7.3f}"
+          f"   落差 {np.nanmean(within)-match.mean():+.3f}")
+    gap = match.mean() - shift.mean()
+    wgap = match.mean() - np.nanmean(within)
+    print(f"\n  逐图判对的比例（配对 > 错配）   "
+          f"{(match > shift).mean():.0%}   同类内 {(match > within).mean():.0%}")
+    print(f"\n判据: 跨类落差 {gap:.2f} 分。我们量到的干预效应是 "
+          f"{0.02*match.mean()/100:+.3f} 分（+0.02%）。")
+    if gap < 1.0:
+        print("  **落差 <1 分 —— 尺子在这批图上没有量程，+0.02% 不能解读为'没变'**")
+    else:
+        print(f"  尺子有 {gap:.1f} 分的量程，干预效应比它小 {gap/max(abs(0.02*match.mean()/100),1e-9):.0f} 倍")
+        print(f"  -> +0.02% 可以解读为'全局语义没变'。同类内量程 {wgap:.2f} 分，"
+              "这才是它在本任务上的真实分辨力。")
+
+
 def main():
     root = Path(os.environ.get("SD_OUT", "./scalediff_out"))
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default=str(root / "batch"))
     ap.add_argument("--new", default=str(root / "method_batch_s1"))
     ap.add_argument("--res", type=int, nargs="+", default=[4096, 1024])
+    ap.add_argument("--sanity", action="store_true",
+                    help="尺子的阳性对照：把图和别人的 prompt 配对，看分数掉多少")
     a = ap.parse_args()
 
     A, B = rows(a.base), rows(a.new)
     idxs = sorted(set(A) & set(B))
     clip = load_clip()
+
+    if a.sanity:
+        sanity(clip, A, Path(a.base))
+        return
 
     acc = {r: {"base": [], "new": [], "cat": [], "applied": []} for r in a.res}
     for i in idxs:

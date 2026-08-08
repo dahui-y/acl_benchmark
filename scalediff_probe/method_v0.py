@@ -69,14 +69,18 @@ def subject_token_ids(pipe, prompt, subject):
 class SubjectGate:
     """记录 Phase 1 的主体注意力图，在 Phase 2 用它当门控。"""
 
-    def __init__(self, token_ids, lam=4.0, canon=64):
+    def __init__(self, token_ids, lam=4.0, canon=64, token_str=None):
         self.tok = token_ids
         self.lam = lam
         self.canon = canon
+        self.token_str = token_str or {}
         self.phase = 1
         self._acc = None          # (canon, canon) 累积的主体注意力
         self._n = 0
         self.map = None           # 归一化到 [0,1] 的成品
+        # 77 个 token 各自吸走多少注意力质量。v0 压了主体词却几乎没改变输出，
+        # 第一个要排除的解释就是"主体 token 本来就没多少权重"。
+        self._mass = None
 
     def record(self, probs, hw):
         """probs: (B, heads, HW, 77) —— 只取条件分支。"""
@@ -85,6 +89,8 @@ class SubjectGate:
         h = w = int(hw ** 0.5)
         if h * w != hw:
             return
+        mass = probs[-1].mean(dim=(0, 1)).float()              # (77,) head 和位置平均
+        self._mass = mass if self._mass is None else self._mass + mass
         m = probs[-1, :, :, self.tok].sum(-1).mean(0)          # (HW,) 各 head 平均
         m = m.reshape(1, 1, h, w).float()
         m = F.interpolate(m, size=(self.canon, self.canon), mode="bilinear",
@@ -100,7 +106,18 @@ class SubjectGate:
         # 逐图归一化：注意力的绝对尺度随层和步数变化，只有相对高低有意义
         m = (m - m.min()) / (m.max() - m.min() + 1e-8)
         self.map = m
-        self._acc, self._n = None, 0
+
+        if self._mass is not None:
+            mass = (self._mass / self._n)
+            mass = mass / mass.sum()
+            share = float(mass[self.tok].sum())
+            print(f"\n主体 token {self.tok} 吸走的注意力质量: {share:.2%}")
+            top = torch.topk(mass, 10)
+            print("注意力质量最大的 10 个 token:")
+            for v, i in zip(top.values.tolist(), top.indices.tolist()):
+                mark = "  <- 主体" if i in self.tok else ""
+                print(f"    [{i:2d}] {self.token_str.get(i, '?'):<16} {v:6.2%}{mark}")
+        self._acc, self._n, self._mass = None, 0, None
 
     def bias(self, hw, device, dtype):
         """返回 (HW, 77) 的加性偏置：主体词在低响应处被压 lam。"""
@@ -206,7 +223,11 @@ def main():
     if not tok_ids:
         sys.exit("找不到主体词，检查 --subject 是否出现在 PROMPT 里")
 
-    gate = SubjectGate(tok_ids, lam=a.lam)
+    tk = pipe.tokenizer
+    ids = tk(PROMPT, padding="max_length", max_length=tk.model_max_length,
+             truncation=True, return_tensors="pt").input_ids[0].tolist()
+    tstr = {i: tk.decode([t]).strip() for i, t in enumerate(ids)}
+    gate = SubjectGate(tok_ids, lam=a.lam, token_str=tstr)
     print(f"换掉 {install(pipe, gate)} 个 attn2 处理器,  lam={a.lam}")
 
     orig = pipe.noise_pred_step

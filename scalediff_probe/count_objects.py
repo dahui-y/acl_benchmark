@@ -161,8 +161,8 @@ class Detector:
                 text_threshold=self.text_thr, target_sizes=[img.size[::-1]])[0]
         return res["boxes"].cpu().numpy(), res["scores"].cpu().numpy()
 
-    def detect(self, img, text, tile=None, stride=None, iou=0.40, max_aspect=2.0,
-               min_base_px=8, base_res=1024, min_score=0.50, max_area_frac=0.25):
+    def detect(self, img, text, tile=None, stride=None, iou=0.40, max_aspect=0.0,
+               min_base_px=8, base_res=1024, min_score=0.50, max_area_frac=0.0):
         """整图 + 分块两遍，合并后 NMS。
 
         tile=None -> 取 img.width/4，stride 取 tile/2。**这不是调参，是修一处
@@ -190,9 +190,14 @@ class Detector:
         NMS 就能把两个半身框吃掉。分块那一遍负责小幻影（60 px 的人整图检测时
         只剩 12 px，必漏）。两遍各管一头。
 
-        max_aspect 过滤横条：站立的人不可能宽远大于高。实测误检的
-        (0.197,0.113) 218x63（宽高比 3.5）和 (0.533,0.075) 72x26（2.8）都在
-        天空里，是云。
+        max_aspect / max_area_frac **默认已关闭**（0）。它们当初是在 lone 这一
+        类上为了杀特定误检加的（云的横条、无特征区域的整图框），然后把其余
+        类别的主体一起杀了：特写肖像、大教堂立面、俯拍键盘的主体占满画面，
+        被 max_area_frac 删光（20/21/22/24/25/28/29 的 4096² 计数全是 0）；
+        桥的侧视图又宽又扁，被 max_aspect 删掉（26 的 delta 是 -2）。
+        delta 看不见这件事（base 和 4096 都是 0），excess 一眼就露出来。
+        它们想杀的东西分别由 min_score 和上面的退化框尺寸规则覆盖。
+        需要复现旧行为就传 --max-aspect 2.0 --max-area-frac 0.25。
         """
         W, H = img.size
         if not tile:
@@ -258,7 +263,13 @@ class Detector:
             near = np.zeros(len(B), bool)
             for t in sizes:
                 near |= (np.abs(w - t) < 0.03 * t) & (np.abs(h - t) < 0.03 * t)
-            too_big = (w * h) > max_area_frac * img.width * img.height
+            # max_area_frac 是退化框规则的粗暴版本，而且有害：特写肖像、
+            # 大教堂立面、俯拍键盘的主体本来就占满画面，一律被当成退化框删掉。
+            # 实测 20/21/22/24/25/28/29 的 4096² 主体计数全是 0，excess 全是 -1。
+            # 上面那条"框尺寸落在 tile / 2*tile / 图像尺寸的 3% 以内"已经精确
+            # 覆盖了它想杀的东西。0 = 关闭。
+            too_big = ((w * h) > max_area_frac * img.width * img.height
+                       if max_area_frac else np.zeros(len(B), bool))
             keep = ~(near | too_big)
             self.dropped_degenerate = int((~keep).sum())
             B, S = B[keep], S[keep]
@@ -300,10 +311,11 @@ def main():
     ap.add_argument("--iou", type=float, default=0.40)
     ap.add_argument("--image", default=None,
                     help="只查一张图：给路径，逐框存原分辨率裁块")
-    ap.add_argument("--max-aspect", type=float, default=2.0,
+    ap.add_argument("--max-aspect", type=float, default=0.0,
                     help="宽/高 超过这个值的框丢掉（站立的人不会是横条）；0 关闭")
     ap.add_argument("--min-score", type=float, default=0.50)
-    ap.add_argument("--max-area-frac", type=float, default=0.25)
+    ap.add_argument("--max-area-frac", type=float, default=0.0,
+                    help="0 = 关闭（默认）。退化框已由 tile 尺寸规则精确覆盖")
     ap.add_argument("--min-base-px", type=float, default=8.0,
                     help="折算回基图分辨率后短于这个值的检测丢掉；0 关闭")
     a = ap.parse_args()

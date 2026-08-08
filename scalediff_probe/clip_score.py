@@ -33,50 +33,101 @@ import numpy as np
 import torch
 from PIL import Image
 
-# SDXL 自带 openai/clip-vit-large-patch14 的文本塔，视觉塔不一定在缓存里。
-# 按优先级试，把缓存里有的那个用上；都没有就明确报错，不要静默换模型。
-CANDIDATES = [
+# 两种来源都试。服务器上 hf-mirror 也不通了，所以**不下载任何权重**：
+#   1) HF 格式的 CLIPModel（缓存里若有就用）
+#   2) 缓存里已有的 open_clip 权重
+#      laion/CLIP-convnext_large_d_320.laion2B-s29B-b131K-ft-soup（1.4 GB）
+#      那个仓库只有 open_clip_model.safetensors，没有 config —— 不要紧，
+#      open_clip 的架构按名字内建，BPE 词表也打包在 wheel 里，
+#      所以只需要 pip 装一个纯 Python 包：
+#          pip install -i https://pypi.tuna.tsinghua.edu.cn/simple open_clip_torch
+#      它是 LAION-2B 上训的，和 ScaleDiff / AccDiffusion v2 用的塔同源。
+HF_CANDIDATES = [
     "openai/clip-vit-large-patch14",
     "openai/clip-vit-base-patch32",
     "laion/CLIP-ViT-bigG-14-laion2B-39B-b160k",
-    "laion/CLIP-ViT-g-14-laion2B-s12B-b42K",
+]
+OPENCLIP_CANDIDATES = [
+    ("convnext_large_d_320",
+     "models--laion--CLIP-convnext_large_d_320.laion2B-s29B-b131K-ft-soup"),
 ]
 
 
+class HFClip:
+    def __init__(self, mid, model, proc):
+        self.name, self.m, self.p = mid, model, proc
+
+    @torch.no_grad()
+    def score(self, img, text):
+        inp = self.p(text=[text], images=img, return_tensors="pt",
+                     padding=True, truncation=True).to("cuda")
+        o = self.m(**inp)
+        ie = o.image_embeds / o.image_embeds.norm(dim=-1, keepdim=True)
+        te = o.text_embeds / o.text_embeds.norm(dim=-1, keepdim=True)
+        return float(100.0 * max(0.0, (ie * te).sum().item()))
+
+
+class OpenClip:
+    def __init__(self, arch, ckpt):
+        import open_clip
+        self.name = f"open_clip:{arch}"
+        self.m, _, self.pre = open_clip.create_model_and_transforms(
+            arch, pretrained=str(ckpt))
+        self.m = self.m.eval().to("cuda")
+        self.tok = open_clip.get_tokenizer(arch)
+
+    @torch.no_grad()
+    def score(self, img, text):
+        im = self.pre(img).unsqueeze(0).to("cuda")
+        tt = self.tok([text]).to("cuda")
+        ie = self.m.encode_image(im)
+        te = self.m.encode_text(tt)
+        ie = ie / ie.norm(dim=-1, keepdim=True)
+        te = te / te.norm(dim=-1, keepdim=True)
+        return float(100.0 * max(0.0, (ie * te).sum().item()))
+
+
 def load_clip():
-    from transformers import CLIPModel, CLIPProcessor
-    errs = []
-    for mid in CANDIDATES:
-        try:
-            m = CLIPModel.from_pretrained(mid).eval().to("cuda")
-            p = CLIPProcessor.from_pretrained(mid)
-            print(f"用 {mid}")
-            return mid, m, p
-        except Exception as e:                       # 缓存里没有就换下一个
-            errs.append(f"  {mid}: {type(e).__name__}")
-    print("缓存里没有任何完整的 CLIP 模型（文本塔不够，要视觉塔）：")
-    print("\n".join(errs))
-    print("\n在能上外网的机器上抓一个，拷进 $HF_HOME/hub 即可：")
-    print('  python -c "from transformers import CLIPModel, CLIPProcessor; '
-          "m='openai/clip-vit-base-patch32'; CLIPModel.from_pretrained(m); "
-          'CLIPProcessor.from_pretrained(m)"')
-    sys.exit(1)
-
-
-@torch.no_grad()
-def score(model, proc, img, text):
     """CLIP score = 100 * max(0, cos(图嵌入, 文本嵌入))，沿用通行定义。
 
-    CLIP 视觉塔输入是 224²。4096² 直接喂进去会被缩 18 倍 —— 这正是
-    FID 看不见幻影的同一个原因。但这里问的是"整幅图还符不符合 prompt"，
+    CLIP 视觉塔输入是 224²/320²。4096² 喂进去会被缩十几倍 —— 这正是 FID
+    看不见幻影的同一个原因。但这里问的是"整幅图还符不符合 prompt"，
     是全局语义，缩放不影响这个问法。**不要拿它去测幻影。**
     """
-    inp = proc(text=[text], images=img, return_tensors="pt",
-               padding=True, truncation=True).to("cuda")
-    out = model(**inp)
-    ie = out.image_embeds / out.image_embeds.norm(dim=-1, keepdim=True)
-    te = out.text_embeds / out.text_embeds.norm(dim=-1, keepdim=True)
-    return float(100.0 * max(0.0, (ie * te).sum().item()))
+    errs = []
+    for mid in HF_CANDIDATES:
+        try:
+            from transformers import CLIPModel, CLIPProcessor
+            c = HFClip(mid, CLIPModel.from_pretrained(mid).eval().to("cuda"),
+                       CLIPProcessor.from_pretrained(mid))
+            print(f"用 {mid}")
+            return c
+        except Exception as e:
+            errs.append(f"  {mid}: {type(e).__name__}")
+
+    hub = Path(os.environ.get("HF_HOME", "")) / "hub"
+    for arch, repo in OPENCLIP_CANDIDATES:
+        cks = sorted((hub / repo / "snapshots").glob("*/open_clip_model.safetensors")) \
+            if (hub / repo).exists() else []
+        if not cks:
+            errs.append(f"  {repo}: 缓存里没有")
+            continue
+        try:
+            c = OpenClip(arch, cks[0])
+            print(f"用 {c.name}   {cks[0]}")
+            return c
+        except ImportError:
+            errs.append(f"  {repo}: 权重在，但没装 open_clip_torch")
+        except Exception as e:
+            errs.append(f"  {repo}: {type(e).__name__}: {e}")
+
+    print("拿不到可用的 CLIP：")
+    print("\n".join(errs))
+    print("\n最省事的一条（权重已在缓存里，只差一个纯 Python 包）：")
+    print("  pip install -i https://pypi.tuna.tsinghua.edu.cn/simple open_clip_torch")
+    print("\n若 pip 也不通，就把图缩到 1024² 拷到 Mac 上算 —— "
+          "CLIP 视觉塔输入只有 224²，缩放不影响这个问法。")
+    sys.exit(1)
 
 
 def rows(d):
@@ -96,7 +147,7 @@ def main():
 
     A, B = rows(a.base), rows(a.new)
     idxs = sorted(set(A) & set(B))
-    _, model, proc = load_clip()
+    clip = load_clip()
 
     acc = {r: {"base": [], "new": [], "cat": [], "applied": []} for r in a.res}
     for i in idxs:
@@ -105,8 +156,8 @@ def main():
             if not fa or not fb:
                 continue
             t = A[i]["prompt"]
-            acc[r]["base"].append(score(model, proc, Image.open(Path(a.base) / fa).convert("RGB"), t))
-            acc[r]["new"].append(score(model, proc, Image.open(Path(a.new) / fb).convert("RGB"), t))
+            acc[r]["base"].append(clip.score(Image.open(Path(a.base) / fa).convert("RGB"), t))
+            acc[r]["new"].append(clip.score(Image.open(Path(a.new) / fb).convert("RGB"), t))
             acc[r]["cat"].append(A[i]["cat"])
             acc[r]["applied"].append(bool(B[i].get("applied", True)))
 

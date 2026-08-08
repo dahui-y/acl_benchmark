@@ -89,7 +89,9 @@ def main():
     print(f"  相同 {same} / 不一致 {bad}"
           + ("   -> 管线无漂移" if bad == 0 else "   -> 下面的差值不可归因"))
 
-    hdr = f"\n{'idx':<5}{'cat':<10}{'head':<13}{'cov':>7}{'base d':>8}{'new d':>7}{'Δ':>6}"
+    # 主看 excess（相对 prompt 基数，无尺度偏差），delta 只作参考
+    hdr = (f"\n{'idx':<5}{'cat':<10}{'head':<13}{'cov':>7}"
+           f"{'base e':>8}{'new e':>7}{'Δe':>5}   {'base d':>7}{'new d':>7}")
     print(hdr)
     print("-" * len(hdr))
     for i in idxs:
@@ -97,30 +99,44 @@ def main():
         m = mb.get(i, {})
         cov = m.get("cov", -1)
         cs = f"{cov:6.1%}" if cov is not None and cov >= 0 else "     -"
+        re_, qe = r.get("excess"), q.get("excess")
         mark = ""
         if not m.get("applied", True):
             mark = "  (未干预)"
-        elif q["delta"] < r["delta"]:
+        elif re_ is None or qe is None:
+            mark = "  (无基数)"
+        elif qe < re_:
             mark = "  好转"
-        elif q["delta"] > r["delta"]:
+        elif qe > re_:
             mark = "  变差"
-        print(f"{i:<5}{r['cat']:<10}{str(m.get('head')):<13}{cs}"
-              f"{r['delta']:>+8}{q['delta']:>+7}{q['delta'] - r['delta']:>+6}{mark}")
+        es = ("       -      -    -" if re_ is None or qe is None
+              else f"{re_:>+8}{qe:>+7}{qe - re_:>+5}")
+        print(f"{i:<5}{r['cat']:<10}{str(m.get('head')):<13}{cs}{es}"
+              f"   {r['delta']:>+7}{q['delta']:>+7}{mark}")
 
-    print(f"\n{'cat':<12}{'base':>16}{'new':>16}")
-    print("-" * 44)
-    for cat in sorted({A[i]["cat"] for i in idxs}):
-        ii = [i for i in idxs if A[i]["cat"] == cat]
-        da = [A[i]["delta"] for i in ii]
-        db = [B[i]["delta"] for i in ii]
-        print(f"{cat:<12}"
-              f"{sum(da) / len(da):>+9.2f} {sum(1 for x in da if x > 0)}/{len(da):<5}"
-              f"{sum(db) / len(db):>+9.2f} {sum(1 for x in db if x > 0)}/{len(db):<5}")
-    da = [A[i]["delta"] for i in idxs]
-    db = [B[i]["delta"] for i in idxs]
-    print(f"{'全部':<11}"
-          f"{sum(da) / len(da):>+9.2f} {sum(1 for x in da if x > 0)}/{len(da):<5}"
-          f"{sum(db) / len(db):>+9.2f} {sum(1 for x in db if x > 0)}/{len(db):<5}")
+    def agg(title, key, pick):
+        print(f"\n{title}\n{'cat':<12}{'base':>16}{'new':>16}")
+        print("-" * 44)
+        for cat in sorted({A[i]["cat"] for i in idxs}):
+            ii = [i for i in idxs if A[i]["cat"] == cat and pick(i)]
+            if not ii:
+                continue
+            da = [A[i][key] for i in ii]
+            db = [B[i][key] for i in ii]
+            print(f"{cat:<12}"
+                  f"{sum(da)/len(da):>+9.2f} {sum(1 for x in da if x > 0)}/{len(da):<5}"
+                  f"{sum(db)/len(db):>+9.2f} {sum(1 for x in db if x > 0)}/{len(db):<5}")
+        ii = [i for i in idxs if pick(i)]
+        da = [A[i][key] for i in ii]
+        db = [B[i][key] for i in ii]
+        print(f"{'全部':<11}"
+              f"{sum(da)/len(da):>+9.2f} {sum(1 for x in da if x > 0)}/{len(da):<5}"
+              f"{sum(db)/len(db):>+9.2f} {sum(1 for x in db if x > 0)}/{len(db):<5}")
+
+    agg("主指标 excess = 4096 计数 - prompt 基数（无尺度偏差）", "excess",
+        lambda i: A[i].get("excess") is not None and B[i].get("excess") is not None)
+    agg("参考 delta = 4096 计数 - 基图计数（仍带约 +2 的尺度偏移）", "delta",
+        lambda i: True)
 
     # 主角有没有被一起抹掉：基图计数应当保持
     lost = [i for i in idxs

@@ -105,9 +105,12 @@ def main():
             mark = "  (未干预)"
         elif re_ is None or qe is None:
             mark = "  (无基数)"
-        elif qe < re_:
+        # 目标是 |excess| = 0，不是 excess 最小。
+        # 23_hands 的 card=2，excess -1 -> -2 是"两只手都被删了"，
+        # 按符号比会被标成好转 —— 那是最严重的回归之一。
+        elif abs(qe) < abs(re_):
             mark = "  好转"
-        elif qe > re_:
+        elif abs(qe) > abs(re_):
             mark = "  变差"
         es = ("       -      -    -" if re_ is None or qe is None
               else f"{re_:>+8}{qe:>+7}{qe - re_:>+5}")
@@ -133,8 +136,34 @@ def main():
               f"{sum(da)/len(da):>+9.2f} {sum(1 for x in da if x > 0)}/{len(da):<5}"
               f"{sum(db)/len(db):>+9.2f} {sum(1 for x in db if x > 0)}/{len(db):<5}")
 
-    agg("主指标 excess = 4096 计数 - prompt 基数（无尺度偏差）", "excess",
-        lambda i: A[i].get("excess") is not None and B[i].get("excess") is not None)
+    def agg_mae(pick):
+        """MAE = 平均 |excess|。符号平均会互相抵消（多画一个和少画一个都是错），
+        而且 T2I 计数线（CountGen 等）通行的就是 MAE —— 顺带与成熟协议对齐。"""
+        print(f"\n主指标 MAE = 平均 |4096 计数 - prompt 基数|（0 最好）"
+              f"\n{'cat':<12}{'base':>16}{'new':>16}")
+        print("-" * 44)
+        for cat in sorted({A[i]["cat"] for i in idxs}):
+            ii = [i for i in idxs if A[i]["cat"] == cat and pick(i)]
+            if not ii:
+                continue
+            da = [abs(A[i]["excess"]) for i in ii]
+            db = [abs(B[i]["excess"]) for i in ii]
+            print(f"{cat:<12}"
+                  f"{sum(da)/len(da):>9.2f} {sum(1 for x in da if x)}/{len(da):<5}"
+                  f"{sum(db)/len(db):>9.2f} {sum(1 for x in db if x)}/{len(db):<5}")
+        ii = [i for i in idxs if pick(i)]
+        da = [abs(A[i]["excess"]) for i in ii]
+        db = [abs(B[i]["excess"]) for i in ii]
+        ma, mb_ = sum(da)/len(da), sum(db)/len(db)
+        print(f"{'全部':<11}"
+              f"{ma:>9.2f} {sum(1 for x in da if x)}/{len(da):<5}"
+              f"{mb_:>9.2f} {sum(1 for x in db if x)}/{len(db):<5}"
+              f"   {100*(mb_-ma)/max(ma,1e-9):+.0f}%")
+
+    has = lambda i: (A[i].get("excess") is not None
+                     and B[i].get("excess") is not None)
+    agg_mae(has)
+    agg("参考：带符号的 excess（会正负抵消，只作诊断用）", "excess", has)
     agg("参考 delta = 4096 计数 - 基图计数（仍带约 +2 的尺度偏移）", "delta",
         lambda i: True)
 

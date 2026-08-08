@@ -75,6 +75,13 @@ def main():
     pipe = CustomStableDiffusionXLPipeline.from_pretrained(CKPT, **kw).to("cuda")
     pipe.vae.enable_tiling()
 
+    # 原版的 attn2 处理器，留着做退回。
+    # 不能用 set_default_attn_processor()：第一次 pipe() 之后 attn1 上装的是
+    # ScaleDiff 的 AttnProcessor2_0_local，diffusers 见到非默认处理器就抛
+    # ValueError。而且我们本来也只想还原 attn2，attn1 归 ScaleDiff 管。
+    BASE_ATTN2 = {k: v for k, v in pipe.unet.attn_processors.items()
+                  if k.endswith("attn2.processor")}
+
     # noise_pred_step 只包一次；用可变 holder 指向当前 prompt 的 gate
     holder = {"gate": None}
     orig_step = pipe.noise_pred_step
@@ -123,8 +130,10 @@ def main():
                             procs[k_] = BlendCrossAttn(gate)
                     pipe.unet.set_attn_processor(procs)
                 else:
-                    # 没有主体词，或 s=0：退回原版处理器，走和基线完全一样的路径
-                    pipe.unet.set_default_attn_processor()
+                    # 没有主体词，或 s=0：只把 attn2 还原成原版，attn1 不动
+                    procs = dict(pipe.unet.attn_processors)
+                    procs.update(BASE_ATTN2)
+                    pipe.unet.set_attn_processor(procs)
                     holder["gate"] = None
 
                 # 放大阶段的噪声走全局 RNG（pipeline:547 没传 generator）

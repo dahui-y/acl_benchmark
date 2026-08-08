@@ -51,8 +51,27 @@ def main():
     if len(idxs) < max(len(A), len(B)):
         print(f"注意: 只有 {len(idxs)} 条两边都有\n")
 
-    # 完整性核查
-    print("完整性核查 —— 未干预的行应当逐字节相同")
+    # 基图哈希 —— 决定性的一步。
+    # 基图在放大之前生成，两边同 seed 同 RNG，本该逐字节相同。
+    #   基图相同而计数不同 -> 两张 counts.json 是不同版本的检测器算的
+    #   基图不同           -> phase 1 的数值路径把基图也改了，A/B 不成立
+    print("基图（1024²）逐字节核查 —— 决定下面的表能不能读")
+    diff_base, same_base = [], []
+    for i in idxs:
+        fa, fb = ma.get(i, {}).get("files", {}), mb.get(i, {}).get("files", {})
+        if "1024" not in fa or "1024" not in fb:
+            continue
+        ha, hb = md5(Path(a.base) / fa["1024"]), md5(Path(a.new) / fb["1024"])
+        (same_base if ha == hb else diff_base).append(i)
+    print(f"  相同 {len(same_base)} / 不同 {len(diff_base)}")
+    if diff_base:
+        print(f"  不同的行: {diff_base}")
+        print("  -> phase 1 的数值路径改了基图。整个 A/B 不可归因，必须重跑。")
+    else:
+        print("  -> 基图全同。基图计数若仍有差，那是两张 counts.json 版本不一致，"
+              "重新数一遍基线即可。")
+
+    print("\n完整性核查 —— 未干预的行应当逐字节相同")
     bad = same = 0
     for i in idxs:
         applied = mb.get(i, {}).get("applied", True)

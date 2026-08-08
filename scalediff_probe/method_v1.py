@@ -133,12 +133,15 @@ class BlendCrossAttn:
         qh, kh, vh = heads(q), heads(k), heads(v)
         is_cross = encoder_hidden_states is not None and kh.shape[2] == 77
 
+        # 输出【始终】走 SDPA。录主体图要显式 softmax，但那份 probs 只用来看，
+        # 不参与前向 —— 否则 fp16 下两条路径的数值差会改掉基图，第一步的微小
+        # 扰动一路放大，A/B 的两边就不是同一张基图了（实测 19/30 行基图计数变了）。
+        out = F.scaled_dot_product_attention(qh, kh, vh)
         if is_cross and self.gate.phase == 1:
-            probs = (qh @ kh.transpose(-1, -2) * (hd ** -0.5)).softmax(-1)
-            self.gate.record(probs.detach(), HW)
-            out = probs @ vh
+            with torch.no_grad():
+                probs = (qh @ kh.transpose(-1, -2) * (hd ** -0.5)).softmax(-1)
+            self.gate.record(probs, HW)
         else:
-            out = F.scaled_dot_product_attention(qh, kh, vh)
             wmap = self.gate.weights(HW, q.device, q.dtype) if is_cross else None
             if wmap is not None and self.gate.alt is not None:
                 alt = self.gate.alt.to(q.dtype)

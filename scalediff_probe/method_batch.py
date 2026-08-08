@@ -163,6 +163,14 @@ def main():
                     p = out / f"{tag}_{im.width}.png"
                     im.save(p)
                     paths[im.width] = p.name
+                # 把混合权重图存下来。诊断 26_bridge / 27_watch 变差要用它：
+                # 多出来的物体落在过渡带上（-> 接缝伪影，该改混合方式）
+                # 还是落在远景里（-> 去主体 prompt 泄漏，该改摘除规则）。
+                # 两个解释指向完全不同的修法，必须先分开。
+                if gate is not None and gate.map is not None:
+                    import numpy as _np
+                    _np.save(out / f"{tag}_map.npy",
+                             gate.map.float().cpu().numpy())
                 peak = torch.cuda.max_memory_allocated() / 2**30
                 mf.write(json.dumps({
                     "idx": idx, "cat": cat, "subject": subj, "prompt": prompt,

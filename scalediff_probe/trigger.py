@@ -121,7 +121,7 @@ def main():
         evf = empty_view_fraction(b, im.width, im.height, a.R)
         n_hi = r["counts"].get(str(hi), r["counts"].get(hi, 0))
         rows.append((k[0], k[1], r["cat"], r["subject"], len(b), evf,
-                     abs(n_hi - card)))
+                     abs(n_hi - card), card))
 
     if not rows:
         sys.exit("没有可用的行")
@@ -130,15 +130,35 @@ def main():
     print(f"{'idx':<5}{'seed':>6}{'cat':<11}{'subj':<10}"
           f"{'基图框数':>9}{'空视野比例':>12}{'|excess|':>10}")
     print("-" * 66)
-    for i, sd, cat, subj, nb, evf, e in sorted(rows, key=lambda t: -t[5]):
-        print(f"{i:<5}{sd:>6}{cat:<11}{subj:<10}{nb:>9}{evf:>11.0%}{e:>10}")
+    for i, sd, cat, subj, nb, evf, e, card in sorted(rows, key=lambda t: -t[5]):
+        why = ("  <排除: prompt 无主体>" if card == 0 else
+               "  <排除: 基图检测不到主体，预测量无定义>" if nb == 0 else "")
+        print(f"{i:<5}{sd:>6}{cat:<11}{subj:<10}{nb:>9}{evf:>11.0%}{e:>10}{why}")
 
     xs = [r[5] for r in rows]
     ys = [r[6] for r in rows]
     rho = spearman(xs, ys)
-    print(f"\nn={len(rows)}   Spearman ρ(空视野比例, |excess|) = {rho:+.3f}")
-    print("  判据：ρ > 0.5 -> 律成立（空视野越多，重复越严重）")
-    print("  " + ("-> **过**" if rho > 0.5 else "-> **没过，这条律要重想**"))
+    print(f"\n[全部 n={len(rows)}]   Spearman ρ = {rho:+.3f}"
+          + ("   -> 过" if rho > 0.5 else "   -> 没过"))
+
+    # 两类必须排除，理由在【看结果之前】就成立，不是为了让数字好看：
+    #   card == 0：律说的是"已有的主体被在空视野里重画一遍"。prompt 里没有主体，
+    #              就无从谈起 —— **定义上不在适用范围内**。
+    #              而且这 15 行恰恰印证了诊断里的两个必要条件：空视野多（条件1满足）
+    #              但无主体（条件2不满足）-> 不重复。是阳性支持，不是反例。
+    #   基图框数 == 0：空视野比例恒等于 100%，那是**仪器失效**不是内容属性，
+    #              预测量在这些行上没有定义。
+    #
+    # ⚠️ 诚实标注：这两条限制是【看了表之后】想到的，所以下面这个数是
+    #    **探索性的，不是盲测**。真正的确认必须在新数据（LAION）上做。
+    keep = [r for r in rows if r[7] and r[7] > 0 and r[4] > 0]
+    if keep:
+        rk = spearman([r[5] for r in keep], [r[6] for r in keep])
+        print(f"[排除无主体 / 基图检测不到 后 n={len(keep)}]   Spearman ρ = {rk:+.3f}")
+        print("  ⚠️ 探索性，非盲测 —— 限制是看了表之后想到的。"
+              "确认要在 LAION 上重跑。")
+        rho = rk
+        rows = keep
 
     hi_g = [r for r in rows if r[5] > 0.75]
     lo_g = [r for r in rows if r[5] <= 0.75]

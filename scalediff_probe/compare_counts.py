@@ -18,10 +18,12 @@ from pathlib import Path
 
 
 def load(d):
+    """键必须是 (idx, seed)。只用 idx 的话，多 seed 时同一个 idx 的三条会互相覆盖，
+    **只剩最后一个 seed，而且不报错** —— 静默给出错误结论。踩过。"""
     p = Path(d) / "counts.json"
     if not p.exists():
         raise SystemExit(f"没有 {p}，先跑 count_objects.py --batch {d}")
-    return {r["idx"]: r for r in json.loads(p.read_text())}
+    return {(r["idx"], r["seed"]): r for r in json.loads(p.read_text())}
 
 
 def md5(p):
@@ -34,7 +36,7 @@ def files_by_idx(d):
     if mp.exists():
         for line in mp.open():
             r = json.loads(line)
-            out[r["idx"]] = r
+            out[(r["idx"], r["seed"])] = r
     return out
 
 
@@ -47,9 +49,13 @@ def main():
 
     A, B = load(a.base), load(a.new)
     ma, mb = files_by_idx(a.base), files_by_idx(a.new)
-    idxs = sorted(set(A) & set(B))
-    if len(idxs) < max(len(A), len(B)):
-        print(f"注意: 只有 {len(idxs)} 条两边都有\n")
+    keys = sorted(set(A) & set(B))
+    seeds = sorted({k[1] for k in keys})
+    if len(keys) < max(len(A), len(B)):
+        print(f"注意: 只有 {len(keys)} 条两边都有")
+    print(f"seed: {seeds}   共 {len(keys)} 对\n")
+    # 逐行明细只打第一个 seed，跨 seed 的结论看后面的汇总
+    idxs = [k for k in keys if k[1] == seeds[0]]
 
     # 基图哈希 —— 决定性的一步。
     # 基图在放大之前生成，两边同 seed 同 RNG，本该逐字节相同。
@@ -57,7 +63,7 @@ def main():
     #   基图不同           -> phase 1 的数值路径把基图也改了，A/B 不成立
     print("基图（1024²）逐字节核查 —— 决定下面的表能不能读")
     diff_base, same_base = [], []
-    for i in idxs:
+    for i in keys:
         fa, fb = ma.get(i, {}).get("files", {}), mb.get(i, {}).get("files", {})
         if "1024" not in fa or "1024" not in fb:
             continue
@@ -73,7 +79,7 @@ def main():
 
     print("\n完整性核查 —— 未干预的行应当逐字节相同")
     bad = same = 0
-    for i in idxs:
+    for i in keys:
         applied = mb.get(i, {}).get("applied", True)
         if applied:
             continue
@@ -90,7 +96,8 @@ def main():
           + ("   -> 管线无漂移" if bad == 0 else "   -> 下面的差值不可归因"))
 
     # 主看 excess（相对 prompt 基数，无尺度偏差），delta 只作参考
-    hdr = (f"\n{'idx':<5}{'cat':<10}{'head':<13}{'cov':>7}"
+    hdr = (f"\n[明细：seed {seeds[0]}]"
+           f"\n{'idx':<5}{'cat':<10}{'head':<13}{'cov':>7}"
            f"{'base e':>8}{'new e':>7}{'Δe':>5}   {'base d':>7}{'new d':>7}")
     print(hdr)
     print("-" * len(hdr))
@@ -114,61 +121,78 @@ def main():
             mark = "  变差"
         es = ("       -      -    -" if re_ is None or qe is None
               else f"{re_:>+8}{qe:>+7}{qe - re_:>+5}")
-        print(f"{i:<5}{r['cat']:<10}{str(m.get('head')):<13}{cs}{es}"
+        print(f"{i[0]:<5}{r['cat']:<10}{str(m.get('head')):<13}{cs}{es}"
               f"   {r['delta']:>+7}{q['delta']:>+7}{mark}")
 
-    def agg(title, key, pick):
-        print(f"\n{title}\n{'cat':<12}{'base':>16}{'new':>16}")
-        print("-" * 44)
-        for cat in sorted({A[i]["cat"] for i in idxs}):
-            ii = [i for i in idxs if A[i]["cat"] == cat and pick(i)]
-            if not ii:
-                continue
-            da = [A[i][key] for i in ii]
-            db = [B[i][key] for i in ii]
-            print(f"{cat:<12}"
-                  f"{sum(da)/len(da):>+9.2f} {sum(1 for x in da if x > 0)}/{len(da):<5}"
-                  f"{sum(db)/len(db):>+9.2f} {sum(1 for x in db if x > 0)}/{len(db):<5}")
-        ii = [i for i in idxs if pick(i)]
-        da = [A[i][key] for i in ii]
-        db = [B[i][key] for i in ii]
-        print(f"{'全部':<11}"
-              f"{sum(da)/len(da):>+9.2f} {sum(1 for x in da if x > 0)}/{len(da):<5}"
-              f"{sum(db)/len(db):>+9.2f} {sum(1 for x in db if x > 0)}/{len(db):<5}")
+    import statistics as st
 
-    def agg_mae(pick):
-        """MAE = 平均 |excess|。符号平均会互相抵消（多画一个和少画一个都是错），
-        而且 T2I 计数线（CountGen 等）通行的就是 MAE —— 顺带与成熟协议对齐。"""
-        print(f"\n主指标 MAE = 平均 |4096 计数 - prompt 基数|（0 最好）"
-              f"\n{'cat':<12}{'base':>16}{'new':>16}")
-        print("-" * 44)
-        for cat in sorted({A[i]["cat"] for i in idxs}):
-            ii = [i for i in idxs if A[i]["cat"] == cat and pick(i)]
-            if not ii:
-                continue
-            da = [abs(A[i]["excess"]) for i in ii]
-            db = [abs(B[i]["excess"]) for i in ii]
-            print(f"{cat:<12}"
-                  f"{sum(da)/len(da):>9.2f} {sum(1 for x in da if x)}/{len(da):<5}"
-                  f"{sum(db)/len(db):>9.2f} {sum(1 for x in db if x)}/{len(db):<5}")
-        ii = [i for i in idxs if pick(i)]
-        da = [abs(A[i]["excess"]) for i in ii]
-        db = [abs(B[i]["excess"]) for i in ii]
-        ma, mb_ = sum(da)/len(da), sum(db)/len(db)
-        print(f"{'全部':<11}"
-              f"{ma:>9.2f} {sum(1 for x in da if x)}/{len(da):<5}"
-              f"{mb_:>9.2f} {sum(1 for x in db if x)}/{len(db):<5}"
-              f"   {100*(mb_-ma)/max(ma,1e-9):+.0f}%")
+    def cell(vals):
+        return f"{sum(vals)/len(vals):.2f}" if vals else "  -"
 
-    has = lambda i: (A[i].get("excess") is not None
-                     and B[i].get("excess") is not None)
-    agg_mae(has)
-    agg("参考：带符号的 excess（会正负抵消，只作诊断用）", "excess", has)
-    agg("参考 delta = 4096 计数 - 基图计数（仍带约 +2 的尺度偏移）", "delta",
-        lambda i: True)
+    def mae(D, cat, seed):
+        v = [abs(D[k]["excess"]) for k in keys
+             if k[1] == seed and D[k]["cat"] == cat and D[k].get("excess") is not None]
+        return v
+
+    cats = sorted({A[k]["cat"] for k in keys})
+    print(f"\n主指标 MAE = 平均 |4096 计数 − prompt 基数|   （每个 seed 一列）")
+    hd = f"{'cat':<11}" + "".join(f"{'s'+str(sd):>15}" for sd in seeds) + f"{'mean±std':>18}"
+    print(hd); print("-" * len(hd))
+    for cat in cats:
+        cells, ba_all, ne_all = [], [], []
+        for sd in seeds:
+            va, vb = mae(A, cat, sd), mae(B, cat, sd)
+            if not va:
+                cells.append("       -")
+                continue
+            cells.append(f"{cell(va)}→{cell(vb)}")
+            ba_all.append(sum(va)/len(va)); ne_all.append(sum(vb)/len(vb))
+        if not ba_all:
+            continue
+        sa = st.stdev(ba_all) if len(ba_all) > 1 else 0.0
+        sb = st.stdev(ne_all) if len(ne_all) > 1 else 0.0
+        print(f"{cat:<11}" + "".join(f"{c:>15}" for c in cells)
+              + f"   {sum(ba_all)/len(ba_all):.2f}±{sa:.2f}→"
+                f"{sum(ne_all)/len(ne_all):.2f}±{sb:.2f}")
+
+    allv = lambda D, sd: [abs(D[k]["excess"]) for k in keys
+                          if k[1] == sd and D[k].get("excess") is not None]
+    ba_all = [sum(allv(A, sd))/len(allv(A, sd)) for sd in seeds if allv(A, sd)]
+    ne_all = [sum(allv(B, sd))/len(allv(B, sd)) for sd in seeds if allv(B, sd)]
+    if ba_all:
+        sa = st.stdev(ba_all) if len(ba_all) > 1 else 0.0
+        sb = st.stdev(ne_all) if len(ne_all) > 1 else 0.0
+        print(f"{'全部':<10}" + "".join(
+            f"{f'{a_:.2f}→{b_:.2f}':>15}" for a_, b_ in zip(ba_all, ne_all))
+            + f"   {sum(ba_all)/len(ba_all):.2f}±{sa:.2f}→"
+              f"{sum(ne_all)/len(ne_all):.2f}±{sb:.2f}")
+
+    # 跑之前定死的判据
+    print("\n判据（跑前定死）：")
+    lone_a = [sum(mae(A, 'lone', sd))/len(mae(A, 'lone', sd))
+              for sd in seeds if mae(A, 'lone', sd)]
+    lone_b = [sum(mae(B, 'lone', sd))/len(mae(B, 'lone', sd))
+              for sd in seeds if mae(B, 'lone', sd)]
+    if lone_a:
+        ok = all(b < a for a, b in zip(lone_a, lone_b))
+        print(f"  ① lone 在【每一个】seed 上都改善: "
+              + "  ".join(f"s{sd} {a:.2f}→{b:.2f}"
+                          for sd, a, b in zip(seeds, lone_a, lone_b))
+              + ("   -> 过，主结果坐实" if ok else "   -> **没过**"))
+    for cat in ("portrait", "structure"):
+        va = [sum(mae(A, cat, sd))/len(mae(A, cat, sd))
+              for sd in seeds if mae(A, cat, sd)]
+        vb = [sum(mae(B, cat, sd))/len(mae(B, cat, sd))
+              for sd in seeds if mae(B, cat, sd)]
+        if not va:
+            continue
+        worse = sum(1 for a_, b_ in zip(va, vb) if b_ > a_)
+        print(f"  ② {cat} 尾部回归出现在 {worse}/{len(va)} 个 seed  "
+              + ("-> 真回归，加适用性门" if worse == len(va)
+                 else "-> 噪声，v1 直接定稿" if worse <= 1 else "-> 不确定"))
 
     # 主角有没有被一起抹掉：基图计数应当保持
-    lost = [i for i in idxs
+    lost = [i for i in keys
             if B[i]["counts"].get("1024", B[i]["counts"].get(1024, 0))
             != A[i]["counts"].get("1024", A[i]["counts"].get(1024, 0))]
     print(f"\n基图计数变化的行: {lost if lost else '无'}"

@@ -108,11 +108,16 @@ def main():
     lv = [float(resid[k]) for k in range(n) if rows[k][0] in KNOWN_LEAKY]
     ov = [float(resid[k]) for k in range(n) if rows[k][1] == "lone"]
     if lv and ov:
+        gap = sum(lv)/len(lv) - sum(ov)/len(ov)
         print(f"\n残留比：已知泄漏 {sum(lv)/len(lv):.3f}   "
-              f"lone {sum(ov)/len(ov):.3f}   "
-              f"间隔 {sum(lv)/len(lv) - sum(ov)/len(ov):+.3f}")
-        print("间隔清晰 -> 可以把残留比做成自动泄漏门（阈值取两簇之间），")
-        print("            门是闭环判据（量语义），不是又一条词法规则。")
+              f"lone {sum(ov)/len(ov):.3f}   间隔 {gap:+.3f}")
+        if strict and gap > 0.1:
+            print("-> 泄漏行系统性更高，可以把残留比做成自动泄漏门。")
+        else:
+            print("-> **判据没过（间隔为负或两簇重叠）：文本相似度探不到这种泄漏，"
+                  "泄漏门这条路不通。**\n   按预注册的备选：要么用去主体 prompt "
+                  "生成小图数主体（贵但直接），\n   要么靠适用性门让这些行根本不被干预"
+                  "（gate_eval.py）。")
 
 
 if __name__ == "__main__":

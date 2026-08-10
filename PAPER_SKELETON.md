@@ -367,12 +367,14 @@ ScaleDiff 自己**并没有横扫** —— 它 KIDp 输、ISp 输。所以门槛
 
 1. **单 seed。** 而且 v0/v1/v2 三个变体**在同一批数据上评估后挑最好**
    —— 有拟合测试集的风险。补 seed 之后才算有验证集。
-2. **网络。** ⚠️ **这条之前写错了，2026-08-10 更正。** 事实是：`env.sh` 里的
-   `HF_HUB_OFFLINE=1` 是我们自己设的；现有 SDXL / GroundingDINO 缓存就是
-   hf-mirror 拉下来的；pip 走清华源可用（`open_clip_torch` 就是这么装上的）。
-   我把**一次** CLIP 权重拉取失败推广成了"服务器拿不到评测数据、Mac 中转是
-   关键路径"。**正确顺序：先在服务器上逐项试（清 OFFLINE + hf-mirror + 清华
-   pip），只有确实拿不到的那几项才走 Mac。** 见 §7.2。
+2. ~~**网络。**~~ ⚠️ **这条阻塞不存在，2026-08-10 实测撤销。**
+   服务器上 **huggingface.co 直连可用**（真取到字节，不只是 HEAD 200），
+   github.com 直连可用，清华 pip 源可用。**Mac 中转路线删除。**
+   两个我自己造成的误报，记下来别再犯：
+   - `HF_ENDPOINT` 默认设成了 hf-mirror —— 它**已不再代理**（仓库里
+     `stylessp_probe/setup_env.sh:63` 早就记着），实测 SSL 握手超时。**直连优先。**
+   - `os.environ.setdefault("HF_HUB_OFFLINE","0")` 覆盖不掉 `env.sh` 的 `=1`，
+     于是 `huggingface_hub` 根本没发请求就报 offline。要硬覆盖。
 3. **算力。** 复现整张 Table 2 不可能（DemoFusion 一行就是 279 GPU 小时）。
    可行做法：**自己只跑 ScaleDiff + 我们两行**（1000 条 × 2 arm × 2 分辨率
    ≈ 90 GPU 小时 ≈ 4 天），用复现出的 ScaleDiff 行校准管线，**其余 baseline

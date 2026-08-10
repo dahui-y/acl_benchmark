@@ -29,9 +29,21 @@ import os
 import sys
 import urllib.request
 
-os.environ.setdefault("HF_HUB_OFFLINE", "0")
-MIRROR = os.environ.get("HF_ENDPOINT", "https://hf-mirror.com")
+# ---- 两个自造的坑，第一轮就是死在这里，记下来别再犯 ----
+#
+# ① setdefault 不覆盖已有值。env.sh 里 HF_HUB_OFFLINE=1，
+#    所以第一轮六个仓库全部 OfflineModeIsEnabled —— 那不是网络，
+#    是 huggingface_hub 根本没发请求。必须硬覆盖。
+os.environ["HF_HUB_OFFLINE"] = "0"
+#
+# ② 默认走 hf-mirror 是错的。仓库里 stylessp_probe/setup_env.sh:63
+#    早就记着"hf-mirror 已不再代理（308 跳回 huggingface.co），
+#    HF_ENDPOINT 那招无效"，我却又把它设成默认。实测也印证了：
+#    mirror SSL 握手超时，直连取到 64 字节。**直连优先，mirror 只当备胎。**
 DIRECT = "https://huggingface.co"
+MIRROR = "https://hf-mirror.com"
+os.environ.pop("HF_ENDPOINT", None)          # 别让外面残留的 mirror 值生效
+ENDPOINT = DIRECT
 
 # 一个确定存在的小文件：SDXL 的 model_index.json（我们缓存里就有这个仓库）
 SMALL = "/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/model_index.json"
@@ -62,17 +74,23 @@ def real_get(url, nbytes=64):
 
 
 def main():
+    global ENDPOINT
     print("\n== ① 通道是不是实的（真下字节，不是 HEAD）==")
     live = {}
-    for name, base in (("hf-mirror", MIRROR), ("直连 huggingface.co", DIRECT)):
+    for name, base in (("直连 huggingface.co", DIRECT), ("hf-mirror（备胎）", MIRROR)):
         n, err = real_get(base + SMALL)
-        live[name] = n > 0
+        live[base] = n > 0
         print(f"  {'OK  ' if n else 'FAIL'} {name}: 取到 {n} 字节"
               + (f"   {err}" if err else ""))
-    if not any(live.values()):
+    if live[DIRECT]:
+        ENDPOINT = DIRECT
+    elif live[MIRROR]:
+        ENDPOINT = MIRROR
+    else:
         print("\n  两条通道都下不来 —— net_probe 的 200 是网关在应答，"
               "结论要退回去。停在这里，不要继续规划。")
         return 1
+    print(f"  -> 本次用 {ENDPOINT}")
 
     try:
         from huggingface_hub import HfApi
@@ -80,7 +98,7 @@ def main():
         print("\n  huggingface_hub 未装：pip install -U huggingface_hub "
               "-i https://pypi.tuna.tsinghua.edu.cn/simple")
         return 1
-    api = HfApi(endpoint=MIRROR)
+    api = HfApi(endpoint=ENDPOINT)
 
     def probe(repos, kind):
         got = []

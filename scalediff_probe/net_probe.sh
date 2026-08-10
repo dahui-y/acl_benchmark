@@ -2,20 +2,23 @@
 # 服务器（OpenBayes，中国境内）到底能拿到哪些评测资产 —— 逐项测，不猜。
 #
 # 背景：之前一次 CLIP 权重拉取失败，我就写下了"服务器拿不到评测数据、
-# Mac 中转是关键路径"。这是过度推广。已知的反例摆在那里：
-#   - 现有 SDXL / GroundingDINO 缓存就是 hf-mirror 拉下来的；
-#   - open_clip_torch 是走清华 pip 源装上的；
+# Mac 中转是关键路径"。这是过度推广。实测结论（2026-08-10）：
+#   - **huggingface.co 直连可用**（真取到字节，不只是 HEAD 200）；
+#   - github.com 直连可用；清华 pip 源可用；
+#   - **hf-mirror 反而不可用**（SSL 握手超时）—— 仓库里
+#     stylessp_probe/setup_env.sh:63 早就记着它已不再代理，
+#     我却把它设成了默认，第一版这个脚本因此误报。
 #   - env.sh 里的 HF_HUB_OFFLINE=1 是我们自己设的，不是网络的限制。
-# 所以先在服务器上把第三条腿要的每一样东西单独试一遍，
-# 只有确实拿不到的才走 Mac。
+# 结论：Mac 中转这条路线删除。
 #
 #     bash scalediff_probe/net_probe.sh
 #
-# 输出每行 OK / FAIL。全 OK -> 第三条腿完全在服务器上做，不需要中转。
+# 输出每行 OK / FAIL。注意 HEAD 200 不等于下得来，真下载见 eval_assets.py。
 
 set -u
 export HF_HUB_OFFLINE=0
-export HF_ENDPOINT=${HF_ENDPOINT:-https://hf-mirror.com}
+# 直连优先。mirror 只在下面单独列一行做对照，不作为默认端点。
+export HF_ENDPOINT=${HF_ENDPOINT:-https://huggingface.co}
 PIP_IDX=${PIP_IDX:-https://pypi.tuna.tsinghua.edu.cn/simple}
 
 ok()   { printf '  \033[32mOK  \033[0m %s\n' "$1"; }
@@ -30,9 +33,9 @@ head_ok() {
 
 echo
 echo "== 1. 基础出口 =="
-head_ok "hf-mirror.com 可达"            "$HF_ENDPOINT"
+head_ok "huggingface.co 直连（主通道）"  "https://huggingface.co"
 head_ok "清华 pypi 可达"                "$PIP_IDX"
-head_ok "huggingface.co 直连（预期 FAIL，不影响）" "https://huggingface.co"
+head_ok "hf-mirror.com（备胎；实测握手超时，不要当默认）" "https://hf-mirror.com"
 head_ok "github.com 直连（FID 权重的默认来源）"     "https://github.com"
 
 echo

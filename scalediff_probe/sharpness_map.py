@@ -18,9 +18,17 @@
      糊的块在基图上也糊 -> 继承，不是外推阶段产生的。
   ③ **最糊的块在哪** -> 存坐标，可直接喂 make_figure 看。
 
-判据（预注册）：
-  我们比基线低超过 10% 的 tile 占比 < 5%  -> 局部模糊不是我们引入的；
-  >= 5% -> **"细节没塌"这句话必须降级，改成分块报告。**
+判据（**09/77 跑完后修正**，原判据是错的）：
+  原判据只数"我们更糊的 tile 占比 < 5%"，两处错：
+  ① 单边。两张 4096² 本来就在发散，随机差异双向都有 —— 必须同时报
+     "我们更清楚"的占比，否则 8% vs 8%（噪声）和 8% vs 1%（系统性）
+     看起来一样。
+  ② 把"抑制了凭空造的内容"当成了"抹掉真细节"。实测 09/77 最糊的几块，
+     基图 HF 只有 0.0045-0.009（几乎空白），基线 4096 却是 0.0807/0.0866。
+     **那是 ScaleDiff 在基图什么都没有的地方凭空画了东西，我们把它压回去
+     —— 那是方法的设计目的。**
+  改后判据：**只有"基图原本就有细节、而我们更糊"的 tile 才算真损害**，
+  占比 < 5% 且双向大致对称 -> 过。
 
     python scalediff_probe/sharpness_map.py
     python scalediff_probe/sharpness_map.py --idx 9 --seed 77 --dump
@@ -79,6 +87,8 @@ def main():
     ap.add_argument("--tile", type=int, default=TILE)
     ap.add_argument("--drop", type=float, default=0.10,
                     help="低于基线这个比例才算'明显更糊'")
+    ap.add_argument("--base-pctl", type=float, default=50,
+                    help="基图高频高于这个分位的 tile 算'原本就有细节'")
     ap.add_argument("--dump", action="store_true", help="打印最糊的 tile 坐标")
     a = ap.parse_args()
 
@@ -93,11 +103,10 @@ def main():
     print(f"tile={a.tile}  频带 [{LO},{HI}]  判据：我们低于基线 {a.drop:.0%} "
           f"以上的 tile 占比 < 5%\n")
     print(f"{'idx':<5}{'seed':>6}{'cat':<10}{'基线 HF':>9}{'我们 HF':>9}"
-          f"{'比值':>7}{'更糊 tile':>10}{'基图也糊':>10}")
-    print("-" * 68)
+          f"{'比值':>7}{'更糊':>9}{'更清楚':>9}{'真损害':>7}{'抑制':>7}")
+    print("-" * 80)
 
-    worse_all, tiles_all = 0, 0
-    inherit_num, inherit_den = 0, 0
+    worse_all = better_all = tiles_all = harm_all = suppress_all = 0
     rows = []
     for k in keys:
         lo_a, hi_a = files(MA[k])
@@ -110,20 +119,33 @@ def main():
         gbase = hf_grid(base.resize(ia.size, Image.BICUBIC), a.tile)
 
         ratio = gb / np.maximum(ga, 1e-9)
+        # **必须双向统计。** 两张 4096² 本来就在发散，随机差异双向都有；
+        # 只数"更糊"那一边不构成证据（和"偏差上界只补一边"是同一个毛病）。
         worse = ratio < (1 - a.drop)
+        better = ratio > (1 + a.drop)
         n = ratio.size
-        # "基图也糊"：在我们更糊的那些块里，基图的高频是否也在低分位
-        thr_base = np.percentile(gbase, 25)
-        inherited = int((worse & (gbase <= thr_base)).sum())
 
-        worse_all += int(worse.sum()); tiles_all += n
-        inherit_num += inherited; inherit_den += int(worse.sum())
+        # **"更糊"不等于"损害"，要看基图那里原本有没有内容。**
+        # 实测 09/77 最糊的几块：基图 HF 0.0045-0.009（几乎空白），
+        # 基线 4096 却是 0.0807/0.0866 —— 那是 ScaleDiff 在空白处凭空画了
+        # 东西，我们把它压回去。那是方法的**设计目的**，不是抹细节。
+        # 所以按基图高频分两档：
+        #   基图有细节 + 我们更糊 -> **真损害**（要报，要控制）
+        #   基图没细节 + 我们更糊 -> 抑制了外推阶段凭空造的内容（在主张之内）
+        thr_base = np.percentile(gbase, a.base_pctl)
+        rich = gbase > thr_base
+        harm = int((worse & rich).sum())
+        suppress = int((worse & ~rich).sum())
+
+        worse_all += int(worse.sum()); better_all += int(better.sum())
+        tiles_all += n
+        harm_all += harm; suppress_all += suppress
         rows.append((k, ga, gb, ratio, worse))
 
         print(f"{k[0]:<5}{k[1]:>6}{A[k]['cat']:<10}{ga.mean():>9.4f}"
               f"{gb.mean():>9.4f}{gb.mean()/max(ga.mean(),1e-9):>7.3f}"
-              f"{f'{worse.sum()}/{n}':>10}"
-              f"{f'{inherited}/{max(int(worse.sum()),1)}':>10}")
+              f"{f'{int(worse.sum())}/{n}':>9}{f'{int(better.sum())}/{n}':>9}"
+              f"{harm:>7}{suppress:>7}")
 
         if a.dump:
             flat = np.dstack(np.unravel_index(np.argsort(ratio, axis=None), ratio.shape))[0]
@@ -140,21 +162,30 @@ def main():
                       f"基图 {gbase[i,j]:.4f}")
         del ia, ib, base
 
-    frac = worse_all / max(tiles_all, 1)
-    print(f"\n全体：明显更糊的 tile {worse_all}/{tiles_all} = {frac:.2%}")
-    print("  " + ("-> 判据过：局部模糊不是我们引入的" if frac < 0.05 else
-                  "-> **判据没过：'细节没塌'必须降级为分块报告**"))
-    if inherit_den:
-        print(f"  其中落在基图低高频区（继承而来）的占 "
-              f"{inherit_num}/{inherit_den} = {inherit_num/inherit_den:.0%}")
+    w = worse_all / max(tiles_all, 1)
+    b = better_all / max(tiles_all, 1)
+    h = harm_all / max(tiles_all, 1)
+    print(f"\n全体 {tiles_all} 个 tile：")
+    print(f"  我们更糊 {worse_all} = {w:.2%}   我们更清楚 {better_all} = {b:.2%}"
+          f"   净 {w-b:+.2%}")
+    print(f"  更糊的里面：真损害（基图原本有细节）{harm_all} = {h:.2%}   "
+          f"抑制外推凭空造的内容 {suppress_all}")
+    print("\n判据（修正后）：**只有'真损害'才算我们抹了细节。**")
+    print("  " + ("-> 过：真损害 < 5%，且双向基本对称" if h < 0.05 and abs(w-b) < 0.05
+                  else "-> **没过：'细节没塌'必须降级为分块报告**"))
     print("""
-读法：
-  比值 ~1.0 且更糊 tile 占比低  -> 那条发糊的斜带是 ScaleDiff 管线本身的，
-     属于这条谱系公认的第二个症状（ScaleDiff 自己的消融：去掉 LFM 会
-     "heavily oversmoothed textures"），不是我们造成的 —— 但**要在论文
-     里承认它存在**，因为定性图上看得见。
-  比值明显 < 1  -> 我们确实在抹细节，"高频 -1.1%" 那句话是被全局平均
-     掩盖的，必须改口径。""")
+为什么判据要改成这样（09/77 逼出来的）：
+  最糊的几块基图 HF 只有 0.0045-0.009（几乎空白），基线 4096 却是
+  0.0807/0.0866 —— **那是 ScaleDiff 在基图什么都没有的地方凭空画了东西，
+  我们把它压回去了。那是方法的设计目的，不是抹细节。**
+  第一版判据把"抑制凭空造的内容"和"破坏真实细节"算成同一件事，是判据的错。
+
+  另外单边统计不构成证据：两张 4096² 本来就在发散，随机差异双向都有。
+  更糊 8% / 更清楚 8% 是噪声；更糊 8% / 更清楚 1% 才是系统性的。
+
+注意：09/77 是 crowd 行，而门在它上面**误开**（空视野 81%，见骨架 §5.5）。
+      也就是说这一行本来就不该被介入 —— 拿它当代表会高估损害。
+      必须跑全体，并且分门开/门关两组看。""")
 
 
 if __name__ == "__main__":

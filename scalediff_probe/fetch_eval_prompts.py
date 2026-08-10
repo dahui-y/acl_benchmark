@@ -1,4 +1,24 @@
-"""取评测用的 1000 条 LAION caption（第三条腿的输入）。
+"""取评测用的 LAION image-text pair（第三条腿的输入）—— 照 ScaleDiff 的原样做。
+
+ScaleDiff §4.1 Evaluation 原文：
+
+    we randomly sample 1,000 image-text pairs from the LAION-5B dataset and
+    generate one image per prompt using each method. We compute FID, KID,
+    and IS between generated images and real images.
+
+所以参考集就是 LAION 那 1000 张真图本身，不是 COCO。我之前提的
+"COCO vs LAION 二选一"是我自己造出来的两难 —— parquet 里 TEXT 和 URL
+在同一行，取 caption 生成、取 URL 下真图，就是他们那套。
+
+唯一的真实工程问题是**链接腐烂**（LAION 的 URL 指向全网各站，多年后
+相当一部分已失效）。解法是超采样：多取几倍的行，留前 1000 个下成功的。
+这是工程细节，不是设计分叉。
+
+保留的两条不可比因素（写在用它之前，不是事后解释）：
+  - 采不到他们那 1000 条 —— 抽样方差；
+  - relaion 是 2023-12 下架后的安全过滤重发，分布与原始 LAION-5B 微移。
+判据不变：我们自己复现的 ScaleDiff 行是锚，落在发表值附近则其余
+baseline 可引用发表数字，落得远则三行全自己跑、只报 A/B 相对变化。
 
 关键约束：那些 parquet 分片是给 20 亿行用的，单片就上 GB，而我们只要 1000
 条 caption。所以**不下整片** —— parquet 的 footer 里有 row group 索引，
@@ -79,6 +99,9 @@ def main():
     ap.add_argument("--repo", default="laion/relaion2B-en-research-safe",
                     help="下架后的官方重发；比 laion2B-en-aesthetic 更该用")
     ap.add_argument("--n", type=int, default=1000)
+    ap.add_argument("--oversample", type=float, default=3.0,
+                    help="LAION 链接腐烂严重；多存这么多倍的候选行，"
+                         "下图时留前 n 个下成功的")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--min-words", type=int, default=4,
                     help="太短的 caption 生不出场景，且和我们的 prompt 差太远")
@@ -130,20 +153,23 @@ def main():
             continue
         seen.add(k)
         pool.append({"prompt": t, "url": u})
-    print(f"  过滤+去重后 {len(pool)} 条可用")
-    if len(pool) < a.n:
-        print(f"  **不足 {a.n} 条** —— 需要多读一个 row group，改 read_row_group(1)")
+    need = int(a.n * a.oversample)
+    print(f"  过滤+去重后 {len(pool)} 条可用（需要 {need} = {a.n}×{a.oversample} 超采样）")
+    if len(pool) < need:
+        print(f"  **不足 {need} 条** —— 多读一个 row group（read_row_group(1)）再来")
         return 1
 
     random.Random(a.seed).shuffle(pool)
-    picked = pool[:a.n]
+    picked = pool[:need]
 
     root = Path(os.environ.get("SD_OUT", "./scalediff_out"))
     out = Path(a.out) if a.out else root / "eval_prompts.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({
         "repo": a.repo, "shard": shards[0], "row_group": 0,
-        "seed": a.seed, "n": a.n,
+        "seed": a.seed, "n": a.n, "oversample": a.oversample,
+        "protocol": "ScaleDiff §4.1: 1000 LAION-5B image-text pairs; "
+                    "FID/KID/IS vs the real images of those same pairs",
         "filter": {"min_words": a.min_words, "max_words": a.max_words,
                    "dedup": "lowercase exact"},
         "items": picked,

@@ -131,10 +131,21 @@ def build(base_dir, new_dir, key, A, B, MA, MB, out_dir):
     x, y = worst_diff_box(ia, ib, CROP)
     ca = ia.crop((x, y, x + CROP, y + CROP))
     cb = ib.crop((x, y, x + CROP, y + CROP))
+    # **基图同一位置也放上来。** 没有这一栏就没法区分三种可能：
+    #   基图本来就糊     -> 继承，LFM 结构上修不了，唯一的杠杆是全局 τ
+    #   基图清楚、4096 糊 -> 外推阶段产生的（SG 低频锁定过强？）
+    #   基图那里什么都没有 -> **那不是糊，是没画完的幻影**，属于我们打的失效
+    lo = MA[key]["files"][str(min(int(k) for k in MA[key]["files"]))]
+    base = Image.open(Path(base_dir) / lo).convert("RGB")
+    s = base.width / ia.width
+    cbase = base.crop((int(x*s), int(y*s), int((x+CROP)*s), int((y+CROP)*s))) \
+                .resize((CROP, CROP), Image.NEAREST)   # NEAREST：不伪造细节
     rows.append(hstack([
+        label(cbase, f"base {base.width} @ same spot (NEAREST x{1/s:.0f})"),
         label(ca, f"1:1 pixels @ ({x},{y}) - baseline"),
         label(cb, f"1:1 pixels @ ({x},{y}) - ours"),
     ]))
+    del base
 
     fig = vstack(rows)
     cap = Image.new("RGB", (fig.width, 58), "white")

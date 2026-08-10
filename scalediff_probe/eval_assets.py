@@ -76,21 +76,18 @@ def real_get(url, nbytes=64):
 def main():
     global ENDPOINT
     print("\n== ① 通道是不是实的（真下字节，不是 HEAD）==")
-    live = {}
-    for name, base in (("直连 huggingface.co", DIRECT), ("hf-mirror（备胎）", MIRROR)):
+    for name, base in (("直连 huggingface.co", DIRECT), ("hf-mirror", MIRROR)):
         n, err = real_get(base + SMALL)
-        live[base] = n > 0
         print(f"  {'OK  ' if n else 'FAIL'} {name}: 取到 {n} 字节"
               + (f"   {err}" if err else ""))
-    if live[DIRECT]:
-        ENDPOINT = DIRECT
-    elif live[MIRROR]:
-        ENDPOINT = MIRROR
-    else:
-        print("\n  两条通道都下不来 —— net_probe 的 200 是网关在应答，"
-              "结论要退回去。停在这里，不要继续规划。")
+    print("  （单次结果不算数：两个端点都是间歇性的，三轮实测互相矛盾过。"
+          "下面用 hfnet.pick_endpoint 轮流重试。）")
+    try:
+        from hfnet import pick_endpoint
+        ENDPOINT = pick_endpoint()
+    except RuntimeError as e:
+        print(f"\n  {e}")
         return 1
-    print(f"  -> 本次用 {ENDPOINT}")
 
     try:
         from huggingface_hub import HfApi

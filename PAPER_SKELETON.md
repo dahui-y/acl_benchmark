@@ -370,11 +370,20 @@ ScaleDiff 自己**并没有横扫** —— 它 KIDp 输、ISp 输。所以门槛
 2. ~~**网络。**~~ ⚠️ **这条阻塞不存在，2026-08-10 实测撤销。**
    服务器上 **huggingface.co 直连可用**（真取到字节，不只是 HEAD 200），
    github.com 直连可用，清华 pip 源可用。**Mac 中转路线删除。**
-   两个我自己造成的误报，记下来别再犯：
-   - `HF_ENDPOINT` 默认设成了 hf-mirror —— 它**已不再代理**（仓库里
-     `stylessp_probe/setup_env.sh:63` 早就记着），实测 SSL 握手超时。**直连优先。**
-   - `os.environ.setdefault("HF_HUB_OFFLINE","0")` 覆盖不掉 `env.sh` 的 `=1`，
-     于是 `huggingface_hub` 根本没发请求就报 offline。要硬覆盖。
+   一个真 bug：`os.environ.setdefault("HF_HUB_OFFLINE","0")` 覆盖不掉 `env.sh`
+   的 `=1`，`huggingface_hub` 根本没发请求就报 offline。已改硬覆盖。
+
+   **端点：两个都间歇可用，不要选。** 三轮实测互相矛盾（mirror 超时/可用、
+   直连可用/SSL EOF 各出现过），我据此先后写过"mirror 不通"和它的反面，
+   两次都是拿一个样本下全称结论。现固化为 `hfnet.pick_endpoint()`：
+   轮流重试两个端点，谁先成谁上。**长任务必须容忍中途掉线。**
+
+   **评测资产已全部确认可取**（`eval_assets.py`）：
+   caption 源 `laion/relaion2B-en-research-safe`（257 片）、
+   `laion2B-en-aesthetic`、`laion-coco`；真图参考集 `sayakpaul/coco-30-val-2014`、
+   `nlphuji/mscoco_2014_5k_test`。Inception 走 pytorch-fid 官方 release。
+   `fetch_eval_prompts.py` 用 HTTP Range 只读 parquet 的一个 row group，
+   不下整片就能取到 1000 条 caption。
 3. **算力。** 复现整张 Table 2 不可能（DemoFusion 一行就是 279 GPU 小时）。
    可行做法：**自己只跑 ScaleDiff + 我们两行**（1000 条 × 2 arm × 2 分辨率
    ≈ 90 GPU 小时 ≈ 4 天），用复现出的 ScaleDiff 行校准管线，**其余 baseline

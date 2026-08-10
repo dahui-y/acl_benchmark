@@ -106,7 +106,7 @@ def main():
           f"{'比值':>7}{'更糊':>9}{'更清楚':>9}{'真损害':>7}{'抑制':>7}")
     print("-" * 80)
 
-    worse_all = better_all = tiles_all = harm_all = suppress_all = 0
+    worse_all = better_all = tiles_all = harm_all = gain_all = suppress_all = 0
     rows = []
     for k in keys:
         lo_a, hi_a = files(MA[k])
@@ -135,11 +135,12 @@ def main():
         thr_base = np.percentile(gbase, a.base_pctl)
         rich = gbase > thr_base
         harm = int((worse & rich).sum())
+        gain = int((better & rich).sum())        # **同一档里的反方向**
         suppress = int((worse & ~rich).sum())
 
         worse_all += int(worse.sum()); better_all += int(better.sum())
         tiles_all += n
-        harm_all += harm; suppress_all += suppress
+        harm_all += harm; gain_all += gain; suppress_all += suppress
         rows.append((k, ga, gb, ratio, worse))
 
         print(f"{k[0]:<5}{k[1]:>6}{A[k]['cat']:<10}{ga.mean():>9.4f}"
@@ -168,11 +169,16 @@ def main():
     print(f"\n全体 {tiles_all} 个 tile：")
     print(f"  我们更糊 {worse_all} = {w:.2%}   我们更清楚 {better_all} = {b:.2%}"
           f"   净 {w-b:+.2%}")
-    print(f"  更糊的里面：真损害（基图原本有细节）{harm_all} = {h:.2%}   "
-          f"抑制外推凭空造的内容 {suppress_all}")
-    print("\n判据（修正后）：**只有'真损害'才算我们抹了细节。**")
-    print("  " + ("-> 过：真损害 < 5%，且双向基本对称" if h < 0.05 and abs(w-b) < 0.05
-                  else "-> **没过：'细节没塌'必须降级为分块报告**"))
+    g = gain_all / max(tiles_all, 1)
+    print(f"  基图原本有细节的 tile 里：我们更糊 {harm_all} = {h:.2%}   "
+          f"我们更清楚 {gain_all} = {g:.2%}   **净 {h-g:+.2%}**")
+    print(f"  基图原本没细节、我们更糊（抑制外推凭空造的内容）{suppress_all}")
+    print("\n判据（**再修正一次**）：单独看'真损害'仍是单边统计 —— 我在这个"
+          "脚本里\n  写下'单边不构成证据'之后，判据本身还是单边的，这是第三次犯同一个错。"
+          "\n  要看的是**基图有细节那一档里，更糊与更清楚的净差**。")
+    print("  " + ("-> 过：净差 < 2%，无系统性细节损失"
+                  if abs(h - g) < 0.02 else
+                  "-> **没过：存在系统性的方向偏移，'细节没塌'必须降级**"))
     print("""
 为什么判据要改成这样（09/77 逼出来的）：
   最糊的几块基图 HF 只有 0.0045-0.009（几乎空白），基线 4096 却是

@@ -96,7 +96,7 @@ def worst_diff_box(a, b, size, step=256):
     return (min(x, a.width - size), min(y, a.height - size))
 
 
-def build(base_dir, new_dir, key, A, B, MA, MB, out_dir):
+def build(base_dir, new_dir, key, A, B, MA, MB, out_dir, at=None):
     idx, seed = key
     fa, fb = hi_file(MA[key]), hi_file(MB[key])
     ia = Image.open(Path(base_dir) / fa).convert("RGB")
@@ -127,8 +127,10 @@ def build(base_dir, new_dir, key, A, B, MA, MB, out_dir):
             label(th(Image.open(pb).convert("RGB")), "detector boxes - ours"),
         ]))
 
-    # 1:1 裁块：位置由差分自动选，不是挑的
-    x, y = worst_diff_box(ia, ib, CROP)
+    # 1:1 裁块：默认位置由差分自动选（不是挑的）；--at 可指定，
+    # 用于回看 sharpness_map 报出来的具体 tile 坐标。
+    x, y = at if at else worst_diff_box(ia, ib, CROP)
+    x, y = min(x, ia.width - CROP), min(y, ia.height - CROP)
     ca = ia.crop((x, y, x + CROP, y + CROP))
     cb = ib.crop((x, y, x + CROP, y + CROP))
     # **基图同一位置也放上来。** 没有这一栏就没法区分三种可能：
@@ -169,6 +171,9 @@ def main():
     ap.add_argument("--idx", type=int, default=None)
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--top", type=int, default=1, help="改善最大的前几条")
+    ap.add_argument("--at", default=None, metavar="X,Y",
+                    help="指定 1:1 裁块左上角，例如 --at 512,1024；"
+                         "省略则取两图差分最大处")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
 
@@ -190,8 +195,9 @@ def main():
 
     out_dir = Path(a.out) if a.out else root / "figures"
     out_dir.mkdir(parents=True, exist_ok=True)
+    at = tuple(int(v) for v in a.at.split(",")) if a.at else None
     for k in keys:
-        p = build(a.base, a.new, k, A, B, MA, MB, out_dir)
+        p = build(a.base, a.new, k, A, B, MA, MB, out_dir, at=at)
         print(f"写出 {p}")
     print("\n第三栏是 1:1 原像素，裁块位置由两图差分自动选定 —— "
           "缩略图上看不出 4096² 的差别，看那一栏。")

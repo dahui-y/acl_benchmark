@@ -43,6 +43,19 @@ from count_objects import Detector                       # noqa: E402
 HIT_IOU = 0.20          # 锚点命中判据：宽松，我们问的是"认出来没有"不是"框得准"
 
 
+def whole_diff(a, b, s=8):
+    """整张图的平均绝对灰度差（1/8 缩略图上算，够用且快）。
+
+    它是"这一行整体变了多少"的标度。锚点差除以它，才是"主体变得比
+    其余部分更厉害吗"。
+    """
+    ga = np.asarray(a.convert("L").resize((a.width // s, a.height // s)),
+                    dtype=np.int16)
+    gb = np.asarray(b.convert("L").resize((b.width // s, b.height // s)),
+                    dtype=np.int16)
+    return float(np.abs(ga - gb).mean())
+
+
 def load(d):
     return {(r["idx"], r["seed"]): r
             for r in json.loads((Path(d) / "counts.json").read_text())}
@@ -102,7 +115,15 @@ def main():
             bb, _ = det.detect(im, A[k]["subject"])
             res[arm] = any(iou(anchor, list(map(float, x))) >= HIT_IOU for x in bb)
 
-        d_anchor = pix_diff(imgs["base"], imgs["ours"], anchor)
+        # **相对锚点变化 = 锚点区域的像素差 ÷ 整张图的像素差。**
+        # 绝对像素差不能用：分类别看，中位数从 portrait 4.3 到 texture 8.0
+        # 差近两倍，而全局 95 分位是 9.61 —— 对 texture 而言阈值只比中位数
+        # 高一点，那一类几乎必然被判"主体被改动"（15_texture 两行就是这么
+        # 被误标的）。比值问的是**"锚点变得比图像其余部分更厉害吗"**，
+        # 自动消掉类别间的尺度差异，也消掉"整张图本来就发散"这个混淆。
+        whole = whole_diff(imgs["base"], imgs["ours"])
+        d_anchor = (pix_diff(imgs["base"], imgs["ours"], anchor)
+                    / max(whole, 1e-6))
         if res["base"] and res["ours"]:
             hit_d.append((k, d_anchor))       # 两边都认出来 -> 零假设样本
         else:
@@ -139,35 +160,42 @@ def main():
 
     # 偏差上界：把"我们漏检、基线命中"的行各补回 1 个计数，重算 MAE。
     # 这是最保守的修正 —— 假定每一次漏检都让我们白占了一个便宜。
-    only_ours = [r[0] for r in have if r[2] and not r[3]
-                 and A[r[0]]["cat"] in MAIN]
-    lone = [k for k in keys if A[k]["cat"] == "lone" and B[k].get("excess") is not None]
-    if lone:
-        m0 = sum(abs(B[k]["excess"]) for k in lone) / len(lone)
-        m1 = sum(abs(B[k]["excess"] + (1 if k in only_ours else 0))
-                 for k in lone) / len(lone)
-        mb = sum(abs(A[k]["excess"]) for k in lone) / len(lone)
-        print(f"\n偏差上界（lone）：我们这版被单独漏检 "
-              f"{sum(1 for k in only_ours if A[k]['cat']=='lone')} 行，"
-              f"每行补回 1 个计数")
-        print(f"  我们 MAE {m0:.2f} -> {m1:.2f}   "
-              f"降幅 {(1-m0/mb)*100:.1f}% -> {(1-m1/mb)*100:.1f}%")
-        print(f"  **论文里报保守值，或同时报两个。**")
+    # 偏差上界。**基线被单独漏检的行也要补**，否则修正是单边的。
+    only_ours = [r[0] for r in have if r[2] and not r[3] and A[r[0]]["cat"] in MAIN]
+    only_base = [r[0] for r in have if r[3] and not r[2] and A[r[0]]["cat"] in MAIN]
+    print(f"\n偏差上界：我们被单独漏检 {len(only_ours)} 行，"
+          f"基线被单独漏检 {len(only_base)} 行，各补回 1 个计数")
+    print(f"  {'组':<12}{'基线 MAE':>18}{'我们 MAE':>18}{'降幅':>18}")
+    for gname, cats in (("lone", {"lone"}), ("主指标全体", MAIN)):
+        ks = [k for k in keys if A[k]["cat"] in cats
+              and A[k].get("excess") is not None and B[k].get("excess") is not None]
+        if not ks:
+            continue
+        ma0 = sum(abs(A[k]["excess"]) for k in ks) / len(ks)
+        mb0 = sum(abs(B[k]["excess"]) for k in ks) / len(ks)
+        ma1 = sum(abs(A[k]["excess"] + (1 if k in only_base else 0))
+                  for k in ks) / len(ks)
+        mb1 = sum(abs(B[k]["excess"] + (1 if k in only_ours else 0))
+                  for k in ks) / len(ks)
+        print(f"  {gname:<12}{f'{ma0:.2f} -> {ma1:.2f}':>18}"
+              f"{f'{mb0:.2f} -> {mb1:.2f}':>18}"
+              f"{f'{(1-mb0/ma0)*100:.1f}% -> {(1-mb1/ma1)*100:.1f}%':>18}")
+    print("  **论文里报修正后的保守值，并在脚注写明修正方式。**")
 
     if not hit_d:
         print("\n没有两边都命中的行，建不起零假设。")
         return 1
     thr = float(np.percentile([d for _, d in hit_d], a.pctl))
-    print(f"\n零假设（两边都命中的行，锚点区域像素差 n={len(hit_d)}）："
-          f"中位 {np.median([d for _, d in hit_d]):.2f}  "
-          f"{a.pctl:.0f} 分位 {thr:.2f}")
-    # 分类别看一眼：texture（满屏细节）和 portrait（大面积平滑）天然不在
-    # 一个量级，全局阈值偏粗。样本够多时应当分层，这里先把分布报出来。
+    print(f"\n零假设（两边都命中的行，**相对锚点变化** = 锚点差/整图差，"
+          f"n={len(hit_d)}）：")
+    print(f"  中位 {np.median([d for _, d in hit_d]):.2f}  "
+          f"{a.pctl:.0f} 分位 {thr:.2f}  -> 超过它才算主体被特意改动")
     bycat = {}
     for kk, d in hit_d:
         bycat.setdefault(A[kk]["cat"], []).append(d)
     print("  分类别：" + "  ".join(
-        f"{c} n={len(v)} 中位{np.median(v):.1f}" for c, v in sorted(bycat.items())))
+        f"{c} n={len(v)} 中位{np.median(v):.2f}" for c, v in sorted(bycat.items())))
+    print("  （改成比值之后各类别应当靠拢；若仍相差一倍以上，说明还要分层。）")
 
     print(f"\n漏检的 {len(miss)} 行：")
     changed_ours = []
@@ -186,7 +214,7 @@ def main():
         else:
             kind = "检测器漏检（像素基本没变）"
         print(f"  {k[0]:02d}_{A[k]['cat']}_s{k[1]:<6} 谁漏={who:<6} "
-              f"锚点像素差 {d:6.2f}   {kind}")
+              f"相对锚点变化 {d:6.2f}   {kind}")
 
     main_changed = [k for k in changed_ours if A[k]["cat"] in MAIN]
     print(f"\n  判据②  可归因于方法的主体改动：{len(changed_ours)} 行"

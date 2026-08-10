@@ -175,9 +175,18 @@ def main():
 
     print(f"\n跳过的非 COCO 主体（这把尺子测不了）: {sorted(skipped)}")
 
+    # **共同子集**：只有两把尺子都测得了的行才能放在一张表里比。
+    # 第一版把"有基数的全体"直接对比，分母不同（GDINO 20 行 × 3 seed = 60，
+    # YOLO 只有 15 行 × 3 = 45，非 COCO 主体被跳过）—— 那个对比是错的。
+    common = [k for k in keys
+              if CARD[k[0]] is not None and A[k]["subject"] in det.names]
+    print(f"共同子集：{len({k[0] for k in common})} 条 prompt × "
+          f"{len({k[1] for k in common})} seed = {len(common)} 行"
+          f"（两把尺子都测得了的）")
+
     groups = [("lone", [k for k in keys if A[k]["cat"] == "lone"]),
               ("empty", [k for k in keys if A[k]["cat"] == "empty"]),
-              ("有基数的全体", keys)]
+              ("共同子集", common)]
 
     print(f"\n{'口径':<28}{'组':<14}{'基线 MAE':>10}{'我们 MAE':>10}"
           f"{'降幅':>8}{'基线 acc':>10}{'我们 acc':>10}")
@@ -197,26 +206,42 @@ def main():
                  res[(mode, "base")], res[(mode, "ours")], gname, ks)
         print()
 
-    # 两把尺子在逐行上的一致性
+    # 两把尺子的一致性。**要看的是 A/B 差值，不是绝对计数** ——
+    # 我们主张的是"介入让 excess 降了多少"，绝对计数一致与否是次要的。
     if True in modes:
-        pairs = [(gd_a[k], res[(True, "base")][k]) for k in keys
-                 if gd_a.get(k) is not None and res[(True, "base")].get(k) is not None]
-        pairs += [(gd_b[k], res[(True, "ours")][k]) for k in keys
-                  if gd_b.get(k) is not None and res[(True, "ours")].get(k) is not None]
-        if len(pairs) > 3:
-            x = np.array([p[0] for p in pairs], float)
-            y = np.array([p[1] for p in pairs], float)
-            r = np.corrcoef(x, y)[0, 1]
-            print(f"两把尺子的逐行一致性（n={len(pairs)} 行×arm）："
-                  f"Pearson r = {r:+.3f}，平均绝对差 {np.abs(x - y).mean():.2f} 个物体")
+        def rank(v):
+            o = np.argsort(np.argsort(v))
+            return o.astype(float)
+
+        abs_pairs = ([(gd_a[k], res[(True, "base")][k]) for k in common]
+                     + [(gd_b[k], res[(True, "ours")][k]) for k in common])
+        x = np.array([p[0] for p in abs_pairs], float)
+        y = np.array([p[1] for p in abs_pairs], float)
+        print(f"\n一致性（共同子集）")
+        print(f"  绝对计数  n={len(x)}  Pearson {np.corrcoef(x, y)[0,1]:+.3f}  "
+              f"Spearman {np.corrcoef(rank(x), rank(y))[0,1]:+.3f}  "
+              f"平均绝对差 {np.abs(x-y).mean():.2f} 个物体")
+
+        dx = np.array([gd_a[k] - gd_b[k] for k in common], float)
+        dy = np.array([res[(True, "base")][k] - res[(True, "ours")][k]
+                       for k in common], float)
+        print(f"  **A/B 差值** n={len(dx)}  Pearson {np.corrcoef(dx, dy)[0,1]:+.3f}  "
+              f"Spearman {np.corrcoef(rank(dx), rank(dy))[0,1]:+.3f}  "
+              f"平均绝对差 {np.abs(dx-dy).mean():.2f}")
+        same = float(np.mean(np.sign(dx) == np.sign(dy)))
+        print(f"  改善方向一致的行：{same:.0%}"
+              f"（这是最该报的一个数：两把尺子在多少行上同意"
+              f"'介入让它变好/变坏'）")
 
     print("""
 怎么读：
   ① "YOLOv9e 分块" 与 "GroundingDINO 分块" 方向一致、降幅量级相近
      -> 结论不依赖任何单一检测器。这是对"你的 metric 自己造的"最直接的回答。
-  ② "YOLOv9e 原样(不分块)" 的基线 MAE 若接近 0
-     -> **领域现成的计数协议在 4096² 上根本测不到这个失效**，
-        和 FID 压到 299² 是同一个机制。这一条进 §1.3，是论据不是限制。
+  ② "YOLOv9e 原样(不分块)" 与它分块那一档的基线 MAE 之比 = 现成协议
+     测到了多少。实测 1.27 / 4.60 = 27.6%，**不是全盲，是衰减 3.6 倍**。
+     写论文时按"低估"讲，别写成"看不见"—— 方向仍然是对的（-63.2%）。
+  ②' empty 那一组是分块的**代价**：不分块 0.00 个假阳性，分块之后
+     YOLO 0.13 / GDINO 0.27。可测性不是免费的，这个数要进敏感度表。
   ③ acc 列是 CountGen 的判据（count == expected），用于和那条线对齐；
      MAE 列是我们的，因为 +9 和 +1 在 acc 下没有区别。""")
     return 0

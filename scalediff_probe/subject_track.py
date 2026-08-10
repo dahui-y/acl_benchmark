@@ -104,7 +104,7 @@ def main():
 
         d_anchor = pix_diff(imgs["base"], imgs["ours"], anchor)
         if res["base"] and res["ours"]:
-            hit_d.append(d_anchor)            # 两边都认出来 -> 零假设样本
+            hit_d.append((k, d_anchor))       # 两边都认出来 -> 零假设样本
         else:
             miss.append((k, res["base"], res["ours"], d_anchor))
         rows.append((k, True, res["base"], res["ours"]))
@@ -112,39 +112,98 @@ def main():
               f"{'√' if res['base'] else '×':>9}{'√' if res['ours'] else '×':>9}")
         del imgs
 
+    # 分组报。**单锚点对 crowd/texture 无意义**（"许多车""数千朵花"取最高分
+    # 那一个框当锚点，漏检是必然的），而这两类 card=None，本来就不在主指标里。
+    # 第一版把它们和主指标行混在一个命中率里，稀释了要看的那个数。
+    MAIN = {"lone", "empty", "portrait", "structure"}
     have = [r for r in rows if r[1]]
-    hb = sum(1 for r in have if r[2])
-    ho = sum(1 for r in have if r[3])
-    n = len(have)
-    print(f"\n基图有主体的行 {n} 条")
-    print(f"  基线 4096² 认出主体 {hb}/{n} = {hb/max(n,1):.0%}")
-    print(f"  我们 4096² 认出主体 {ho}/{n} = {ho/max(n,1):.0%}")
-    print(f"  判据①  差 {abs(hb-ho)} 行  "
-          + ("-> 过：无差别偏差，A/B 差值可用"
-             if abs(hb - ho) <= 2 else
-             "-> **没过：漏检在两个 arm 上不对称，MAE 必须连同命中率一起报**"))
+    groups = [("主指标行 (lone/empty/portrait/structure)",
+               [r for r in have if A[r[0]]["cat"] in MAIN]),
+              ("crowd + texture（单锚点不适用，仅供参考）",
+               [r for r in have if A[r[0]]["cat"] not in MAIN]),
+              ("全部", have)]
+    for gname, g in groups:
+        if not g:
+            continue
+        hb = sum(1 for r in g if r[2])
+        ho = sum(1 for r in g if r[3])
+        n = len(g)
+        mark = ""
+        if gname.startswith("主指标"):
+            mark = ("  -> 判据① 过：无差别偏差，A/B 差值可用"
+                    if abs(hb - ho) <= 2 else
+                    "  -> **判据① 没过：漏检不对称，MAE 必须连同命中率一起报**")
+        print(f"\n{gname}  {n} 行")
+        print(f"  基线认出主体 {hb}/{n} = {hb/n:.0%}   "
+              f"我们 {ho}/{n} = {ho/n:.0%}   差 {abs(hb-ho)} 行{mark}")
+
+    # 偏差上界：把"我们漏检、基线命中"的行各补回 1 个计数，重算 MAE。
+    # 这是最保守的修正 —— 假定每一次漏检都让我们白占了一个便宜。
+    only_ours = [r[0] for r in have if r[2] and not r[3]
+                 and A[r[0]]["cat"] in MAIN]
+    lone = [k for k in keys if A[k]["cat"] == "lone" and B[k].get("excess") is not None]
+    if lone:
+        m0 = sum(abs(B[k]["excess"]) for k in lone) / len(lone)
+        m1 = sum(abs(B[k]["excess"] + (1 if k in only_ours else 0))
+                 for k in lone) / len(lone)
+        mb = sum(abs(A[k]["excess"]) for k in lone) / len(lone)
+        print(f"\n偏差上界（lone）：我们这版被单独漏检 "
+              f"{sum(1 for k in only_ours if A[k]['cat']=='lone')} 行，"
+              f"每行补回 1 个计数")
+        print(f"  我们 MAE {m0:.2f} -> {m1:.2f}   "
+              f"降幅 {(1-m0/mb)*100:.1f}% -> {(1-m1/mb)*100:.1f}%")
+        print(f"  **论文里报保守值，或同时报两个。**")
 
     if not hit_d:
         print("\n没有两边都命中的行，建不起零假设。")
         return 1
-    thr = float(np.percentile(hit_d, a.pctl))
+    thr = float(np.percentile([d for _, d in hit_d], a.pctl))
     print(f"\n零假设（两边都命中的行，锚点区域像素差 n={len(hit_d)}）："
-          f"中位 {np.median(hit_d):.2f}  {a.pctl:.0f} 分位 {thr:.2f}")
+          f"中位 {np.median([d for _, d in hit_d]):.2f}  "
+          f"{a.pctl:.0f} 分位 {thr:.2f}")
+    # 分类别看一眼：texture（满屏细节）和 portrait（大面积平滑）天然不在
+    # 一个量级，全局阈值偏粗。样本够多时应当分层，这里先把分布报出来。
+    bycat = {}
+    for kk, d in hit_d:
+        bycat.setdefault(A[kk]["cat"], []).append(d)
+    print("  分类别：" + "  ".join(
+        f"{c} n={len(v)} 中位{np.median(v):.1f}" for c, v in sorted(bycat.items())))
 
     print(f"\n漏检的 {len(miss)} 行：")
-    changed_ours = 0
+    changed_ours = []
     for k, rb, ro, d in sorted(miss, key=lambda x: -x[3]):
         who = "基线" if not rb else ""
         who += ("我们" if not ro else "")
-        kind = "**主体真的被改动**" if d > thr else "检测器漏检（像素基本没变）"
-        if d > thr and not ro:
-            changed_ours += 1
+        # **判据②只看"基线命中 + 我们漏检 + 像素变了"。** 第一版写成
+        # `d > thr and not ro`，把"两个 arm 都漏检"的行也算作我们改动了主体
+        # —— 两边都漏的行不可归因于我们（15_texture 两条就是这么被误算的）。
+        attributable = rb and (not ro) and d > thr
+        if attributable:
+            changed_ours.append(k)
+            kind = "**基线命中/我们漏检 + 像素变了 -> 可归因于方法，要看图**"
+        elif d > thr:
+            kind = "像素变了，但两边都漏检 -> 不可归因"
+        else:
+            kind = "检测器漏检（像素基本没变）"
         print(f"  {k[0]:02d}_{A[k]['cat']}_s{k[1]:<6} 谁漏={who:<6} "
               f"锚点像素差 {d:6.2f}   {kind}")
 
-    print(f"\n  判据②  我们这版'主体真被改动'的行数 {changed_ours}  "
-          + ("-> 过：方法没有删主体" if changed_ours == 0 else
-             "-> **这些行进失败分析，逐个看图**"))
+    main_changed = [k for k in changed_ours if A[k]["cat"] in MAIN]
+    print(f"\n  判据②  可归因于方法的主体改动：{len(changed_ours)} 行"
+          f"（其中主指标类 {len(main_changed)} 行）")
+    print("     " + ("过：主指标行里方法没有删主体" if not main_changed else
+                     f"**没过：{main_changed} 进失败分析**"))
+    if changed_ours and not main_changed:
+        print(f"     主指标外的 {[f'{k[0]:02d}_s{k[1]}' for k in changed_ours]} "
+              f"仍要看图 —— 它是唯一的疑似损害证据。")
+
+    # 基图上就检不出主体的行：锚点测不了，这是尺子的另一个边界，要报不要静默
+    nobase = [r[0] for r in rows if r[1] is None]
+    card_nobase = [k for k in nobase if A[k]["cat"] in MAIN and A[k]["cat"] != "empty"]
+    print(f"\n基图检不出主体的行 {len(nobase)} 条；其中**有基数、非 empty** 的 "
+          f"{len(card_nobase)} 条锚点测不了："
+          f"{[f'{k[0]:02d}_s{k[1]}' for k in card_nobase]}")
+    print("  （empty 类基图检不出主体是正确行为，不算边界。）")
 
     print("""
 这张表要进论文的敏感度部分。它回答的不是"检测器准不准"（不准），

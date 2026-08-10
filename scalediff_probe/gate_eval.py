@@ -93,6 +93,14 @@ def main():
     print("-" * 66)
     for k in keys:
         if A[k].get("excess") is None:
+            # **crowd / texture（无声明基数）此前被整行跳过，于是门在这两类
+            # 上的行为从未被看到** —— 而它们恰恰是门要保护的情形（主体铺满
+            # 画面 -> 空视野比例低 -> 应当关门、逐字节不动）。
+            # 没有 excess 就不参与 MAE，但门的开关必须打印出来。
+            g = gate(k, thr0)
+            print(f"{k[0]:<5}{k[1]:>6}{A[k]['cat']:<11}{evf[k]:>7.0%}{nbox[k]:>5}"
+                  f"{'开' if g else '关':>4}{'':>8}{'':>6}{'':>8}"
+                  f"  (无基数，不进 MAE)")
             continue
         g = gate(k, thr0)
         e_v11 = B[k]["excess"] if g else A[k]["excess"]

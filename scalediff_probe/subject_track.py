@@ -163,7 +163,11 @@ def main():
     # 偏差上界。**基线被单独漏检的行也要补**，否则修正是单边的。
     only_ours = [r[0] for r in have if r[2] and not r[3] and A[r[0]]["cat"] in MAIN]
     only_base = [r[0] for r in have if r[3] and not r[2] and A[r[0]]["cat"] in MAIN]
-    print(f"\n偏差上界：我们被单独漏检 {len(only_ours)} 行，"
+    # 措辞注意：这是**漏检修正**，不是严格意义的上界。excess 为负的行
+    # （检测器本来就少数了）补回 1 反而使 |excess| 变小 —— 23/77 就是这样，
+    # 和 03/1234 的变大互相抵消，于是主指标全体 0.75 -> 0.75 纹丝不动。
+    # 修正的方向是对的（漏了一个主体，真值就该 +1），但别叫它"上界"。
+    print(f"\n漏检修正：我们被单独漏检 {len(only_ours)} 行，"
           f"基线被单独漏检 {len(only_base)} 行，各补回 1 个计数")
     print(f"  {'组':<12}{'基线 MAE':>18}{'我们 MAE':>18}{'降幅':>18}")
     for gname, cats in (("lone", {"lone"}), ("主指标全体", MAIN)):

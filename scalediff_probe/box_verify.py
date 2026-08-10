@@ -100,6 +100,14 @@ class Verifier:
         return float((e @ pos.T).max() - (e @ self.neg.T).max())
 
 
+# 零假设用的额外查询词。empty 五条都是雪原/沙丘/海面/林冠/冰川，
+# 里面这些东西一个都没有 —— 所以任何一个词查出来的框，按构造都是假阳性。
+# 第一版只查了 person，全部 empty 行加起来才 8 个框，而且两个 arm 在
+# empty 上逐字节相同（15/15 已验证），等于同一个框数了两遍 —— 真实样本
+# 只有 4 个。n=4 的 95 分位没有意义。这里把词和分辨率都铺开。
+NULL_SUBJECTS = ["person", "boat", "bird", "car", "dog", "house", "tree", "animal"]
+
+
 def load_counts(d):
     return {(r["idx"], r["seed"]): r
             for r in json.loads((Path(d) / "counts.json").read_text())}
@@ -127,6 +135,34 @@ def scan(d, det, ver, keys, C, M):
     return out
 
 
+def build_null(d, det, ver, keys, C, M, subjects, verbose=True):
+    """零假设：在 empty 五条的所有分辨率上，用一组必定不存在的词查框。
+
+    **只扫一个 arm。** empty 行两个 arm 逐字节相同，扫两遍等于把每个观测
+    数两次，会假性缩小分位数的方差。
+    """
+    vals, seen = [], set()
+    for k in keys:
+        if C[k]["cat"] != "empty":
+            continue
+        for res, fn in sorted(M[k]["files"].items(), key=lambda kv: int(kv[0])):
+            p = Path(d) / fn
+            h = p.stat().st_size, fn
+            if h in seen:
+                continue
+            seen.add(h)
+            img = Image.open(p).convert("RGB")
+            for subj in subjects:
+                boxes, _ = det.detect(img, subj)
+                for b in boxes:
+                    vals.append(ver.margin(img, b, subj))
+            del img
+    if verbose:
+        print(f"零假设取样：empty 五条 × {len(subjects)} 个必不存在的词 "
+              f"× 各分辨率 -> {len(vals)} 个已知假阳性框")
+    return vals
+
+
 def mae(counts, keys):
     v = [abs(counts[k]) for k in keys if counts[k] is not None]
     return sum(v) / len(v) if v else float("nan")
@@ -139,6 +175,8 @@ def main():
     ap.add_argument("--new", default=str(root / "method_batch_s1"))
     ap.add_argument("--pctl", type=float, default=95,
                     help="阈值 = empty 类框核验分的这个分位")
+    ap.add_argument("--dump", nargs="*", default=None, metavar="IDX:SEED",
+                    help="逐框打印分数与核验分，例如 --dump 4:2025 3:1234")
     a = ap.parse_args()
 
     A, B = load_counts(a.base), load_counts(a.new)
@@ -149,18 +187,29 @@ def main():
     print("扫描基线 arm ...");  SA = scan(a.base, det, ver, keys, A, MA)
     print("扫描我们 arm ...");  SB = scan(a.new, det, ver, keys, A, MB)
 
-    # 零假设：empty 类的框，按构造全是假阳性
-    null = [m for k in keys if A[k]["cat"] == "empty"
-            for _, _, m in SA[k] + SB[k]]
-    if len(null) < 5:
-        print(f"\nempty 类只检出 {len(null)} 个框 —— 太少，建不起零假设。"
-              "这本身是好消息（检测器在负对照上几乎不误报），"
-              "但也意味着假阳性得用别的办法量。")
+    null = build_null(a.base, det, ver, keys, A, MA, NULL_SUBJECTS)
+    if len(null) < 20:
+        print(f"\n只取到 {len(null)} 个已知假阳性框 —— 样本太小，"
+              f"{a.pctl} 分位不稳定。加词或加 empty 行再来。")
         return 1
     thr = float(np.percentile(null, a.pctl))
-    print(f"\n零假设：empty 类框 {len(null)} 个（按构造全是假阳性）")
+    print(f"\n零假设：{len(null)} 个框（按构造全是假阳性）")
     print(f"  核验分 中位 {np.median(null):+.4f}  {a.pctl:.0f} 分位 {thr:+.4f}")
     print(f"  -> 阈值 {thr:+.4f}：核验分不高于它的框判为假阳性")
+
+    if a.dump:
+        want = {tuple(int(x) for x in s.split(":")) for s in a.dump}
+        for k in keys:
+            if k not in want:
+                continue
+            print(f"\n逐框明细 {k[0]:02d}_{A[k]['cat']}_s{k[1]}  "
+                  f"subject={A[k]['subject']}  阈值 {thr:+.4f}")
+            for arm, S in (("基线", SA), ("我们", SB)):
+                for b, s, m in sorted(S[k], key=lambda t: -t[2]):
+                    w, h = int(b[2] - b[0]), int(b[3] - b[1])
+                    print(f"  {arm}  det {s:.2f}  核验 {m:+.4f}  "
+                          f"{w}x{h} @ ({int(b[0])},{int(b[1])})  "
+                          f"{'保留' if m > thr else '判为假阳性'}")
 
     print(f"\n{'idx':<5}{'seed':>6}{'cat':<10}"
           f"{'基线 原/核验':>14}{'我们 原/核验':>14}"

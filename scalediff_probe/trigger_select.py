@@ -67,6 +67,13 @@ def main():
                          "都存在，所以不拍脑袋：tune 上跑 0.20/0.30 两档，"
                          "**普遍性若对阈值不敏感就沿用 0.30（与计数指标同值），"
                          "敏感则如实记下来**。")
+    ap.add_argument("--min-score", type=float, default=0.50,
+                    help="**detect() 在 box_thr 之后还筛的第二道**。"
+                         "trigger_debug 实测它把两张图整图一遍拿到的 3 个框"
+                         "全部吃掉，evf 记成 1.00 再被 nbox>=1 当成'无定义'"
+                         "排除掉 —— 门要召回，这道二次筛正好反着来。"
+                         "默认沿用 0.50（诊断集当时的工作点），但必须并列报"
+                         "0.30 那一档。")
     ap.add_argument("--tag", default=None, help="输出文件后缀，便于并列两档")
     a = ap.parse_args()
 
@@ -82,7 +89,7 @@ def main():
     if not rows:
         sys.exit("没有符合条件的基图")
 
-    tag = a.tag or f"{a.split or 'all'}_thr{a.box_thr:g}"
+    tag = a.tag or f"{a.split or 'all'}_thr{a.box_thr:g}_ms{a.min_score:g}"
     out = base / f"trigger_{tag}.jsonl"
     done = {}
     if out.exists():                      # 断点续跑
@@ -104,7 +111,7 @@ def main():
                 im = Image.open(base / r["file"]).convert("RGB")
                 # caption 原样喂进去：它就是生成时的条件，ground 它等于
                 # 找"prompt 要求的那些主体"
-                b, _ = det.detect(im, r["prompt"])
+                b, _ = det.detect(im, r["prompt"], min_score=a.min_score)
                 evf = empty_view_fraction(b, im.width, im.height, a.R)
                 rec = {"idx": r["idx"], "split": r.get("split"),
                        "nbox": len(b), "evf": evf, "prompt": r["prompt"]}
@@ -158,7 +165,7 @@ def main():
     p = base / f"trigger_set_{tag}.json"
     p.write_text(json.dumps(
         {"base": str(base), "split": a.split, "R": a.R, "tau": TAU,
-         "box_thr": a.box_thr, "n_scored": len(recs), "n_defined": len(defined),
+         "box_thr": a.box_thr, "min_score": a.min_score, "n_scored": len(recs), "n_defined": len(defined),
          "n_trigger": len(sel), "prevalence": frac,
          "note": "τ 沿用 trigger.py 的预注册值，未在 LAION 上重新拟合",
          "alive_idx": sel}, ensure_ascii=False, indent=1))

@@ -293,29 +293,41 @@ def main():
         print(f"  找不到 caption 列，实际列见上"); return 1
 
     want = [c for c in (tcol, ucol) if c]
-    tbl = pf.read_row_group(0, columns=want)
-    print(f"  第一个 row group {tbl.num_rows} 行")
+    rg = pf.metadata.row_group(0)
+    print(f"  第一个 row group {rg.num_rows} 行 / "
+          f"{rg.total_byte_size / 2**20:.0f} MB（压缩前）")
 
-    texts = tbl.column(tcol).to_pylist()
-    urls = tbl.column(ucol).to_pylist() if ucol else [None] * len(texts)
-
-    seen, pool = set(), []
-    for t, u in zip(texts, urls):
-        if not t:
-            continue
-        t = " ".join(t.split())
-        w = len(t.split())
-        if not (a.min_words <= w <= a.max_words):
-            continue
-        k = t.lower()
-        if k in seen:                                   # 去重：LAION 里重复很多
-            continue
-        seen.add(k)
-        card = declared_cardinality(t)
-        pool.append({"prompt": t, "url": u,
-                     "card": card[0] if card else None,
-                     "subject": card[1] if card else None})
+    # **流式读，够了就停。** read_row_group(0) 会把整个 row group 拉下来
+    # （这些分片单片 3.4 GB，一个 row group 就几百 MB），而我们只要 3000 条
+    # caption —— 用 iter_batches 边读边筛，攒够立刻 break。
     need = int(a.n * a.oversample)
+    seen, pool = set(), []
+    nread = 0
+    for batch in pf.iter_batches(batch_size=8192, columns=want):
+        texts = batch.column(tcol).to_pylist()
+        urls = (batch.column(ucol).to_pylist() if ucol
+                else [None] * len(texts))
+        nread += len(texts)
+        for t, u in zip(texts, urls):
+            if not t:
+                continue
+            t = " ".join(t.split())
+            w = len(t.split())
+            if not (a.min_words <= w <= a.max_words):
+                continue
+            k = t.lower()
+            if k in seen:                               # 去重：LAION 里重复很多
+                continue
+            seen.add(k)
+            card = declared_cardinality(t)
+            pool.append({"prompt": t, "url": u,
+                         "card": card[0] if card else None,
+                         "subject": card[1] if card else None})
+        print(f"\r  已读 {nread} 行 -> 可用 {len(pool)}/{need}",
+              end="", flush=True)
+        if len(pool) >= need:
+            break
+    print()
     print(f"  过滤+去重后 {len(pool)} 条可用（需要 {need} = {a.n}×{a.oversample} 超采样）")
     if len(pool) < need:
         print(f"  **不足 {need} 条** —— 多读一个 row group（read_row_group(1)）再来")

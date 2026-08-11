@@ -52,6 +52,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from trigger import empty_view_fraction        # noqa: E402
+from caption_audit import conditioned_text, load_tokenizer   # noqa: E402
 
 TAU = 0.75
 TAUS = (0.50, 0.625, 0.75, 0.875)
@@ -110,13 +111,17 @@ def main():
         from PIL import Image
         from count_objects import Detector
         det = Detector(box_thr=a.box_thr)
+        # **ground 的文本必须恰好等于条件过图像的那段。** LAION 的 alt-text
+        # 里混着图片 ID / 发布者 / 日期（"1 1 may. 2 0 1 6" 每字符一个 token），
+        # 一条 60 词的 caption 也能撑到 95 token，超出 77 的部分 SDXL 根本没看见
+        # —— 拿它去 ground 图像只会长出噪声框，而这个量对假阳性框最敏感（§5.4）。
+        tok = load_tokenizer()
         t0 = time.time()
         with out.open("a") as f:
             for n, r in enumerate(todo, 1):
                 im = Image.open(base / r["file"]).convert("RGB")
-                # caption 原样喂进去：它就是生成时的条件，ground 它等于
-                # 找"prompt 要求的那些主体"
-                b, _ = det.detect(im, r["prompt"], min_score=a.min_score)
+                text, _, _ = conditioned_text(tok, r["prompt"])
+                b, _ = det.detect(im, text, min_score=a.min_score)
                 evf = empty_view_fraction(b, im.width, im.height, a.R)
                 rec = {"idx": r["idx"], "split": r.get("split"),
                        "nbox": len(b), "evf": evf, "prompt": r["prompt"]}

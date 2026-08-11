@@ -38,6 +38,7 @@ import os
 import random
 import re
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
@@ -142,6 +143,10 @@ def declared_cardinality(text):
         return int(m.group(1)), _head(m.group(2), m.group(3))
     return None
 
+# 单次 HTTP range 请求的上限。8 MB 在这条间歇性链路上实测稳定；
+# 调大会回到 RemoteDisconnected，调小则请求数太多。
+CHUNK = 8 * 1024 * 1024
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from hfnet import pick_endpoint                        # noqa: E402
 
@@ -204,24 +209,45 @@ class HttpRangeFile(io.RawIOBase):
                      self._pos + off if whence == 1 else self._size + off)
         return self._pos
 
+    def _chunk(self, start, end):
+        """取 [start, end] 这一小段，带退避重试。"""
+        for attempt in range(6):
+            try:
+                req = urllib.request.Request(
+                    self.url, headers={**self.headers,
+                                       "Range": f"bytes={start}-{end}"})
+                with urllib.request.urlopen(req, timeout=120) as r:
+                    return r.read()
+            except Exception as e:
+                if attempt == 5:
+                    raise
+                wait = 2 ** attempt
+                print(f"\n  range [{start}-{end}] 失败({type(e).__name__})，"
+                      f"{wait}s 后重试 {attempt+1}/5", flush=True)
+                time.sleep(wait)
+
     def read(self, n=-1):
+        """**必须分块。** pyarrow 读一个 column chunk 可能一次要几百 MB，
+        当成单个 HTTP range 发出去，连接撑不住就 RemoteDisconnected，
+        而重试重发同样的巨大请求，必然继续失败（实测就是这么挂的）。
+        切成 CHUNK 大小的小段，掉线只损失一块，且可以退避重试。
+        """
         if n is None or n < 0:
             n = self._size - self._pos
         if n <= 0 or self._pos >= self._size:
             return b""
         end = min(self._pos + n, self._size) - 1
-        req = urllib.request.Request(
-            self.url, headers={**self.headers,
-                               "Range": f"bytes={self._pos}-{end}"})
-        for attempt in range(4):                        # 端点间歇性掉线，重试
-            try:
-                with urllib.request.urlopen(req, timeout=120) as r:
-                    buf = r.read()
-                break
-            except Exception as e:
-                if attempt == 3:
-                    raise
-                print(f"  range 读失败({type(e).__name__})，重试 {attempt+1}/3")
+        out, cur, total = [], self._pos, end - self._pos + 1
+        while cur <= end:
+            stop = min(cur + CHUNK - 1, end)
+            out.append(self._chunk(cur, stop))
+            cur = stop + 1
+            if total > CHUNK:
+                print(f"\r  取数据 {(cur - self._pos) / 2**20:6.1f} / "
+                      f"{total / 2**20:.1f} MB", end="", flush=True)
+        if total > CHUNK:
+            print()
+        buf = b"".join(out)
         self._pos += len(buf)
         return buf
 

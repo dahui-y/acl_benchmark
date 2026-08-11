@@ -66,6 +66,12 @@ def main():
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--R", type=int, default=4,
                     help="4 -> 4096²（16 块）。与放大倍数一致")
+    ap.add_argument("--extra-R", type=int, nargs="*", default=[2, 8],
+                    help="**同时在别的档上算 evf，几乎免费（框只检一次）。**"
+                         "几何上 evf ≈ 1 − (√a + 1/R)²（a = 主体面积占比），"
+                         "所以 **R 越大 evf 越高** —— 网格越细，'框擦到块角'"
+                         "造成的虚假覆盖越少。R=8 就是 8192²。"
+                         "4K 上读 0 的图，8K 上未必是 0，这条要用数据验。")
     ap.add_argument("--box-thr", type=float, default=0.30,
                     help="**门要召回，指标要精度 —— 两个工作点不同**（§5.5）。"
                          "基图漏检 -> 那块看着空 -> 空视野比例虚高 -> 假触发。"
@@ -124,7 +130,12 @@ def main():
                 b, _ = det.detect(im, text, min_score=a.min_score)
                 evf = empty_view_fraction(b, im.width, im.height, a.R)
                 rec = {"idx": r["idx"], "split": r.get("split"),
-                       "nbox": len(b), "evf": evf, "prompt": r["prompt"]}
+                       "nbox": len(b), "evf": evf, "prompt": r["prompt"],
+                       # 框存下来：换 R、换 5% 判据都不用重跑检测器（这一跑 56 分钟）
+                       "boxes": [[round(float(v), 1) for v in bb] for bb in b],
+                       "wh": [im.width, im.height],
+                       "evf_R": {str(rr): empty_view_fraction(
+                           b, im.width, im.height, rr) for rr in a.extra_R}}
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
                 f.flush()
                 done[r["idx"]] = rec
@@ -180,6 +191,21 @@ def main():
          "note": "τ 沿用 trigger.py 的预注册值，未在 LAION 上重新拟合",
          "alive_idx": sel}, ensure_ascii=False, indent=1))
     print(f"\n触发子群 {len(sel)} 条写入 {p}（键名沿用 alive_idx）")
+    # **随分辨率变化的触发率** —— 这才是 8K 那个题目的前提
+    have = [k for k in (defined[0].get("evf_R") or {})] if defined else []
+    if have:
+        print("\n触发率随 R（= 放大倍数）怎么变  **这是 8K 方向的门槛之一**：")
+        allR = sorted(set([str(a.R)] + have), key=int)
+        for rr in allR:
+            v = [(r["evf"] if rr == str(a.R) else r["evf_R"][rr]) for r in defined]
+            for t in (0.5, 0.75):
+                k2 = sum(1 for x in v if x > t)
+                print(f"  R={rr:<3}({1024*int(rr)}²)  τ={t}   "
+                      f"{k2:>4}/{len(v)} = {k2/len(v):6.1%}   "
+                      f"evf 均值 {sum(v)/len(v):.3f}")
+        print("  预测：R 越大 evf 越高（evf ≈ 1 − (√a + 1/R)²）。"
+              "**若 R=8 与 R=4 差不多，8K 那个说法就被否了。**")
+
     print("\n下一步：在 tune 上把 box_thr 0.20 那一档也跑一遍，"
           "看普遍性对阈值敏不敏感：\n"
           f"    python {sys.argv[0]} --split tune --box-thr 0.20")

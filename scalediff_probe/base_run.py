@@ -76,15 +76,25 @@ def main():
     ap.add_argument("--split", default=None, choices=["tune", "eval"],
                     help="只跑某个 split；省略则两个都跑")
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--alive", default=None,
+                    help="fetch_real_images.py 出的 alive.json —— "
+                         "**只给真图还活着的 prompt 生成基图**，"
+                         "别给失效的烧 GPU（第一版就是这么排错的）。"
+                         "触发子群不需要真图，所以那部分不用加这个参数。")
     ap.add_argument("--seed", type=int, default=77)
     ap.add_argument("--steps", type=int, default=50)
     ap.add_argument("--cfg", type=float, default=7.5)
     a = ap.parse_args()
 
     meta = json.loads(Path(a.prompts).read_text())
-    items = meta["items"]
+    items = [{**x, "_idx": i} for i, x in enumerate(meta["items"])]
     if a.split:
         items = [x for x in items if x.get("split") == a.split]
+    if a.alive:
+        alive = set(json.loads(Path(a.alive).read_text())["alive_idx"])
+        items = [{**x, "_idx": i} for i, x in enumerate(meta["items"])
+                 if i in alive and (not a.split or x.get("split") == a.split)]
+        print(f"按 {a.alive} 过滤：真图存活 {len(alive)} 条")
     if a.limit:
         items = items[:a.limit]
     if not items:
@@ -99,7 +109,10 @@ def main():
             done.add(json.loads(line)["idx"])
         print(f"manifest 里已有 {len(done)} 条，跳过")
 
-    todo = [(i, x) for i, x in enumerate(items) if i not in done]
+    # idx 必须是 eval_prompts.json 里的原始下标，否则和 alive.json、
+    # 真图文件名对不上。所以带上 x 自己记的 _idx（--alive 路径下已设）。
+    todo = [(x.get("_idx", i), x) for i, x in enumerate(items)
+            if x.get("_idx", i) not in done]
     print(f"{len(items)} 条，待跑 {len(todo)} 条 -> {out}")
     print(f"来源 {meta.get('repo')}   split={a.split or '全部'}   seed={a.seed}")
     if not todo:

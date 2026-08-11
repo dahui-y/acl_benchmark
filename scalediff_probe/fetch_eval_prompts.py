@@ -240,6 +240,9 @@ def main():
                     help="**不相交的调参 split**：门阈值 τ、检测工作点等一切"
                          "还需要标定的东西只许在这上面定。取数时就切开、"
                          "写进 JSON —— 数据落地后再切会有'看过才切'的嫌疑。")
+    ap.add_argument("--min-px", type=int, default=128,
+                    help="LAION 元数据里短边小于此的直接跳过（占位符尺度，"
+                         "与 fetch_real_images 的 MIN_SIDE 同依据）")
     ap.add_argument("--max-batches", type=int, default=200,
                     help="最多扫这么多批（每批 8192 行）")
     ap.add_argument("--oversample", type=float, default=3.0,
@@ -297,10 +300,14 @@ def main():
 
     tcol = next((c for c in cols if c.upper() in ("TEXT", "CAPTION")), None)
     ucol = next((c for c in cols if c.upper() == "URL"), None)
+    # WIDTH/HEIGHT 本来就在 parquet 里，第一版没存 —— 存下来就能在选
+    # prompt 阶段直接排掉已知的小图，**根本不用去下**（省一轮网络）。
+    wcol = next((c for c in cols if c.upper() == "WIDTH"), None)
+    hcol = next((c for c in cols if c.upper() == "HEIGHT"), None)
     if tcol is None:
         print(f"  找不到 caption 列，实际列见上"); return 1
 
-    want = [c for c in (tcol, ucol) if c]
+    want = [c for c in (tcol, ucol, wcol, hcol) if c]
     rg = pf.metadata.row_group(0)
     print(f"  第一个 row group {rg.num_rows} 行 / "
           f"{rg.total_byte_size / 2**20:.0f} MB（压缩前）")
@@ -317,9 +324,15 @@ def main():
         texts = batch.column(tcol).to_pylist()
         urls = (batch.column(ucol).to_pylist() if ucol
                 else [None] * len(texts))
+        ws = batch.column(wcol).to_pylist() if wcol else [None] * len(texts)
+        hs = batch.column(hcol).to_pylist() if hcol else [None] * len(texts)
         nread += len(texts)
         nbatch += 1
-        for t, u in zip(texts, urls):
+        for t, u, wpx, hpx in zip(texts, urls, ws, hs):
+            # 元数据里就知道太小的，直接不要 —— 省一次下载往返。
+            # 阈值同 fetch_real_images 的占位符尺度（见那里的说明）。
+            if wpx and hpx and min(int(wpx), int(hpx)) < a.min_px:
+                continue
             if not t:
                 continue
             t = " ".join(t.split())
@@ -330,7 +343,9 @@ def main():
             if k in seen:                               # 去重：LAION 里重复很多
                 continue
             seen.add(k)
-            pool.append({"prompt": t, "url": u})
+            pool.append({"prompt": t, "url": u,
+                         "w": int(wpx) if wpx else None,
+                         "h": int(hpx) if hpx else None})
         print(f"\r  已读 {nread} 行 -> 随机池 {len(pool)}/{need}",
               end="", flush=True)
         if len(pool) >= need:

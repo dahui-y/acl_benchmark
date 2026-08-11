@@ -665,18 +665,29 @@ high-resolution？）、没说快照、没说过滤条件。而**原始 LAION-5B
 2023-12 已下架**。所以"用和 ScaleDiff 一样的数据"在字面意义上做不到，
 这不是我们的取舍，是数据本身没了。
 
-LAION 官方（2024-08-30 Re-LAION-5B 发布说明）的包含关系：
+**但"LAION-5B"是伞名，要查的是这条线实际用哪个子集。** 证据分三层：
 
-```
-relaion2B-en-research-safe  ⊂  relaion2B-en-research  ⊂  原始 LAION-5B
-```
+| 来源 | 原文 | 强度 |
+|---|---|---|
+| **PixelRush**（同线，training-free 高分辨率） | *"1000 prompts randomly sampled from the **LAION/LAION2B aesthetic** dataset"*，且开篇称 *follow the experimental settings of prior methods* | ✅ 明确 |
+| ScaleDiff §4.1 | *"1,000 image-text pairs from the LAION-5B dataset [38]"* | ⚠️ 伞名 |
+| DemoFusion | **未能直接核实**（PDF 取不下来，检索无原句） | ❌ 待补 |
 
-`-safe` 额外用 `p_unsafe > 0.45` 滤掉大部分 NSFW 样本。**所以首选
-`laion/relaion2B-en-research`**（英文子集，ScaleDiff 的 prompt 是英文），
-`-safe` 是退而求其次。两者**都是 gated access，要填机构信息 + 同意条款**，
-不是点一下就通过。
+包含关系：`laion2B-en-aesthetic ⊂ laion2B-en ⊂ LAION-5B`。
+**所以 ScaleDiff 写伞名、实际用 aesthetic 子集并不矛盾**，而这条线上唯一
+明确写出子集的那篇写的是 aesthetic。
 
-（我第一版把 `-safe` 排在首位是没查就排的，已更正。）
+> **首选 `laion/laion2B-en-aesthetic`。** relaion 系列降为退路
+> （`relaion-safe ⊂ relaion-research ⊂ 原始 LAION-5B`，`-safe` 多一层
+> `p_unsafe > 0.45` 过滤），且都是 gated access，要填机构信息 + 审核。
+
+（两次更正：第一版把 `-safe` 排首位是没查变体关系；第二版把 relaion 排首位
+是只顺着"下架→重发"找替代品，**没去查这条线实际用哪个子集**。）
+
+**aesthetic 过滤带来的一条附带影响，要写进 §1.2.1a**：美学子集偏"好看"的
+构图，触发区占比在它上面测出来的数，是**美学过滤语料**的占比，不是一般
+文生图使用场景的占比。这不影响与这条线的可比性（大家都用它），但
+prevalence 那句话必须限定在这个语料上。
 
 **写进论文的措辞**（现在定死，不许事后放宽）：
 

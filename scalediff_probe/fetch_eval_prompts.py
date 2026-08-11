@@ -74,21 +74,31 @@ def _head(w1, w2):
     return w
 
 
-# 候选 caption 源，按"与 ScaleDiff 采样来源的贴近程度"排序。
+# 候选 caption 源，按"与这条线实际使用的评测集的贴近程度"排序。
 #
-# **ScaleDiff §4.1 只说了 "LAION-5B [38]"** —— 没说子集、没说快照、没说过滤。
-# 而原始 LAION-5B 仓库 2023-12 已下架，所以**无论选哪个都不可能完全一致**，
-# 这一条本来就在不可比因素里。问题只是现存的哪个最接近。
+# **证据分三层，强度不同（2026-08-10 第二次更正）：**
+#   PixelRush（同线，training-free 高分辨率）原文：
+#       "1000 prompts randomly sampled from the LAION/LAION2B aesthetic dataset"
+#       —— 明确，且该文开篇即称 "follow the experimental settings of prior methods"
+#   ScaleDiff §4.1 原文：
+#       "1,000 image-text pairs from the LAION-5B dataset [38]"
+#       —— **伞名**，没说子集。
+#   DemoFusion：**未能直接核实**（PDF 取不下来，检索未给出原句）。
 #
-# LAION 官方（2024-08-30 Re-LAION-5B 发布说明）给出的包含关系：
-#     relaion2B-en-research-safe  ⊂  relaion2B-en-research  ⊂  原始 LAION-5B
-# -safe 额外用 p_unsafe > 0.45 滤掉大部分 NSFW。**所以 research 比
-# research-safe 更接近**，我第一版把 -safe 排在首位是没查就排的。
-# 选 2B-en 而非 2B-multi：ScaleDiff 的 prompt 是英文。
+# 包含关系： laion2B-en-aesthetic ⊂ laion2B-en ⊂ LAION-5B
+# 所以 ScaleDiff 写 "LAION-5B"、实际用 aesthetic 子集**并不矛盾**，只是用了伞名。
+# 而这条线上唯一明确写出子集的那篇写的是 aesthetic。
+#
+# 我第一版把 relaion 排在首位，漏洞在于：只顺着"原始下架 -> 官方重发"找替代品，
+# 没去查**这条线实际用的是哪个子集**。relaion 现在降为退路——它是原始
+# LAION-5B 的安全过滤重发（relaion-safe ⊂ relaion-research ⊂ LAION-5B），
+# 分布上离 aesthetic 更远。
+#
+# **不猜哪个门控** —— 逐个真的 HEAD 一下分片，取第一个能下的。
 CANDIDATES = [
-    "laion/relaion2B-en-research",        # 最接近原始 LAION-5B（英文子集）
-    "laion/relaion2B-en-research-safe",   # 上者的真子集，多一层 NSFW 过滤
-    "laion/laion2B-en-aesthetic",         # 美学过滤子集，分布偏"好看"
+    "laion/laion2B-en-aesthetic",         # 这条线实际用的（PixelRush 明确写出）
+    "laion/relaion2B-en-research",        # 退路：官方重发，最接近原始 LAION-5B
+    "laion/relaion2B-en-research-safe",   # 上者真子集，多一层 NSFW 过滤
     "laion/laion-coco",                   # 合成 caption，分布差最远
 ]
 
@@ -98,10 +108,11 @@ GATED_HELP = """
 LAION 在 2023-12 下架重发后，这些集合都要登录 + 同意条款。
 
 三步解决：
-  1. 打开 https://huggingface.co/datasets/laion/relaion2B-en-research
-     （首选；退而求其次是 .../relaion2B-en-research-safe），
-     **填写机构信息并同意条款** —— 这两个都是 gated access，
-     不是点一下就通过，可能需要审核时间；
+  1. 按 CANDIDATES 顺序去对应的数据集页面接受条款：
+        https://huggingface.co/datasets/laion/laion2B-en-aesthetic  （首选）
+        https://huggingface.co/datasets/laion/relaion2B-en-research （退路）
+     relaion 系列是 gated access，**要填机构信息 + 同意条款**，
+     需审核，不是点一下就通过；
   2. 在 https://huggingface.co/settings/tokens 建一个 read token；
   3. 在服务器上任选其一：
         huggingface-cli login          # 交互粘贴 token

@@ -123,8 +123,23 @@ def main():
     q = lambda f: sides[min(int(len(sides) * f), len(sides) - 1)]
     print(f"\n短边分位  p0={sides[0]}  p10={q(.1)}  p50={q(.5)}  "
           f"p90={q(.9)}  p100={sides[-1]}")
-    print(f"短边 < {a.min_side} 的：{len(small)} 张"
-          + ("   <- **缓存分支绕过了尺寸检查**，见下面 mtime" if small else ""))
+    print(f"短边 < {a.min_side} 的：{len(small)} 张")
+    if small:
+        # **看它们落在哪个区间。** 全部落在 [256, 299) -> 正是旧阈值 256
+        # 放行的那扇窗，来源是缓存分支；有低于 256 的 -> 另有机制，要查。
+        lo = min(min(r["w"], r["h"]) for r in small)
+        print("   " + "  ".join(f"{r['idx']}:{r['w']}×{r['h']}"
+                                for r in sorted(small, key=lambda r: r["idx"])))
+        print(f"   最小短边 {lo}  ->  " + (
+            "**全部落在 [256,299)，正是旧阈值 256 放行的那扇窗** —— "
+            "来源是缓存分支，删掉重下即可。"
+            if lo >= 256 else
+            "**有低于 256 的，旧阈值解释不了 —— 另有机制，先查再删。**"))
+    if small:
+        idxs = sorted(r["idx"] for r in small)
+        print(f"   删除命令： cd {d} && rm -f " +
+              " ".join(f"{i:05d}.jpg" for i in idxs[:12]) +
+              (" ..." if len(idxs) > 12 else ""))
     ar = sorted((max(r["w"], r["h"]) / min(r["w"], r["h"]), r["idx"])
                 for r in good)
     print(f"长宽比 p50={ar[len(ar)//2][0]:.2f}  p99={ar[int(len(ar)*.99)][0]:.2f}"
@@ -156,18 +171,24 @@ def main():
     print(f"\n近乎纯色（灰度 std < {FLAT_STD}）：{len(flat)} 张")
 
     # ---- mtime：识别上一轮候选表遗留的缓存文件 ----
+    # 固定的 1 小时门限是个**错的仪器**：探路轮如果就在正式轮前十几分钟跑，
+    # 整个跨度不足 1 小时，它必然报 0。所以改成找 mtime 序列里最大的空档 ——
+    # 两轮之间的停顿会自己显出来。
     mt = sorted(r["mtime"] for r in recs)
-    stale = [r for r in recs if r["mtime"] < mt[-1] - 3600]
-    print(f"\nmtime 跨度 {(mt[-1]-mt[0])/3600:.1f} 小时；"
-          f"比最新文件早 1 小时以上的：{len(stale)} 张")
+    gaps = [(mt[i + 1] - mt[i], i) for i in range(len(mt) - 1)]
+    gap, gi = max(gaps) if gaps else (0, 0)
+    print(f"\nmtime 跨度 {(mt[-1]-mt[0])/60:.0f} 分钟；"
+          f"最大空档 {gap/60:.1f} 分钟（其前有 {gi+1} 张）")
+    cut = mt[gi] if gap > 300 else mt[0] - 1
+    stale = [r for r in recs if r["mtime"] <= cut]
+    print(f"空档之前的（= 上一轮遗留的缓存）：{len(stale)} 张")
     if stale:
         print("  **这些是上一轮候选表下的缓存**。候选表重取过（加了 299 预筛），"
               "\n  下标已经变了，所以它们的 idx 现在对应的是**另一条 caption**。"
               "\n  FID 比的是分布不是配对，所以不致命；但它们同时绕过了尺寸检查。"
               "\n  处置：删掉再跑一次 fetch_real_images.py（其余文件命中缓存，"
               "只补这些）：")
-        print(f"    find {d} -name '*.jpg' -newermt '@{mt[-1]-3600:.0f}' "
-              f"-prune -o -name '*.jpg' -print -delete")
+        print(f"    find {d} -name '*.jpg' ! -newermt '@{cut:.0f}' -delete")
 
     # ---- split 够不够 ----
     alive_p = d / "alive.json"

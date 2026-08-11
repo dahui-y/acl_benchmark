@@ -155,6 +155,10 @@ def main():
     by_idx = {r["idx"]: r for r in good}
     big = sorted(gf.items(), key=lambda kv: -len(kv[1]))[:10]
     if big:
+        # **域名和 caption 这两列只在 table.json 指纹一致时可信** ——
+        # 它们是按 idx 去当前候选表里查的，而混进来的旧表文件其 idx 指向
+        # 另一行，查出来的是别人的 URL。第一版就是被这两列误导，把
+        # "旧表文件与其孪生配成的对"读成了"同一张图挂在两个域名下的转载"。
         print("  最大的几组（组大小 / 尺寸 / 域名 / 示例 caption）：")
         for _, idxs in big:
             r0 = by_idx[idxs[0]]

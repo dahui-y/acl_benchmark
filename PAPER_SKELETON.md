@@ -612,15 +612,42 @@ CountGen 的脚本用 YOLOv9e(COCO)），另加单复数一致 + 量词/部分�
 并补人称同义词（man/child/hiker/surfer… -> person）与
 `a single / lone / solitary X`（**这正是我们的律针对的句式**）。
 
-由此子集会小很多，所以**拆成两个独立集合**：
+**但改进后的词法筛仍然不能用 —— 8 例错 6-7 例：**
+
+| 抽出的 | 原文 | 错在哪 |
+|---|---|---|
+| `[2 car]` | Tonka Jeep - GR **2**-2431 - Model **Cars** | 型号里的数字 |
+| `[2 bed]` | House Plan - **2 Beds** 2 Baths | 户型说明，图是房子外观 |
+| `[7 person]` | Country house - **7 persons**, 1 bedroom | 可住 7 人，图里没人 |
+| `[1 cup]` | Portion Control **1-Cup** Container | cup 是容量单位 |
+| `[5 person]` | The Top **5 Toys** for **Girls** | 5 个玩具 |
+
+> **根因不是正则不够好：LAION alt-text 里的数字绝大多数不描述画面。**
+> 再加规则只是打地鼠。
+
+**而这条线根本没人从 caption 挖计数 —— 我一路在造轮子：**
+
+| | venue | 形式 |
+|---|---|---|
+| **GenEval** counting | NeurIPS'23 D&B | 静态 `evaluation_metadata.jsonl`，模板 "a photo of three dogs"，N∈{2,3,4}，COCO 类 |
+| **CoCoCount** | CVPR'25 (CountGen) | `dataset/create_data_CoCoCount.py` 生成，"A photo of four donuts **on the road**"（带场景短语） |
+
+计数写在 prompt 里，**不存在抽错的可能**。于是：
 
 | | 数据 | 用途 | 可比性 |
 |---|---|---|---|
-| **随机集** 1000+200 | 无任何筛选 | FID/KID/IS/FIDp/KIDp/ISp/CLIP | 与 ScaleDiff 协议一致 |
-| **计数集** ~400 | 严格词法筛，独立收集 | 计数 MAE + CountGen 正确率 | 计数有定义的地方才算 |
+| **随机集** 1000+200 | LAION aesthetic，无筛选 | FID/KID/IS/FIDp/KIDp/ISp/CLIP | 与 ScaleDiff §4.1 一致 |
+| **计数集** | **GenEval + CoCoCount**（外部，可引用） | 计数 MAE + CountGen 正确率 | 与计数那条线一致 |
 
-**两者不重叠**（计数集独立收集，不从随机池里挑），各自再切 tune/eval。
-CountGen 造 CoCoCount 就是这个思路 —— 计数指标本来就该有专门的集合。
+**两个基准同时用，本身就是律的又一次检验（事前预测）：**
+
+- **CoCoCount 带场景短语** -> 主体可能只占画面一小部分 -> 空视野比例高
+  -> **按律应当有重复，我们的方法应当有效**；
+- **GenEval 是裸模板** -> 主体多半占满画面 -> 空视野比例低
+  -> **按律本就不该有重复，门应当关闭、逐字节不动**。
+
+两条都成立才说明律和门都对。GenEval 那批若也大幅变化，说明门没起作用，
+要回头查阈值。两批的空视野比例可以在基图上直接量，不需要额外假设。
 
 **crowd / texture 这两类连诊断集里都只是门的负对照**，
 `card=None`，我们对拥挤场景没有定量结论 —— limitation 照此写，

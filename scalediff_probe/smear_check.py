@@ -159,6 +159,36 @@ def main():
         v = acc[(s, q)]
         return float(np.mean(v)) if v else float("nan")
 
+    def stratified():
+        """**必须控制的混淆**：无主体 tile 在基图上本来就更平（没物体=没纹理），
+        所以"增益 = 4096 高频 - 基图高频"天然更大 —— 是余量更大，不一定是
+        填得更多。按基图高频分五档后再比，才是同等起点的对照。"""
+        hb = np.array(acc[("subj", "hf_base")] + acc[("nosubj", "hf_base")])
+        edges = np.percentile(hb, [0, 20, 40, 60, 80, 100])
+        print(f"\n分层对照（按基图高频五等分，控制余量混淆）：")
+        print(f"  {'基图高频档':<16}{'n 有/无':>14}{'增益 有':>10}{'增益 无':>10}"
+              f"{'各向异性 有':>13}{'各向异性 无':>13}")
+        ok1 = ok2 = 0
+        for t in range(5):
+            lo_e, hi_e = edges[t], edges[t + 1]
+            out = {}
+            for sname in ("subj", "nosubj"):
+                b = np.array(acc[(sname, "hf_base")])
+                sel = (b >= lo_e) & (b <= hi_e)
+                out[sname] = (int(sel.sum()),
+                              float(np.array(acc[(sname, "gain_a")])[sel].mean())
+                              if sel.any() else float("nan"),
+                              float(np.array(acc[(sname, "an_a")])[sel].mean())
+                              if sel.any() else float("nan"))
+            ok1 += out["nosubj"][1] > out["subj"][1]
+            ok2 += out["nosubj"][2] > out["subj"][2]
+            print(f"  [{lo_e:.3f},{hi_e:.3f}]".ljust(18)
+                  + f"{out['subj'][0]}/{out['nosubj'][0]}".rjust(12)
+                  + f"{out['subj'][1]:>10.4f}{out['nosubj'][1]:>10.4f}"
+                  + f"{out['subj'][2]:>13.4f}{out['nosubj'][2]:>13.4f}")
+        print(f"  五档中'无主体更高'的档数：增益 {ok1}/5   各向异性 {ok2}/5")
+        print("  **只有在多数档里都成立，P1/P2 才不是余量混淆造成的。**")
+
     n_s, n_n = len(acc[("subj", "an_a")]), len(acc[("nosubj", "an_a")])
     print(f"\ntile 总数 {n_s + n_n}   有主体 {n_s}   无主体 {n_n}\n")
     print(f"{'':<14}{'高频增益 基线':>14}{'高频增益 我们':>14}"
@@ -172,6 +202,8 @@ def main():
     p2 = m("nosubj", "an_a") > m("subj", "an_a")
     p3 = (m("nosubj", "gain_b") < m("nosubj", "gain_a")
           and m("nosubj", "an_b") < m("nosubj", "an_a"))
+    stratified()
+
     print(f"\n预注册预测：")
     print(f"  P1 无主体 tile 的高频增益更大：{'过' if p1 else '**没过**'}"
           f"  ({m('nosubj','gain_a'):.4f} vs {m('subj','gain_a'):.4f})")

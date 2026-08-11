@@ -64,7 +64,17 @@ def fetch_one(item, out_dir, timeout, min_side):
     idx, url = item["idx"], item.get("url")
     p = Path(out_dir) / f"{idx:05d}.jpg"
     if p.exists():
-        return idx, True, "cached"
+        # **缓存也要过尺寸检查。** 第一版直接 return，于是早期用 256 阈值
+        # 下下来的图（短边 256..298）绕过检查留在了参考集里 —— 这正是
+        # "阈值不能将就"要防的那件事，从后门溜进来了。
+        try:
+            im = Image.open(p)
+            im.load()
+            if min(im.size) >= min_side:
+                return idx, True, "cached"
+            p.unlink()
+        except Exception:
+            p.unlink(missing_ok=True)
     if not url:
         return idx, False, "no_url"
     try:

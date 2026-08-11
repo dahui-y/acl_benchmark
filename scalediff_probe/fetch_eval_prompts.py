@@ -148,7 +148,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", default="laion/relaion2B-en-research-safe",
                     help="下架后的官方重发；比 laion2B-en-aesthetic 更该用")
-    ap.add_argument("--n", type=int, default=1000)
+    ap.add_argument("--n", type=int, default=1000, help="eval split 的大小")
+    ap.add_argument("--tune", type=int, default=200,
+                    help="**不相交的调参 split**：门阈值 τ、检测工作点等一切"
+                         "还需要标定的东西只许在这上面定。取数时就切开、"
+                         "写进 JSON —— 数据落地后再切会有'看过才切'的嫌疑。")
     ap.add_argument("--oversample", type=float, default=3.0,
                     help="LAION 链接腐烂严重；多存这么多倍的候选行，"
                          "下图时留前 n 个下成功的")
@@ -214,6 +218,12 @@ def main():
 
     random.Random(a.seed).shuffle(pool)
     picked = pool[:need]
+    # **先切 split，再谈别的。** 前 tune 条是调参集，其后是评测集。
+    # 超采样的余量按比例分给两边（链接腐烂后各自还能凑够）。
+    r_tune = a.tune / (a.tune + a.n)
+    n_tune = int(len(picked) * r_tune)
+    for i, it in enumerate(picked):
+        it["split"] = "tune" if i < n_tune else "eval"
 
     root = Path(os.environ.get("SD_OUT", "./scalediff_out"))
     out = Path(a.out) if a.out else root / "eval_prompts.json"
@@ -221,10 +231,18 @@ def main():
     n_card = sum(1 for it in picked if it["card"] is not None)
     print(f"  其中明确声明了基数的 {n_card} 条 = {n_card/len(picked):.1%}"
           f"（计数指标只在这个子集上算；FID/KID/IS/CLIP 用全部）")
+    for sp in ("tune", "eval"):
+        g = [it for it in picked if it["split"] == sp]
+        gc = sum(1 for it in g if it["card"] is not None)
+        print(f"  split={sp:<5} {len(g):>5} 条候选（目标 "
+              f"{a.tune if sp=='tune' else a.n}），其中声明基数 {gc}")
+    print("  **eval split 在方法冻结前一次都不许回看。**")
 
     out.write_text(json.dumps({
         "repo": a.repo, "shard": shards[0], "row_group": 0,
-        "seed": a.seed, "n": a.n, "oversample": a.oversample,
+        "seed": a.seed, "n": a.n, "tune": a.tune, "oversample": a.oversample,
+        "split_rule": "前 tune/(tune+n) 比例为 tune split，其余为 eval；"
+                      "切分在取数时完成，早于任何标定",
         "protocol": "ScaleDiff §4.1: 1000 LAION-5B image-text pairs; "
                     "FID/KID/IS vs the real images of those same pairs",
         "filter": {"min_words": a.min_words, "max_words": a.max_words,

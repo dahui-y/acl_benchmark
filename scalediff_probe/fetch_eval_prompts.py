@@ -74,6 +74,35 @@ def _head(w1, w2):
     return w
 
 
+# 候选 caption 源，按"与 ScaleDiff 协议的贴近程度"排序。
+# **不猜哪个门控** —— 逐个真的 HEAD 一下分片，取第一个能下的。
+CANDIDATES = [
+    "laion/relaion2B-en-research-safe",   # 下架后的官方重发，最贴 LAION-5B
+    "laion/laion2B-en-aesthetic",
+    "laion/laion-coco",
+    "laion/relaion2B-multi-research-safe",
+]
+
+GATED_HELP = """
+**所有候选都下不了 —— 这是门控（gating），不是网络。**
+判断依据：repo_info 成功（元数据公开）而 resolve 返回 401/403（内容需授权）。
+LAION 在 2023-12 下架重发后，这些集合都要登录 + 同意条款。
+
+三步解决：
+  1. 在 huggingface.co 上打开该数据集页面，点 "Agree and access repository"；
+  2. 在 https://huggingface.co/settings/tokens 建一个 read token；
+  3. 在服务器上任选其一：
+        huggingface-cli login          # 交互粘贴 token
+        export HF_TOKEN=hf_xxxxx       # 或直接给环境变量
+  然后重跑本脚本。
+
+若无法取得授权，退路（要在骨架 §7.2 里记下口径变化）：
+  改用非门控的 caption 源（--repo 指定），并在论文中说明 prompt 分布
+  与 ScaleDiff 的 LAION-5B 采样不同 —— 那时绝对 FID 不可比，
+  只报 A/B 相对变化。
+"""
+
+
 def declared_cardinality(text):
     """返回 (基数, 名词) 或 None。只认明确的数量词。"""
     m = _SING.search(text)
@@ -94,15 +123,44 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from hfnet import pick_endpoint                        # noqa: E402
 
 
+def auth_headers():
+    """HF 的 token。**门控数据集必须带它** —— relaion 等在 2023 下架重发后
+    需要登录 + 同意条款，未授权时 resolve 返回 401（而 repo_info 仍然成功，
+    因为元数据是公开的，这一点很容易误判成网络问题）。
+
+    token 来源：huggingface-cli login 写入的缓存，或 HF_TOKEN 环境变量。
+    """
+    try:
+        from huggingface_hub import get_token
+        t = get_token()
+    except Exception:
+        t = os.environ.get("HF_TOKEN")
+    return {"Authorization": f"Bearer {t}"} if t else {}
+
+
+def probe_shard(url, hdrs):
+    """HEAD 一下这个分片。返回 (ok, 状态码或异常名)。"""
+    try:
+        req = urllib.request.Request(url, method="HEAD", headers=hdrs)
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return True, r.status
+    except urllib.error.HTTPError as e:
+        return False, e.code
+    except Exception as e:
+        return False, type(e).__name__
+
+
 class HttpRangeFile(io.RawIOBase):
     """只读、可 seek 的 HTTP 文件对象。pyarrow 靠 seek 读 footer。"""
 
-    def __init__(self, url, size=None):
+    def __init__(self, url, size=None, headers=None):
         self.url, self._pos = url, 0
+        self.headers = headers or {}
         self._size = size if size is not None else self._head_size()
 
     def _head_size(self):
-        req = urllib.request.Request(self.url, method="HEAD")
+        req = urllib.request.Request(self.url, method="HEAD",
+                                     headers=self.headers)
         with urllib.request.urlopen(req, timeout=60) as r:
             n = r.headers.get("Content-Length")
             if n is None:
@@ -130,7 +188,8 @@ class HttpRangeFile(io.RawIOBase):
             return b""
         end = min(self._pos + n, self._size) - 1
         req = urllib.request.Request(
-            self.url, headers={"Range": f"bytes={self._pos}-{end}"})
+            self.url, headers={**self.headers,
+                               "Range": f"bytes={self._pos}-{end}"})
         for attempt in range(4):                        # 端点间歇性掉线，重试
             try:
                 with urllib.request.urlopen(req, timeout=120) as r:
@@ -146,8 +205,8 @@ class HttpRangeFile(io.RawIOBase):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--repo", default="laion/relaion2B-en-research-safe",
-                    help="下架后的官方重发；比 laion2B-en-aesthetic 更该用")
+    ap.add_argument("--repo", default=None,
+                    help="不指定则按 CANDIDATES 顺序逐个探测，取第一个能下载的")
     ap.add_argument("--n", type=int, default=1000, help="eval split 的大小")
     ap.add_argument("--tune", type=int, default=200,
                     help="**不相交的调参 split**：门阈值 τ、检测工作点等一切"
@@ -168,15 +227,38 @@ def main():
     from huggingface_hub import HfApi
 
     api = HfApi(endpoint=ep)
-    info = api.repo_info(a.repo, repo_type="dataset")
-    shards = sorted(s.rfilename for s in (info.siblings or [])
-                    if s.rfilename.endswith(".parquet"))
-    if not shards:
-        print(f"{a.repo} 里没有 parquet"); return 1
-    url = f"{ep}/datasets/{a.repo}/resolve/main/{shards[0]}"
-    print(f"分片 {shards[0]}（共 {len(shards)} 片，只读第一片的第一个 row group）")
+    hdrs = auth_headers()
+    print(f"HF token: {'有' if hdrs else '**无**（门控数据集会 401）'}")
 
-    f = HttpRangeFile(url)
+    # **repo_info 成功 ≠ 能下载。** 门控仓库的元数据公开、内容需授权，
+    # 所以必须逐个真的 HEAD 一下分片，取第一个能下的。
+    cands = [a.repo] if a.repo else CANDIDATES
+    repo = url = shards = None
+    for cand in cands:
+        try:
+            info = api.repo_info(cand, repo_type="dataset")
+        except Exception as e:
+            print(f"  {cand:<45} repo_info 失败 {type(e).__name__}")
+            continue
+        sh = sorted(x.rfilename for x in (info.siblings or [])
+                    if x.rfilename.endswith(".parquet"))
+        if not sh:
+            print(f"  {cand:<45} 没有 parquet")
+            continue
+        u = f"{ep}/datasets/{cand}/resolve/main/{sh[0]}"
+        ok, code = probe_shard(u, hdrs)
+        print(f"  {cand:<45} {len(sh):>3} 片  分片可下载: "
+              + ("是" if ok else f"否({code})"))
+        if ok:
+            repo, url, shards = cand, u, sh
+            break
+    if repo is None:
+        print(GATED_HELP)
+        return 1
+    print(f"\n用 {repo}   分片 {shards[0]}"
+          f"（共 {len(shards)} 片，只读第一片的第一个 row group）")
+
+    f = HttpRangeFile(url, headers=hdrs)
     print(f"  整片 {f._size / 2**20:.0f} MB —— 不下载，只 range 读")
     pf = pq.ParquetFile(f)
     cols = pf.schema_arrow.names
@@ -239,7 +321,7 @@ def main():
     print("  **eval split 在方法冻结前一次都不许回看。**")
 
     out.write_text(json.dumps({
-        "repo": a.repo, "shard": shards[0], "row_group": 0,
+        "repo": repo, "shard": shards[0], "row_group": 0,
         "seed": a.seed, "n": a.n, "tune": a.tune, "oversample": a.oversample,
         "split_rule": "前 tune/(tune+n) 比例为 tune split，其余为 eval；"
                       "切分在取数时完成，早于任何标定",

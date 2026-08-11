@@ -42,37 +42,78 @@ import time
 import urllib.request
 from pathlib import Path
 
-# ---- 词法筛：哪些 caption 明确声明了数量 ----
+# ---- 词法筛：哪些 caption 明确声明了可数的视觉物体 ----
 #
-# 计数指标要 excess = 检出数 - 声明基数。LAION caption 绝大多数不声明数量，
-# 所以只在**声明了的子集**上算 —— 纯词法，零标注，和 CountGen 造 CoCoCount
-# 的思路一致。全部 1000 条仍然照 ScaleDiff 协议算 FID/KID/IS/CLIP。
+# **第一版几乎全错，实测 5 个例子错 4 个：**
+#   [10 mustang] "10 Great Mustang Movies to Watch"    -> 是 10 部电影
+#   [6 bedroom]  "Richmond 6 Piece Bedroom Set"        -> 是 6 件套
+#   [1 world]    "Named One Of World's Most Liveable"  -> "one of" 是部分格
+# 原因：① 部分格 one of 不是计数；② 量词（piece/pcs/pack/set）后面的名词
+# 不是被数的东西；③ 中心词抽错（取了 Mustang，真中心词是 Movies）。
 #
-# 刻意保守：只认明确的数量词。"a photo of a dog" 这种单数冠词**不算**
-# （caption 噪声大，一只狗的照片里常有别的狗），宁可子集小也不要假真值。
+# **换判据，不是补规则：能数的只有检测器能检的东西。**
+# 中心词必须落在 COCO-80 里 —— 这个词表非任意且有引用：GenEval 的 counting
+# 任务用 Mask2Former(COCO)，CountGen 的评测脚本用 YOLOv9e(COCO)。
+# 再加单复数一致（n>1 要复数、n=1 要单数）与量词/部分格排除。
+#
+# 代价：子集会小很多，所以计数指标**另建一个集合**（--count-n），
+# 不与随机 1000 条混用 —— 那 1000 条保持无筛选，才和 ScaleDiff 的
+# FID/KID/IS 协议可比。CountGen 造 CoCoCount 也是这个思路。
+
+COCO80 = """person bicycle car motorcycle airplane bus train truck boat
+bench bird cat dog horse sheep cow elephant bear zebra giraffe backpack
+umbrella handbag tie suitcase frisbee snowboard kite skateboard surfboard
+bottle cup fork knife spoon bowl banana apple sandwich orange broccoli
+carrot pizza donut cake chair couch bed toilet tv laptop mouse remote
+keyboard microwave oven toaster sink refrigerator book clock vase
+scissors toothbrush""".split()
+
+_IRREG = {"person": "people", "mouse": "mice", "knife": "knives",
+          "sandwich": "sandwiches", "bus": "buses", "scissors": "scissors",
+          "sheep": "sheep", "broccoli": "broccoli"}
+
+
+def _plural(w):
+    if w in _IRREG:
+        return _IRREG[w]
+    return w + ("es" if w.endswith(("s", "x", "ch", "sh")) else "s")
+
+
+SING2CLS = {c: c for c in COCO80}
+PLUR2CLS = {_plural(c): c for c in SING2CLS}
+
+# COCO 只有 "person"，但 caption 里写的是 man/woman/child/surfer…
+# 不补这些会丢掉大量真实的计数声明（实测 "three little children" 被拒）。
+# 只收**明确指人**的词，不收职业泛称之外的模糊词。
+_PERSON_S = ["man", "woman", "boy", "girl", "child", "kid", "lady", "guy",
+             "baby", "person", "surfer", "hiker", "skier", "rider",
+             "player", "worker", "soldier", "dancer", "runner"]
+_PERSON_P = {"men": "person", "women": "person", "children": "person",
+             "people": "person", "babies": "person", "ladies": "person",
+             "persons": "person"}
+SING2CLS.update({w: "person" for w in _PERSON_S})
+PLUR2CLS.update(_PERSON_P)
+PLUR2CLS.update({w + "s": "person" for w in _PERSON_S
+                 if w not in ("man", "woman", "child", "person", "lady",
+                              "baby")})
+
+# "a single / lone / solitary / sole X" —— 这**正是我们的律针对的句式**
+# （孤独主体 + 大场景），必须收，等价于基数 1。
+SINGLE_WORDS = {"single", "lone", "solitary", "sole", "only"}
+
 NUMS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
         "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
-_NP = r"(\w+)(?:\s+(\w+))?"
-_SING = re.compile(r"\b(?:a |an |the )?(?:single|lone|solitary|sole)\s+" + _NP, re.I)
-_PAIR = re.compile(r"\ba pair of\s+" + _NP, re.I)
-_WORD = re.compile(r"\b(" + "|".join(NUMS) + r")\s+" + _NP, re.I)
-_DIGIT = re.compile(r"\b([1-9]|10)\s+" + _NP, re.I)
 
-# "a pair of leather shoes" 的主体是 shoes 不是 leather，所以要看第二个词；
-# 但 "three dogs running" 的主体是 dogs 不是 running。没有词性标注时，
-# 用这条规则区分：第二个词若是 -ing/-ed 或介词/连词，就取第一个。
-_NOT_NOUN = {"in", "on", "of", "at", "with", "and", "or", "near", "over",
-             "under", "by", "from", "to", "for", "against", "into", "across",
-             "the", "a", "an", "that", "which", "is", "are", "was", "were"}
+# 量词：数字修饰的是它，不是后面的名词。"6 Piece Bedroom Set" 死在这里。
+MEASURE = {"piece", "pieces", "pcs", "pc", "pack", "packs", "set", "sets",
+           "pair", "pairs", "box", "boxes", "count", "ct", "pk", "lot",
+           "bundle", "kit", "inch", "inches", "cm", "mm", "ft", "oz", "lb",
+           "kg", "ml", "gb", "mb", "way", "tier", "star", "seat", "door",
+           "speed", "layer", "color", "colors", "size", "sizes", "row",
+           "pcs/set", "in", "of"}
 
-
-def _head(w1, w2):
-    if not w2:
-        return w1.lower()
-    w = w2.lower()
-    if w in _NOT_NOUN or w.endswith("ing") or w.endswith("ed"):
-        return w1.lower()
-    return w
+_TOKEN = re.compile(r"[a-z0-9]+")
+_NUMTOK = re.compile(r"^([1-9]|10)$")
 
 
 # 候选 caption 源，按"与这条线实际使用的评测集的贴近程度"排序。
@@ -127,21 +168,40 @@ LAION 在 2023-12 下架重发后，这些集合都要登录 + 同意条款。
 """
 
 
-def declared_cardinality(text):
-    """返回 (基数, 名词) 或 None。只认明确的数量词。"""
-    m = _SING.search(text)
-    if m:
-        return 1, _head(m.group(1), m.group(2))
-    m = _PAIR.search(text)
-    if m:
-        return 2, _head(m.group(1), m.group(2))
-    m = _WORD.search(text)
-    if m:
-        return NUMS[m.group(1).lower()], _head(m.group(2), m.group(3))
-    m = _DIGIT.search(text)
-    if m:
-        return int(m.group(1)), _head(m.group(2), m.group(3))
+def declared_cardinality(text, window=3):
+    """返回 (基数, COCO 类名) 或 None。
+
+    四条全部满足才采信：
+      1. 有数量词（英文数词或 1-10 的数字），且**不是 "one of"**；
+      2. 其后 window 个词内出现 COCO-80 名词；
+      3. 中间不出现量词（piece/pack/set/...）；
+      4. 单复数与基数一致（n=1 单数，n>1 复数）—— 不一致就整条不采信，
+         因为那通常说明数字修饰的是别的东西（"6 Piece Bedroom"）。
+    """
+    toks = _TOKEN.findall(text.lower())
+    for i, t in enumerate(toks):
+        if t in NUMS:
+            n = NUMS[t]
+        elif _NUMTOK.match(t):
+            n = int(t)
+        elif t in SINGLE_WORDS:
+            n = 1
+        else:
+            continue
+        if n == 1 and i + 1 < len(toks) and toks[i + 1] == "of":
+            continue                                # "one of" 是部分格
+        for j in range(i + 1, min(i + 1 + window, len(toks))):
+            w = toks[j]
+            if w in MEASURE:
+                break                               # 数字修饰的是量词
+            if n == 1 and w in SING2CLS:
+                return 1, SING2CLS[w]
+            if n > 1 and w in PLUR2CLS:
+                return n, PLUR2CLS[w]
+            if (n == 1 and w in PLUR2CLS) or (n > 1 and w in SING2CLS):
+                break                               # 单复数不一致，不采信
     return None
+
 
 # 单次 HTTP range 请求的上限。8 MB 在这条间歇性链路上实测稳定；
 # 调大会回到 RemoteDisconnected，调小则请求数太多。
@@ -261,6 +321,14 @@ def main():
                     help="**不相交的调参 split**：门阈值 τ、检测工作点等一切"
                          "还需要标定的东西只许在这上面定。取数时就切开、"
                          "写进 JSON —— 数据落地后再切会有'看过才切'的嫌疑。")
+    ap.add_argument("--count-n", type=int, default=400,
+                    help="**独立的计数集大小**（tune+eval 合计，同样超采样）。"
+                         "计数指标不与随机 1000 条混用：那 1000 条必须保持"
+                         "无筛选才和 ScaleDiff 的 FID 协议可比，而计数只在"
+                         "'计数有定义'的 prompt 上才有意义。CountGen 造"
+                         "CoCoCount 也是这个思路。")
+    ap.add_argument("--max-batches", type=int, default=200,
+                    help="最多扫这么多批（每批 8192 行）来凑够计数集")
     ap.add_argument("--oversample", type=float, default=3.0,
                     help="LAION 存的是图片 URL 不是图片，多年后三到五成已失效。"
                          "ScaleDiff 要 image-text pair（caption 生成、真图算 FID），"
@@ -330,13 +398,15 @@ def main():
     # **两个 split 都要超采样**：need 只按 eval 那 1000 算是漏了 tune 的 200，
     # 实际倍率会变成 2.5x 而不是写好的 3x。
     need = int((a.n + a.tune) * a.oversample)
-    seen, pool = set(), []
-    nread = 0
+    count_need = int(a.count_n * a.oversample)
+    seen, pool, cpool = set(), [], []
+    nread = nbatch = 0
     for batch in pf.iter_batches(batch_size=8192, columns=want):
         texts = batch.column(tcol).to_pylist()
         urls = (batch.column(ucol).to_pylist() if ucol
                 else [None] * len(texts))
         nread += len(texts)
+        nbatch += 1
         for t, u in zip(texts, urls):
             if not t:
                 continue
@@ -349,58 +419,66 @@ def main():
                 continue
             seen.add(k)
             card = declared_cardinality(t)
-            pool.append({"prompt": t, "url": u,
-                         "card": card[0] if card else None,
-                         "subject": card[1] if card else None})
-        print(f"\r  已读 {nread} 行 -> 可用 {len(pool)}/{need}",
-              end="", flush=True)
-        if len(pool) >= need:
+            rec = {"prompt": t, "url": u,
+                   "card": card[0] if card else None,
+                   "subject": card[1] if card else None}
+            if len(pool) < need:
+                pool.append(rec)
+            # **计数集独立收集**，不从 pool 里挑 —— 从 pool 里挑会让
+            # 随机 1000 条和计数集重叠，两个集合的独立性就没了。
+            if card and len(cpool) < count_need:
+                cpool.append(rec)
+        print(f"\r  已读 {nread} 行 -> 随机池 {len(pool)}/{need}   "
+              f"计数池 {len(cpool)}/{count_need}", end="", flush=True)
+        if len(pool) >= need and len(cpool) >= count_need:
+            break
+        if nbatch >= a.max_batches:
+            print(f"\n  扫到 {a.max_batches} 批上限就停了")
             break
     print()
-    print(f"  过滤+去重后 {len(pool)} 条可用（需要 {need} = {a.n}×{a.oversample} 超采样）")
-    if len(pool) < need:
-        print(f"  **不足 {need} 条** —— 多读一个 row group（read_row_group(1)）再来")
-        return 1
 
-    random.Random(a.seed).shuffle(pool)
-    picked = pool[:need]
-    # **先切 split，再谈别的。** 前 tune 条是调参集，其后是评测集。
-    # 超采样的余量按比例分给两边（链接腐烂后各自还能凑够）。
-    r_tune = a.tune / (a.tune + a.n)
-    n_tune = int(len(picked) * r_tune)
-    for i, it in enumerate(picked):
-        it["split"] = "tune" if i < n_tune else "eval"
+    rng = random.Random(a.seed)
+    rng.shuffle(pool)
+    rng.shuffle(cpool)
 
     root = Path(os.environ.get("SD_OUT", "./scalediff_out"))
     out = Path(a.out) if a.out else root / "eval_prompts.json"
     out.parent.mkdir(parents=True, exist_ok=True)
-    n_card = sum(1 for it in picked if it["card"] is not None)
-    print(f"  其中明确声明了基数的 {n_card} 条 = {n_card/len(picked):.1%}"
-          f"（计数指标只在这个子集上算；FID/KID/IS/CLIP 用全部）")
-    for sp in ("tune", "eval"):
-        g = [it for it in picked if it["split"] == sp]
-        gc = sum(1 for it in g if it["card"] is not None)
-        print(f"  split={sp:<5} {len(g):>5} 条候选（目标 "
-              f"{a.tune if sp=='tune' else a.n}），其中声明基数 {gc}")
+
+    def split_and_write(items, n_eval, n_tune, path, what):
+        """**先切 split 再谈别的。** 切分在取数时完成、写进 JSON，
+        早于任何标定 —— 数据落地后再切会有'看过才切'的嫌疑。"""
+        r = n_tune / (n_tune + n_eval)
+        k = int(len(items) * r)
+        for i, it in enumerate(items):
+            it["split"] = "tune" if i < k else "eval"
+        path.write_text(json.dumps({
+            "repo": repo, "shard": shards[0], "row_group": 0,
+            "seed": a.seed, "n_eval": n_eval, "n_tune": n_tune,
+            "oversample": a.oversample, "what": what,
+            "protocol": "ScaleDiff §4.1: 1000 LAION image-text pairs; "
+                        "FID/KID/IS vs the real images of those same pairs",
+            "split_rule": "取数时按 tune/(tune+eval) 比例切，早于任何标定",
+            "filter": {"min_words": a.min_words, "max_words": a.max_words,
+                       "dedup": "lowercase exact"},
+            "items": items,
+        }, ensure_ascii=False, indent=1))
+        print(f"  {what:<10} -> {path.name}   {len(items)} 条候选"
+              f"（tune {k} / eval {len(items)-k}，目标 {n_tune}/{n_eval}）")
+
+    print()
+    split_and_write(pool, a.n, a.tune, out, "随机集")
+    split_and_write(cpool, int(a.count_n * a.n / (a.n + a.tune)),
+                    int(a.count_n * a.tune / (a.n + a.tune)),
+                    out.parent / "count_prompts.json", "计数集")
     print("  **eval split 在方法冻结前一次都不许回看。**")
 
-    out.write_text(json.dumps({
-        "repo": repo, "shard": shards[0], "row_group": 0,
-        "seed": a.seed, "n": a.n, "tune": a.tune, "oversample": a.oversample,
-        "split_rule": "前 tune/(tune+n) 比例为 tune split，其余为 eval；"
-                      "切分在取数时完成，早于任何标定",
-        "protocol": "ScaleDiff §4.1: 1000 LAION-5B image-text pairs; "
-                    "FID/KID/IS vs the real images of those same pairs",
-        "filter": {"min_words": a.min_words, "max_words": a.max_words,
-                   "dedup": "lowercase exact"},
-        "items": picked,
-    }, ensure_ascii=False, indent=1))
-    print(f"\n写出 {out}   {len(picked)} 条")
-    for it in picked[:5]:
-        print(f"  - {it['prompt'][:90]}")
-    print("  声明了基数的例子：")
-    for it in [x for x in picked if x["card"] is not None][:5]:
-        print(f"  - [{it['card']} {it['subject']}] {it['prompt'][:80]}")
+    print("\n随机集样例（FID/KID/IS/CLIP 用这个，不筛选）：")
+    for it in pool[:4]:
+        print(f"  - {it['prompt'][:88]}")
+    print("计数集样例（计数指标只用这个）：")
+    for it in cpool[:8]:
+        print(f"  - [{it['card']} {it['subject']}] {it['prompt'][:74]}")
 
     print("""
 可比性提醒（写在用它之前）：

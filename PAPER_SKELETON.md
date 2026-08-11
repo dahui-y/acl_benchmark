@@ -583,11 +583,44 @@ crowd+texture 30 行只有 5/1234、9/77 两行门开。用门重算 v1.1：
 切分在取数时完成、写进 JSON，早于任何标定 —— 数据落地后再切会有
 "看过才切"的嫌疑。
 
-**LAION 上怎么算计数**：caption 绝大多数不声明数量，所以词法筛出
-**明确声明了基数**的子集（`a single X` / `one X` / `a lone X` /
-`a pair of X` / 数字），零标注，与 CountGen 造 CoCoCount 同思路。
-`fetch_eval_prompts.declared_cardinality` 实现，保守：单数冠词
-"a photo of a dog" **不算**，宁可子集小也不要假真值。
+**LAION 上怎么算计数 —— 两个独立集合，不混用（2026-08-10 定稿）。**
+
+先看实际数据长什么样。aesthetic 子集的 caption 是网页 alt 文本：
+
+```
+Download Burger 1.0.17 APK File for Android
+Tremendous Richmond 6 Piece Bedroom Set In Dark Grey Oak Finish
+2pcs/Set Kids Girls Clothes Baby Girl Floral Ruffled Tops
+```
+
+**和这条线定性图里的 prompt（"astronaut on mars"）完全两个世界** ——
+定量表跑在这种文本上、定性图另用精选 prompt，是这条线的共同现状。
+FID 可比性不受影响，但它**直接支持 §1.2.1a 那条预注册预测**：
+这批 prompt 里"大场景 + 小主体"几乎不出现，FID 上我们大概率几乎不动。
+
+第一版词法筛在这种文本上**实测 5 例错 4 例**：
+
+| 抽出的 | 原文 | 错在哪 |
+|---|---|---|
+| `[10 mustang]` | 10 Great Mustang Movies to Watch | 是 10 部电影 |
+| `[6 bedroom]` | Richmond 6 Piece Bedroom Set | 是 6 件套（量词） |
+| `[1 world]` | Named One Of World's Most Liveable | "one of" 是部分格 |
+
+**换判据而不是补规则：能数的只有检测器能检的东西。** 中心词必须落在
+**COCO-80** 里 —— 非任意且有引用（GenEval 的 counting 用 Mask2Former(COCO)，
+CountGen 的脚本用 YOLOv9e(COCO)），另加单复数一致 + 量词/部分格排除，
+并补人称同义词（man/child/hiker/surfer… -> person）与
+`a single / lone / solitary X`（**这正是我们的律针对的句式**）。
+
+由此子集会小很多，所以**拆成两个独立集合**：
+
+| | 数据 | 用途 | 可比性 |
+|---|---|---|---|
+| **随机集** 1000+200 | 无任何筛选 | FID/KID/IS/FIDp/KIDp/ISp/CLIP | 与 ScaleDiff 协议一致 |
+| **计数集** ~400 | 严格词法筛，独立收集 | 计数 MAE + CountGen 正确率 | 计数有定义的地方才算 |
+
+**两者不重叠**（计数集独立收集，不从随机池里挑），各自再切 tune/eval。
+CountGen 造 CoCoCount 就是这个思路 —— 计数指标本来就该有专门的集合。
 
 **crowd / texture 这两类连诊断集里都只是门的负对照**，
 `card=None`，我们对拥挤场景没有定量结论 —— limitation 照此写，

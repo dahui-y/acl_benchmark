@@ -658,6 +658,38 @@ crowd+texture 30 行只有 5/1234、9/77 两行门开。用门重算 v1.1：
    ≈ 90 GPU 小时 ≈ 4 天），用复现出的 ScaleDiff 行校准管线，**其余 baseline
    引用他们发表的数字**。新那一列只在我们 20–30 条 prompt 上跑，不需要 1000 条。
 
+### 7.1.5 评测用的 LAION 变体：选哪个、为什么、以及不可比在哪（2026-08-10）
+
+**ScaleDiff §4.1 只写了 "LAION-5B [38]"** —— 没说子集（2B-en / aesthetic /
+high-resolution？）、没说快照、没说过滤条件。而**原始 LAION-5B 仓库
+2023-12 已下架**。所以"用和 ScaleDiff 一样的数据"在字面意义上做不到，
+这不是我们的取舍，是数据本身没了。
+
+LAION 官方（2024-08-30 Re-LAION-5B 发布说明）的包含关系：
+
+```
+relaion2B-en-research-safe  ⊂  relaion2B-en-research  ⊂  原始 LAION-5B
+```
+
+`-safe` 额外用 `p_unsafe > 0.45` 滤掉大部分 NSFW 样本。**所以首选
+`laion/relaion2B-en-research`**（英文子集，ScaleDiff 的 prompt 是英文），
+`-safe` 是退而求其次。两者**都是 gated access，要填机构信息 + 同意条款**，
+不是点一下就通过。
+
+（我第一版把 `-safe` 排在首位是没查就排的，已更正。）
+
+**写进论文的措辞**（现在定死，不许事后放宽）：
+
+> We sample prompts from re-LAION-5B (English research subset), the
+> official successor to LAION-5B, since the original release was
+> withdrawn in December 2023. ScaleDiff specifies only "LAION-5B", so
+> an exact reproduction of their sample is not possible; we therefore
+> reproduce the ScaleDiff row ourselves and use its agreement with the
+> published value to calibrate the pipeline.
+
+判据不变（§7.2）：**复现的 ScaleDiff 行落在发表值附近 -> 管线通过校准，
+其余 baseline 引用发表数字；落得远 -> 三行全自己跑，只报 A/B 相对变化。**
+
 ### 7.2 评测数据到底卡在哪（先测再说）
 
 `scalediff_probe/net_probe.sh` 把第三条腿要的每一样东西单独试一遍：

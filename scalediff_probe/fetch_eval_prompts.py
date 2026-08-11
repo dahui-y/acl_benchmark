@@ -74,13 +74,22 @@ def _head(w1, w2):
     return w
 
 
-# 候选 caption 源，按"与 ScaleDiff 协议的贴近程度"排序。
-# **不猜哪个门控** —— 逐个真的 HEAD 一下分片，取第一个能下的。
+# 候选 caption 源，按"与 ScaleDiff 采样来源的贴近程度"排序。
+#
+# **ScaleDiff §4.1 只说了 "LAION-5B [38]"** —— 没说子集、没说快照、没说过滤。
+# 而原始 LAION-5B 仓库 2023-12 已下架，所以**无论选哪个都不可能完全一致**，
+# 这一条本来就在不可比因素里。问题只是现存的哪个最接近。
+#
+# LAION 官方（2024-08-30 Re-LAION-5B 发布说明）给出的包含关系：
+#     relaion2B-en-research-safe  ⊂  relaion2B-en-research  ⊂  原始 LAION-5B
+# -safe 额外用 p_unsafe > 0.45 滤掉大部分 NSFW。**所以 research 比
+# research-safe 更接近**，我第一版把 -safe 排在首位是没查就排的。
+# 选 2B-en 而非 2B-multi：ScaleDiff 的 prompt 是英文。
 CANDIDATES = [
-    "laion/relaion2B-en-research-safe",   # 下架后的官方重发，最贴 LAION-5B
-    "laion/laion2B-en-aesthetic",
-    "laion/laion-coco",
-    "laion/relaion2B-multi-research-safe",
+    "laion/relaion2B-en-research",        # 最接近原始 LAION-5B（英文子集）
+    "laion/relaion2B-en-research-safe",   # 上者的真子集，多一层 NSFW 过滤
+    "laion/laion2B-en-aesthetic",         # 美学过滤子集，分布偏"好看"
+    "laion/laion-coco",                   # 合成 caption，分布差最远
 ]
 
 GATED_HELP = """
@@ -89,7 +98,10 @@ GATED_HELP = """
 LAION 在 2023-12 下架重发后，这些集合都要登录 + 同意条款。
 
 三步解决：
-  1. 在 huggingface.co 上打开该数据集页面，点 "Agree and access repository"；
+  1. 打开 https://huggingface.co/datasets/laion/relaion2B-en-research
+     （首选；退而求其次是 .../relaion2B-en-research-safe），
+     **填写机构信息并同意条款** —— 这两个都是 gated access，
+     不是点一下就通过，可能需要审核时间；
   2. 在 https://huggingface.co/settings/tokens 建一个 read token；
   3. 在服务器上任选其一：
         huggingface-cli login          # 交互粘贴 token

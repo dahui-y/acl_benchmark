@@ -245,6 +245,50 @@ ScaleDiff 只有**一次全图前向**，没有地方喂第二句话。
 不是"我们不一样"。机制（同一句 prompt 施于所有局部视野导致重复）**是 AccDiffusion
 命名的，我们继承并引用**。
 
+### 3.1a AccDiffusion 的原文：数据集、以及他们自己承认的缺口（2026-08-11 核实）
+
+**四句原文**（经 arXiv HTML 版取得，**进论文前需对 PDF 再核一遍**）：
+
+> **v1**：*"We randomly selected 10,000 images from the Laion-5B dataset as our
+> real images set and randomly chose 1,000 text prompts from Laion-5B as inputs."*
+> **v2**：*"For quantitative comparison, we randomly selected 10,000 images from
+> the Laion-5B dataset as the real image set and used 1,000 randomly chosen
+> text prompts from Laion-5B as input."*
+
+数据集与我们同源（Laion-5B，1000 条 prompt）。**但真图参考集他们用 10,000 张，
+ScaleDiff 用 1,000 张 —— 这条线内部本来就不统一。** 指标 FID / IS / CLIP
++ 裁块版 FIDc / ISc（ScaleDiff 叫 FIDp / KIDp），分辨率 1024–4096。
+
+> **v1**：*"FID, IS, and CLIP-Score **do not intuitively reflect the degree of
+> repeated generation** in the resulting images."*
+> **v2**：*"Note that FID, IS, and CLIP-Score **may not directly indicate the
+> presence of repetitive generation** or local distortion in the generated images."*
+
+**一篇整本为物体重复而写的 ECCV 论文，两个版本都写下这句话，然后重复只用
+定性图（红框标复制体）来证明。** 这把 §6.9.0a 那套论证从"我们的辩解"
+升级成**在位者自己写在正文里的公认缺口**：标准表看不见重复 -> 没人能靠它
+证明修好了 -> **我们提供第一个不需真值、不需标注的重复量化指标**。
+引用时要把这两句原样放进 related work，它比我们自己论证十句都有力。
+
+**区别一览（防守靠"结构上不可用 + 数字"，不靠"我们不一样"）：**
+
+| | AccDiffusion v1/v2 | 我们 |
+|---|---|---|
+| 机制家族 | **patch-based**（DemoFusion 一系） | **单次全图前向**（ScaleDiff，注意力窗口） |
+| 怎么改文本条件 | 给每个 patch 换一串 token | 同一次前向里两套嵌入共存，按门控图逐位置混合 |
+| 结构前提 | **需要独立的 patch 前向** | ScaleDiff 只有一次全图前向，**没有地方喂第二句话** |
+| 4096² 耗时 | **1599 s** | ~117 s，**约 1/14** |
+| 施加范围 | 无条件 | **有适用性门，关闭时逐字节等于原版** |
+| 重复的度量 | **无，只有定性图** | **Δdelta**，无需真值/标注 |
+
+机制本身（同一句 prompt 施于所有局部视野导致重复）**是 AccDiffusion 命名的，
+我们继承并引用**，不假装是自己发现的。
+
+**顺带的协议决定**：他们用 10,000 张真图、ScaleDiff 用 1,000 张，
+我们手上有 **3,424 张干净真图**。主表按 ScaleDiff 协议用 1,000 张
+（我们要和它比），**另加一行用全部 3,424 张的稳健性检查** —— 更大参考集
+压低 FID 的小样本偏差，且已经在手，不额外花钱。这是当初多取候选的又一个回报。
+
 ### 3.15 适用性门（v1.1，方法的一部分，不是补丁）
 
 > **介入 ⟺ 基图空视野比例 > τ 且基图检出主体 ≥ 1。**

@@ -262,8 +262,9 @@ def main():
                          "还需要标定的东西只许在这上面定。取数时就切开、"
                          "写进 JSON —— 数据落地后再切会有'看过才切'的嫌疑。")
     ap.add_argument("--oversample", type=float, default=3.0,
-                    help="LAION 链接腐烂严重；多存这么多倍的候选行，"
-                         "下图时留前 n 个下成功的")
+                    help="LAION 存的是图片 URL 不是图片，多年后三到五成已失效。"
+                         "ScaleDiff 要 image-text pair（caption 生成、真图算 FID），"
+                         "所以按 (n + tune) 的这么多倍攒候选，下图时留下成功的。")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--min-words", type=int, default=4,
                     help="太短的 caption 生不出场景，且和我们的 prompt 差太远")
@@ -326,7 +327,9 @@ def main():
     # **流式读，够了就停。** read_row_group(0) 会把整个 row group 拉下来
     # （这些分片单片 3.4 GB，一个 row group 就几百 MB），而我们只要 3000 条
     # caption —— 用 iter_batches 边读边筛，攒够立刻 break。
-    need = int(a.n * a.oversample)
+    # **两个 split 都要超采样**：need 只按 eval 那 1000 算是漏了 tune 的 200，
+    # 实际倍率会变成 2.5x 而不是写好的 3x。
+    need = int((a.n + a.tune) * a.oversample)
     seen, pool = set(), []
     nread = 0
     for batch in pf.iter_batches(batch_size=8192, columns=want):

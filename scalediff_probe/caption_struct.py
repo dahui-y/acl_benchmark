@@ -94,7 +94,15 @@ def main():
     cands = [p for p in cands if p.exists()]
     if not cands:
         sys.exit(f"没找到 {base}/trigger_{a.split}_*.jsonl，先跑 trigger_select.py")
-    src = cands[0]
+    # **按行数挑，不按文件名排序挑。** 早期探路轮（20 张）留下的文件
+    # tag 里还没有 `_ms0.5`，字母序反而排在全量文件前面 —— 第一版取
+    # cands[0]，于是拿 18 行的旧文件当成了 560 行的结果。
+    nlines = {c: sum(1 for _ in c.open()) for c in cands}
+    if len(cands) > 1:
+        print("候选文件（按行数挑最大的那个）：")
+        for c in sorted(cands, key=lambda c: -nlines[c]):
+            print(f"  {nlines[c]:>5} 行  {c.name}")
+    src = max(cands, key=lambda c: nlines[c])
     rows = [json.loads(l) for l in src.open()]
     rows = [r for r in rows if r.get("nbox", 0) >= 1]      # 无定义的不进统计
     if len(rows) < 20:

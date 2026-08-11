@@ -36,9 +36,59 @@ import io
 import json
 import os
 import random
+import re
 import sys
 import urllib.request
 from pathlib import Path
+
+# ---- 词法筛：哪些 caption 明确声明了数量 ----
+#
+# 计数指标要 excess = 检出数 - 声明基数。LAION caption 绝大多数不声明数量，
+# 所以只在**声明了的子集**上算 —— 纯词法，零标注，和 CountGen 造 CoCoCount
+# 的思路一致。全部 1000 条仍然照 ScaleDiff 协议算 FID/KID/IS/CLIP。
+#
+# 刻意保守：只认明确的数量词。"a photo of a dog" 这种单数冠词**不算**
+# （caption 噪声大，一只狗的照片里常有别的狗），宁可子集小也不要假真值。
+NUMS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+        "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+_NP = r"(\w+)(?:\s+(\w+))?"
+_SING = re.compile(r"\b(?:a |an |the )?(?:single|lone|solitary|sole)\s+" + _NP, re.I)
+_PAIR = re.compile(r"\ba pair of\s+" + _NP, re.I)
+_WORD = re.compile(r"\b(" + "|".join(NUMS) + r")\s+" + _NP, re.I)
+_DIGIT = re.compile(r"\b([1-9]|10)\s+" + _NP, re.I)
+
+# "a pair of leather shoes" 的主体是 shoes 不是 leather，所以要看第二个词；
+# 但 "three dogs running" 的主体是 dogs 不是 running。没有词性标注时，
+# 用这条规则区分：第二个词若是 -ing/-ed 或介词/连词，就取第一个。
+_NOT_NOUN = {"in", "on", "of", "at", "with", "and", "or", "near", "over",
+             "under", "by", "from", "to", "for", "against", "into", "across",
+             "the", "a", "an", "that", "which", "is", "are", "was", "were"}
+
+
+def _head(w1, w2):
+    if not w2:
+        return w1.lower()
+    w = w2.lower()
+    if w in _NOT_NOUN or w.endswith("ing") or w.endswith("ed"):
+        return w1.lower()
+    return w
+
+
+def declared_cardinality(text):
+    """返回 (基数, 名词) 或 None。只认明确的数量词。"""
+    m = _SING.search(text)
+    if m:
+        return 1, _head(m.group(1), m.group(2))
+    m = _PAIR.search(text)
+    if m:
+        return 2, _head(m.group(1), m.group(2))
+    m = _WORD.search(text)
+    if m:
+        return NUMS[m.group(1).lower()], _head(m.group(2), m.group(3))
+    m = _DIGIT.search(text)
+    if m:
+        return int(m.group(1)), _head(m.group(2), m.group(3))
+    return None
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from hfnet import pick_endpoint                        # noqa: E402
@@ -152,7 +202,10 @@ def main():
         if k in seen:                                   # 去重：LAION 里重复很多
             continue
         seen.add(k)
-        pool.append({"prompt": t, "url": u})
+        card = declared_cardinality(t)
+        pool.append({"prompt": t, "url": u,
+                     "card": card[0] if card else None,
+                     "subject": card[1] if card else None})
     need = int(a.n * a.oversample)
     print(f"  过滤+去重后 {len(pool)} 条可用（需要 {need} = {a.n}×{a.oversample} 超采样）")
     if len(pool) < need:
@@ -165,6 +218,10 @@ def main():
     root = Path(os.environ.get("SD_OUT", "./scalediff_out"))
     out = Path(a.out) if a.out else root / "eval_prompts.json"
     out.parent.mkdir(parents=True, exist_ok=True)
+    n_card = sum(1 for it in picked if it["card"] is not None)
+    print(f"  其中明确声明了基数的 {n_card} 条 = {n_card/len(picked):.1%}"
+          f"（计数指标只在这个子集上算；FID/KID/IS/CLIP 用全部）")
+
     out.write_text(json.dumps({
         "repo": a.repo, "shard": shards[0], "row_group": 0,
         "seed": a.seed, "n": a.n, "oversample": a.oversample,
@@ -177,6 +234,9 @@ def main():
     print(f"\n写出 {out}   {len(picked)} 条")
     for it in picked[:5]:
         print(f"  - {it['prompt'][:90]}")
+    print("  声明了基数的例子：")
+    for it in [x for x in picked if x["card"] is not None][:5]:
+        print(f"  - [{it['card']} {it['subject']}] {it['prompt'][:80]}")
 
     print("""
 可比性提醒（写在用它之前）：

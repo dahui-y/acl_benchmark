@@ -101,6 +101,9 @@ def main():
                     help="并发数。境内出网不稳，太高反而更多超时")
     ap.add_argument("--timeout", type=int, default=20)
     ap.add_argument("--min-side", type=int, default=MIN_SIDE)
+    ap.add_argument("--allow-mixed", action="store_true",
+                    help="候选表指纹不符时仍然继续。**默认拒绝** —— "
+                         "见下面 table.json 那段")
     a = ap.parse_args()
 
     meta = json.loads(Path(a.prompts).read_text())
@@ -112,7 +115,31 @@ def main():
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
+
+    # **候选表指纹。** 文件名是 idx，而 idx 是"在候选表里的位置" ——
+    # 候选表一重取，同一个 idx 就指向另一条 caption，目录里于是混着两代文件。
+    # 这件事发生过一次（见 §7.1.7），而且当时是靠 mtime 空档这种启发式去猜的。
+    # 现在把表的 sha256 钉在目录里：换了表就**拒绝运行**，让它显式，不靠猜。
+    import hashlib
+    tsha = hashlib.sha256(Path(a.prompts).read_bytes()).hexdigest()
+    stamp = out / "table.json"
+    if stamp.exists():
+        old = json.loads(stamp.read_text())
+        if old.get("sha256") != tsha and not a.allow_mixed:
+            print(f"**候选表变了。** 目录里的图是按\n  {old.get('sha256','?')[:16]}"
+                  f"\n下的，当前 {a.prompts} 是\n  {tsha[:16]}\n"
+                  f"（记录于 {old.get('when')}，{old.get('n_items')} 条）\n\n"
+                  "同一个 idx 在两代表里指向不同 caption，混在一起就说不清了。\n"
+                  "二选一：\n"
+                  f"  rm -rf {out}          # 全部重下，最干净\n"
+                  "  --allow-mixed          # 明知故犯，且必须在论文里交代")
+            return 2
+    stamp.write_text(json.dumps(
+        {"prompts": str(a.prompts), "sha256": tsha, "n_items": len(meta["items"]),
+         "when": time.strftime("%Y-%m-%d %H:%M:%S")}, ensure_ascii=False, indent=1))
+
     print(f"{len(items)} 条  ->  {out}   并发 {a.workers}  超时 {a.timeout}s")
+    print(f"候选表指纹 {tsha[:16]}")
 
     t0 = time.time()
     ok, reasons = [], {}

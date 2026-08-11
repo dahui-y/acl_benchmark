@@ -181,13 +181,32 @@ def main():
           f"最大空档 {gap/60:.1f} 分钟（其前有 {gi+1} 张）")
     cut = mt[gi] if gap > 300 else mt[0] - 1
     stale = [r for r in recs if r["mtime"] <= cut]
-    print(f"空档之前的（= 上一轮遗留的缓存）：{len(stale)} 张")
+    print(f"空档之前的：{len(stale)} 张")
+
+    # **权威判据是候选表指纹，不是 mtime。** mtime 空档分不清"换了候选表"
+    # 和"同一张表跑了两趟、中间隔了二十分钟"，两者长得一模一样 ——
+    # 它只能提示"这里有一批更早的文件"，不能断定它们属于哪一代表。
+    tp = d / "table.json"
+    if tp.exists():
+        import hashlib
+        t = json.loads(tp.read_text())
+        now = hashlib.sha256(Path(a.prompts).read_bytes()).hexdigest()
+        same = t.get("sha256") == now
+        print(f"候选表指纹 {t.get('sha256','?')[:16]}（记于 {t.get('when')}）"
+              f"  当前 {now[:16]}  -> " +
+              ("**一致**，目录里就是这张表下的图；上面的空档只是两趟之间的停顿。"
+               if same else
+               "**不一致 —— 目录里混着两代表的文件，先清干净。**"))
+        if same:
+            stale = []
+    else:
+        print("  目录里没有 table.json（早于该机制的批次）—— "
+              "只能退回 mtime 启发式，它会把两趟之间的停顿也算进去。")
     if stale:
-        print("  **这些是上一轮候选表下的缓存**。候选表重取过（加了 299 预筛），"
-              "\n  下标已经变了，所以它们的 idx 现在对应的是**另一条 caption**。"
-              "\n  FID 比的是分布不是配对，所以不致命；但它们同时绕过了尺寸检查。"
-              "\n  处置：删掉再跑一次 fetch_real_images.py（其余文件命中缓存，"
-              "只补这些）：")
+        print("  **可能是上一轮候选表下的缓存**（没有 table.json 时只能这么猜）。"
+              "\n  若候选表重取过，下标就整体位移了，它们的 idx 会对应另一条"
+              "\n  caption。FID 比分布不比配对，所以不致命；处置是删掉重下"
+              "\n  （其余文件命中缓存，只补这些）：")
         print(f"    find {d} -name '*.jpg' ! -newermt '@{cut:.0f}' -delete")
 
     # ---- split 够不够 ----

@@ -634,6 +634,64 @@ HiPrompt）评测点都停在 4096²，**8192² 的 training-free 生成基本�
    上面那套说法就被否了。**
 3. **重复量在 8192² 是否真的比 4096² 严重。** 前两条都过才做。
 
+### 5.46 读了三篇原文之后：顶会要什么，我们的空位在哪（2026-08-11）
+
+**PixelRush（CVPR）为什么能中 —— 它不是"又一个 training-free"。**
+novelty 既不在 one-step（不稀奇）也不在 training-free（更不稀奇），
+而在于**把已有范式推进到一个它会崩的 regime，诊断崩因，修好，换数量级收益**：
+
+| 步骤 | 内容 |
+|---|---|
+| 洞察 | 精修只需合成高频，**跑完整反向过程是冗余的** -> partial inversion |
+| 换 regime | 50 步 -> **few-step**，4K 从 5 分钟到 **20 秒**（10–35x） |
+| **新 regime 引入的新失效** | ① 低步数下 patch blending 崩坏 -> seamless blending<br>② 过平滑 -> noise injection |
+| 定位 | *"the first tuning-free framework for **practical** high-resolution T2I"* |
+
+> **拥挤的是范式，不拥挤的是范式在新 regime 下的断裂处。**
+
+**对我们不利的一条，记下来**：PixelRush 正文写
+*"enabling generation at **8K and beyond** on a single GPU"*，
+并称自己 *"inherently mitigates object repetition"*。
+**§5.45 那个 8K 改题的前半已被占。** 但注意：这句"inherently mitigates"
+**没有任何度量支撑** —— 这条线没有一篇有重复的定量指标。
+
+**AccDiffusion 的贡献边界（原文自述）**：v1 两条 ——
+*"identify the reason for repetitive generation **during patch-wise
+denoising**"* + patch-content-aware prompts；dilated sampling with
+interaction。v2 加 ControlNet 注入低分辨率结构治 local distortion。
+
+**关键在那个限定语 `during patch-wise denoising`：他们的因果解释绑死在
+patch 分解上。** 而 **ScaleDiff 没有 patch** —— 局部性来自注意力窗口限制
+感受野，不是图像被切块。所以那句因果描述在 ScaleDiff 上**字面不成立**，
+症状却照样出现（作者自承背景区有 repetitive artifacts）。
+
+> **空位：同一症状、两种产生机制，而现有解释各自绑死在自己的机制上。**
+> 我们的律（重复 ≈ R²×(1−主体覆盖率)）在 patch 家族（DemoFusion）与
+> 注意力窗口家族（ScaleDiff）上都成立（§1.2.2）—— **它是机制无关的**，
+> 而 AccDiffusion 的解释里根本没有 R 这个变量。
+
+#### 三个候选论文形状（**现在还没有资格选，见末尾**）
+
+**形状一 换 regime（学 PixelRush）。** 把干预放进 few-step：PixelRush 是
+当前最快的一极，但对重复只有一句 "inherently mitigates"、**零度量**。
+若能证明它其实没修好、而我们用 +3.9% 修好，就是在最新 SOTA 上打。
+前提：它的开源码（正文给了 GitHub）能跑起来。
+
+**形状二 基准批判 + 度量 + 方法。** 三条证据链：
+(1) AccDiffusion v1/v2 **自己写**标准指标反映不出重复（§3.1a 原文）；
+(2) 实测 LAION-aesthetic 只有约 **2%** 的 prompt 进入失效区；
+(3) 故这条线三年来关于重复的改进**全是定性的、不可验证的**。
+交付：无需真值的度量 + 分层评测协议 + 在其上取胜的方法。
+**这条不依赖在 FID 上赢 ScaleDiff** —— 而那件事大概率做不到。
+
+**形状三 机制无关的统一解释。** 律在三个机制家族上成立，据此给出
+任何管线都能挂的预测器与干预。最"理论"，也最依赖数字漂亮。
+
+**倾向：二为主、三为辅、一作最强加分。但这个倾向现在不作数** ——
+形状二的第 (2) 条目前**只有代理量（evf）支持**，而 `laion_hi_run` 正在测的
+就是它。**若 delta 显示重复其实普遍，第 (2) 条立刻反转，整套论证要重写。**
+**在那之前不锁方向。**
+
 ### 5.5 门的已知失效：触发变量依赖基图检测（2026-08-10）
 
 `gate_eval` 此前整行跳过无基数的类，于是**门在 crowd/texture 上的行为

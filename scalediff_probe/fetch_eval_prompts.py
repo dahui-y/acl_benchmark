@@ -240,9 +240,12 @@ def main():
                     help="**不相交的调参 split**：门阈值 τ、检测工作点等一切"
                          "还需要标定的东西只许在这上面定。取数时就切开、"
                          "写进 JSON —— 数据落地后再切会有'看过才切'的嫌疑。")
-    ap.add_argument("--min-px", type=int, default=128,
-                    help="LAION 元数据里短边小于此的直接跳过（占位符尺度，"
-                         "与 fetch_real_images 的 MIN_SIDE 同依据）")
+    ap.add_argument("--min-px", type=int, default=299,
+                    help="LAION 元数据里短边小于此的直接跳过。299 = FID 的"
+                         "重采样目标：**参考图不许被上采样**，否则参考分布"
+                         "系统性偏糊。与 fetch_real_images 的 MIN_SIDE 同值同据。"
+                         "在这里筛掉，那些图根本不用去下 —— 下载失败里就只剩"
+                         "真正的死链。")
     ap.add_argument("--max-batches", type=int, default=200,
                     help="最多扫这么多批（每批 8192 行）")
     ap.add_argument("--oversample", type=float, default=3.0,

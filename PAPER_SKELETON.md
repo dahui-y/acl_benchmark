@@ -195,14 +195,29 @@ ScaleDiff 的缺陷报告。DemoFusion（CVPR 2024，重叠 patch + 渐进上采
 1. **视野是受限的**；
 2. **完整的文本条件以全局强度施加到每一个视野。**
 
-**领域三年来只攻过第 (1) 条：**
+**按"攻哪个因子"分类（2026-08-12 修正：原稿写成"三年来只攻过第 (1) 条"，
+把 AccDiffusion 的 patch-prompt 错归进第 (1) 条，与 §3.1b 已承认的
+"文本条件空间化这个原则是他们的"自相矛盾。审稿人会当场抓住，这里改正）：**
 
-| 攻法 | 代价（实测/论文） |
+| 攻第 (1) 条：让局部视野知道更多全局 | 依据 |
 |---|---|
-| 扩大 / 重叠视野（DemoFusion、HiWave 50% overlap、我们的 KV×2 消融） | **+37% 时间 / +41% 显存** |
-| 逐 patch 改写 prompt（AccDiffusion v1/v2） | **需要独立的 patch 前向**；4096² 要 1599 秒 |
+| ScaleCrafter 扩张卷积扩大感受野 | *"modifies the dilation rate ... which mitigates object repetition artifacts"* |
+| DemoFusion dilated sampling 提供全局语义 | AccDiffusion v2 转述 |
+| FouriScale / FreeScale 频域对齐 | *"attribute this to frequency-domain misalignment and introduce spectral interventions"* |
+| HiWave 注入 DDIM 反演噪声保结构 | *"injects DDIM-inverted noise to preserve structural information and reduce repetition"* |
+| PixelRush 从保结构 latent 起步 | *"inherently mitigates object repetition"* |
+| （我们的 KV×2 消融也属这一类） | 实测 **+37% 时间 / +41% 显存** |
 
-**没有人攻过第 (2) 条，尤其没有人在单次前向内攻过它。**
+| 攻第 (2) 条：让文本条件不再全局均匀 | 代价 |
+|---|---|
+| **AccDiffusion v1/v2 逐 patch 改写 prompt —— 唯一一家** | **需要独立的 patch 前向**；4096² 要 1599 秒 |
+
+> **五种机制攻"视野不够全局"，一种机制攻"文本条件不分位置"。
+> 后者只有 AccDiffusion，而它的做法需要 patch 前向。
+> 我们是第二个攻第 (2) 条的，也是第一个在单次全图前向内攻它的。**
+
+这个分类还解释了为什么其余五家**在机制层面不构成正面竞争** ——
+它们与我们互补（攻不同因子），只有 AccDiffusion 需要正面防守（§3.1b）。
 
 > ### **能不能让文本条件在空间上不再均匀，且不付计算代价 ——**
 > ### **使效率不必再用一致性来买？**

@@ -678,6 +678,27 @@ C − A = **+0.27**（功效下限 1.5）；Spearman(evf, delta_content) = **+0.
 "主体+场景" prompt 上重复同样的测量，预期 delta 大。两边都有数，
 "展示语料与评测语料错开"就从观察变成定理级的实证事实。
 
+### 5.48 base_diag 定案：不是 tiling，是数值路径；内容等同（2026-08-12）
+
+四方对比（idx 36，同 prompt 同 seed）：
+
+| | md5 | vs base_run 像素差 |
+|---|---|---|
+| base_run 版 | `b634…` | — |
+| plain 不分块 | `b634…` | **max=0（逐字节复现）** |
+| plain 分块 | `b634…` | max=0 |
+| **laion_hi（ScaleDiff 管线）** | `2942…` | **max=13 / mean=0.057** |
+
+三个结论：
+1. **我的头号嫌疑（VAE tiling）被证伪** —— tiling 开关对 1024² 逐字节无影响
+   （这个尺寸下分块根本没起作用）。猜错了，测了才知道。
+2. **差异来自 ScaleDiff 管线自身的数值路径**（fp32 解码顺序 / attention
+   processor 包装），mean=0.057 → **同一张图**。560 张基图与 evf 照常可用；
+   `laion_delta` 的自检已改为像素容差判定。
+3. **"逐字节相同"这个说法今后只许用于同管线比较**（我们 arm vs 基线 arm，
+   都在 Custom 管线里）—— 跨管线只能说"内容等同"。20/20 md5 复用校验
+   同理：必须在 Custom 管线内做。
+
 ### 5.46 读了三篇原文之后：顶会要什么，我们的空位在哪（2026-08-11）
 
 **PixelRush（CVPR）为什么能中 —— 它不是"又一个 training-free"。**
@@ -1392,6 +1413,41 @@ Inception（FID/KID/IS 的骨干）、CLIP 塔、LAION caption 分片、pip 源�
 **只有这些都不成立时才谈 Mac。** 在此之前不再把中转写进计划。
 
 ---
+
+## 9. 顶会作战图（2026-08-12 复盘定稿）
+
+**一句话论文**：*训练自由高分辨率生成的物体重复：正确地测它、提前地预测它、
+近零成本地修它 —— 并证明现行评测协议为什么三年看不见它。*
+
+### 9.1 三根柱子与证据状态
+
+| 柱子 | 主张 | 证据 | 状态 |
+|---|---|---|---|
+| **事实** | 展示语料（主体+场景手写 prompt）与评测语料（LAION 裸主体 caption）错开，故表格从不显示该失效 | LAION 侧：触发率 2% + 直接测量 delta 平（C−A=+0.27）；触发侧：诊断集 +5.40，**CoCoCount 待跑** | **半闭合** |
+| **尺子** | Δdelta 无需真值可测重复；朴素测法被尺度漂移污染（实测假阳性 +2.33） | 漂移消除设计 + 双检测器一致 + D 层干净；**真值验证（CoCoCount/GenEval 计数）待跑** | 大半 |
+| **方法** | AccDiffusion 原则的 patch-free 实例化：单前向、双嵌入、连续门控、门关时同管线逐字节不动、+3.9% | 机制消融已有（v0 无效、KV×2 太贵）；**主表与正面对比待跑** | 待主战 |
+
+### 9.2 六个实验到三个口号
+
+| # | 实验 | 支撑的口号 | 算力 |
+|---|---|---|---|
+| E1 | Δdelta 对 CoCoCount/GenEval 真值计数校准 | "被验证过的尺子" | 数小时（只计数） |
+| E2 | ScaleDiff+DemoFusion 基线在 CoCoCount 上的 delta（触发侧闭环 + 律的正域检验） | 事实柱第二半 | ~400 张 ≈ 10 h |
+| E3 | **主表**：我们 vs ScaleDiff，CoCoCount 分层 Δdelta + LAION-1000 标准表（护栏，配换 seed 噪声地板） | "比 ScaleDiff 强"（帕累托+扩维） | 最大头 |
+| E4 | 我们的方法装上 DemoFusion，与 AccDiffusion 同批 prompt 正面比（Δdelta、FIDp/KIDp、时间） | "比 AccDiffusion 强" | DemoFusion 慢，~60 条分层 |
+| E5 | 在 ScaleDiff 上实测移植 patch-content-aware prompt 的代价 | "结构上不可用"成为实验 | 小 |
+| E6 | FLUX 第二骨干（ScaleDiff 对齐） | 同任务定位 | 后置 |
+
+### 9.3 "赢"的定义（诚实版）
+
+- **vs ScaleDiff**：标准七列落在实测噪声地板内 + Rep 列量级差的赢
+  + patch 三列争取真赢（畸形复制体消失应体现在原生裁块上）。
+  **不承诺 FID 赢** —— 同骨干上没有人能有意义地赢 FID。
+- **vs AccDiffusion**：他们主场（DemoFusion + 他们式 prompt）上
+  Δdelta 相当或更好，代价 +3.9% vs 每 patch 独立编码+前向；
+  且其方案在窗口注意力家族结构不可用（E5 的表）。
+- **判死条件**：E2 在 CoCoCount 上也平 -> 前提死，转 few-step/PixelRush
+  分支；E4 输 -> 降级为成本/通用性主张；patch 列不动 -> 撤该主张只留 Rep。
 
 ## 8. 实验优先级（按"支撑哪一句"排，不按方便程度）
 

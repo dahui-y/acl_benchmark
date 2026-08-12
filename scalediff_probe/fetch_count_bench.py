@@ -74,7 +74,8 @@ def geneval(out_dir, tune_frac=0.2, seed=0):
     p.write_text(json.dumps({
         "source": "GenEval (NeurIPS 2023 D&B), prompts/evaluation_metadata.jsonl",
         "tag": "counting", "n": len(items),
-        "note": "裸模板，无场景短语；按律主体多半占满画面 -> 门应当关闭",
+        "note": "裸模板，无场景短语；按律主体多半占满画面 -> 门应当关闭。"
+                "主读数是 Δdelta，card 只用于校准计数器/基图",
         "items": items}, ensure_ascii=False, indent=1))
     print(f"  写出 {p}   {len(items)} 条（tune {k} / eval {len(items)-k}）")
     for it in items[:5]:
@@ -159,9 +160,12 @@ def main():
         cococount_hint()
 
     print("""
-事前预测（写在跑之前，两批各自的空视野比例在基图上量）：
-  CoCoCount（带场景）  空视野比例高 -> 门开 -> 计数 MAE 明显下降；
-  GenEval（裸模板）    空视野比例低 -> 门关 -> **逐字节不动，MAE 不变**。
+事前预测（写在跑之前，两批各自的空视野比例在基图上量）。
+**主读数是 Δdelta（对自己基图的重复量），不是对声明数的 MAE** ——
+声明的 card 只用于校准（count(基图)==card 验证基图与计数器，
+之后 delta 才被真值锚定）：
+  CoCoCount（带场景）  空视野比例高 -> 门开 -> **基线 delta 大，我们的 delta 显著更小**；
+  GenEval（裸模板）    空视野比例低 -> 门关 -> **同管线逐字节不动，delta 两臂相同**。
 两条都成立才说明律和门都对；GenEval 那批若也大幅变化，说明门没起作用，
 要回头查阈值。""")
     return 0 if g else 1

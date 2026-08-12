@@ -117,11 +117,18 @@ def adapt_cococount(path, out_dir, tune_frac=0.2, seed=0):
         if not isinstance(r, dict):
             continue
         prompt = r.get("prompt") or r.get("text") or r.get("caption")
-        card = r.get("count") or r.get("number") or r.get("expected_count")
-        subj = r.get("class") or r.get("class_name") or r.get("object")
+        # **官方文件里 `number` 是英文单词（"three"），int() 会崩** ——
+        # 整数在 `int_number`。第一版就抓错了字段，这里按实际结构来。
+        card = r.get("int_number", r.get("count", r.get("expected_count")))
+        subj = r.get("object") or r.get("class") or r.get("class_name")
         if prompt and card and subj:
             items.append({"prompt": prompt, "card": int(card),
-                          "subject": str(subj), "source": "cococount"})
+                          "subject": str(subj),
+                          # scene 是作者自己标的：50% 带场景短语、50% 裸模板。
+                          # **基准内部的单变量对照** —— 律的检验用它分组，
+                          # 连 has_locative 那个粗规则都不用。
+                          "scene": r.get("scene", ""),
+                          "source": "cococount"})
     if not items:
         print(f"**没解析出条目。第一行长这样：** {rows[0] if rows else '(空)'}")
         return None
@@ -137,8 +144,12 @@ def adapt_cococount(path, out_dir, tune_frac=0.2, seed=0):
         "note": "带场景短语；按律主体可能只占一小部分 -> 门应当开启",
         "items": items}, ensure_ascii=False, indent=1))
     print(f"  写出 {p}   {len(items)} 条（tune {k} / eval {len(items)-k}）")
+    ns = sum(1 for it in items if it.get("scene"))
+    print(f"  带场景 {ns} / 裸模板 {len(items)-ns}   "
+          f"<- 基准内部的单变量对照（no_scene_percent=0.5）")
     for it in items[:5]:
-        print(f"    - [{it['card']} {it['subject']}] {it['prompt'][:70]}")
+        sc = it.get("scene") or "(无场景)"
+        print(f"    - [{it['card']} {it['subject']}] {sc:<16} {it['prompt'][:56]}")
     return items
 
 

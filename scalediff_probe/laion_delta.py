@@ -83,10 +83,26 @@ def main():
             diff.append(r["idx"])
     print(f"\n自检 基图一致性：逐字节相同 {same}   不同 {len(diff)}   无法比 {nocmp}")
     if diff:
-        print(f"  **不同的 idx（前 10）：{diff[:10]}**")
-        print("  两条管线的 1024² 不是同一张图 -> delta 的参照物错位。"
-              "\n  **下面的数只在'用本次自带的 1024² 当基图'的意义下成立**，"
-              "\n  且必须查清差异来源（steps / CFG / negative / RNG 钉法）。")
+        # **md5 不同 ≠ 内容不同。** base_diag 已定案（2026-08-12）：
+        # plain 管线逐字节复现 base_run（max=0），tiling 开关无影响；
+        # ScaleDiff 管线的 1024² 与之 max=13 / mean=0.057 —— 纯数值路径差，
+        # 同一张图。所以这里补一手像素差，把两种情况当场分开。
+        from PIL import Image
+        import numpy as np
+        worst = 0.0
+        for i in diff[:5]:
+            r0 = next(r for r in rows if r["idx"] == i)
+            f1 = r0["files"].get("1024") or r0["files"].get(1024)
+            a1 = np.asarray(Image.open(hi / f1).convert("RGB"), dtype=np.int16)
+            a2 = np.asarray(Image.open(base / f"{i:05d}.png").convert("RGB"),
+                            dtype=np.int16)
+            if a1.shape == a2.shape:
+                worst = max(worst, float(np.abs(a1 - a2).mean()))
+        print(f"  抽 5 对算像素差：mean 最大 {worst:.3f}"
+              + ("  -> **内容等同（数值路径差异），参照物没有错位**；"
+                 "delta 用同跑基图，560 张基图与 evf 照常可用。"
+                 if worst < 1.0 else
+                 "  -> **内容可能真的不同，先跑 base_diag.py 查清再信下面的数。**"))
 
     out_path = hi / "delta.jsonl"
     done = {}

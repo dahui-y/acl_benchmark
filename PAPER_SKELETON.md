@@ -56,6 +56,38 @@
 **七种不同的效率机制，七篇各自命名了同一个失效。**
 不是巧合 —— 是那个结构性代价换了外衣反复出现。
 
+### 1.1a "专门针对重复"的到底有几家（2026-08-12 查原文定案）
+
+区分"顺带缓解"与"专门诊断"，答案不是一家也不是六家，是**两家**：
+
+| | 重复是**唯一**目标 | 有**专门的因果诊断**并宣称解决 | 顺带缓解 |
+|---|---|---|---|
+| **AccDiffusion v1/v2** | ✅ | ✅ | |
+| **ScaleCrafter (ICLR24)** | ❌（两问题之一） | ✅ | |
+| DemoFusion / FouriScale / FreeScale / HiWave / PixelRush / Pixelsmith | | | ✅ |
+
+**ScaleCrafter 摘要原文**（不是顺带一提，必须给它这个位置，否则审稿人会拿
+它来问）：*"we observe persistent problems of **object repetition and
+unreasonable object structures** ... identify the crucial cause as the
+**limited perception field of convolutional kernels** ... our approach can
+**address the repetition issue well**"*
+**AccDiffusion v1 摘要第一句**：*"This paper attempts to address the object
+repetition issue in patch-wise higher-resolution image generation."*
+
+**两家的诊断恰好互斥，各占一个因子：**
+- ScaleCrafter -> 因子 (1) 视野不够全局 -> re-dilation 扩感受野；
+- AccDiffusion -> 因子 (2) 文本条件不分位置 -> 逐 patch 改写 prompt。
+
+**领域里对这个问题的专门诊断就这两条，且都是定性、二值的（有/无某因素）。**
+我们的定位由此变得干净：
+
+> **我们给出二者的定量合成：重复 ≈ R² × (1 − 主体覆盖率)。
+> R² 来自视野被切成多少块（ScaleCrafter 那一维），(1 − 覆盖率) 来自这些块
+> 里有多少个收到了不该收到的主体条件（AccDiffusion 那一维）。
+> 它第一次回答"在什么条件下发生、发生多少"，而不只是"为什么发生"。**
+
+这把"第三家修法"升格为"把前两家的诊断统一起来并可预测化"。
+
 ### 1.2 我们把定性抱怨变成定量的律
 
 **律的完整形式有两个因子，只写第一个是错的（2026-08-08 修正）。**

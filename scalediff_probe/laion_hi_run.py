@@ -111,6 +111,10 @@ def main():
                          "换抽样不影响生成的可复现性")
     ap.add_argument("--plan-only", action="store_true",
                     help="只打印抽样表，不加载模型、不烧 GPU")
+    ap.add_argument("--idx-file", default=None,
+                    help="给一份名单（trigger_clean_*.json 的 alive_idx）"
+                         "就按名单跑，**跳过四层分层抽样** —— Parti 触发集"
+                         "走这条路")
     a = ap.parse_args()
 
     base = Path(a.base)
@@ -119,10 +123,20 @@ def main():
     byidx = {r["idx"]: r for r in rows}
     print(f"用 {src.name}   {len(rows)} 条")
 
+    if a.idx_file:
+        want = json.loads(Path(a.idx_file).read_text())["alive_idx"]
+        plan = [(i, "trigger") for i in sorted(want)]
+        print(f"\n按名单 {a.idx_file}：{len(plan)} 条（跳过分层抽样）")
+    else:
+        plan = None
     rng = random.Random(a.sample_seed)
-    plan = []
-    print(f"\n分层抽样（每层 {a.per_stratum} 条）：")
-    for name, desc, pred in STRATA:
+    if plan is None:
+        plan = []
+        print(f"\n分层抽样（每层 {a.per_stratum} 条）：")
+        _run_strata = True
+    else:
+        _run_strata = False
+    for name, desc, pred in (STRATA if _run_strata else []):
         pool = sorted([r["idx"] for r in rows if pred(r)])
         take = pool if len(pool) <= a.per_stratum else rng.sample(pool, a.per_stratum)
         plan += [(i, name) for i in sorted(take)]

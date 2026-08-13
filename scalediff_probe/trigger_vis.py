@@ -49,13 +49,21 @@ def main():
                          "evf 被记成 1.00 再被当作'无定义'排除。门要召回，"
                          "这个二次筛正好反着来 —— 所以这里能调，且要并列看两档。")
     ap.add_argument("--tag", default=None)
+    ap.add_argument("--idx-file", default=None,
+                    help="只画这份名单（parti_profile --write 出的 "
+                         "trigger_clean_*.json，键 alive_idx）")
     a = ap.parse_args()
 
     from PIL import Image, ImageDraw
     from count_objects import Detector
 
     base = Path(a.base)
-    rows = [json.loads(l) for l in (base / "manifest.jsonl").open()][:a.n]
+    rows = [json.loads(l) for l in (base / "manifest.jsonl").open()]
+    if a.idx_file:
+        want = set(json.loads(Path(a.idx_file).read_text())["alive_idx"])
+        rows = [r for r in rows if r["idx"] in want]
+        a.n = max(a.n, len(rows))
+    rows = rows[:a.n]
     det = Detector(box_thr=a.box_thr)
 
     C, R = a.cell, a.R

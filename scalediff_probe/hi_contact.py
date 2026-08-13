@@ -31,6 +31,8 @@ def main():
                          "不传时：有 C_high 取 C_high，否则全取")
     ap.add_argument("--top-raw", type=int, default=0,
                     help="改为取 delta_raw 最大的 N 张（跨层）")
+    ap.add_argument("--idx", type=int, nargs="*", default=None,
+                    help="只看这几张（可疑格放大用，配 --cell 1024 --cols 1）")
     ap.add_argument("--cell", type=int, default=384)
     ap.add_argument("--cols", type=int, default=3)
     a = ap.parse_args()
@@ -52,7 +54,10 @@ def main():
     ptag = lambda r: pred.get(str(r["idx"]), {}).get("tag", "")
 
     rows = list(mani.values())
-    if a.top_raw:
+    if a.idx:
+        rows = [mani[i] for i in a.idx if i in mani]
+        tag = "pick_" + "_".join(str(i) for i in a.idx)
+    elif a.top_raw:
         rows = sorted(rows, key=lambda r: -(deltas.get(r["idx"], {})
                                             .get("delta_raw", -99)))[:a.top_raw]
         tag = f"topraw{a.top_raw}"

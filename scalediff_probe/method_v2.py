@@ -131,6 +131,10 @@ def main():
     ap.add_argument("--stage", type=int, default=2)
     ap.add_argument("--out", default=str(root / "method_v2"))
     ap.add_argument("--skip-measure", action="store_true")
+    ap.add_argument("--detector", action="store_true",
+                    help="额外跑已判死的检测器计数列（默认不跑：它只作方向"
+                         "参考，却要在 SDXL 之后再占显存。权威计数走 "
+                         "vlm_count.py --armdelta）")
     a = ap.parse_args()
 
     import pipeline_scalediff_sdxl as sd_mod
@@ -180,10 +184,16 @@ def main():
         for idx in a.idx:
             cat, subj, prompt = PROMPTS[idx]
             head = HEADS[idx]
-            nosubj = strip_subject(prompt, head) if head else prompt
+            # strip_subject 返回 (去主体 prompt, 被摘掉的那段) —— 必须解包，
+            # 否则整个元组会被当成 prompt 喂进 encode_prompt
+            nosubj, removed = strip_subject(prompt, head) if head else (prompt, "")
             tok_ids = subject_token_ids(pipe, prompt, head or subj)
             print(f"\n[{idx}] {cat}/{subj}  主体 token {tok_ids}")
             print(f"    去主体: {nosubj[:70]}")
+            print(f"    摘掉了: {removed!r}")
+            if not removed:
+                print("    **警告：一个词都没摘掉** —— v1/v2 两臂的替代文本"
+                      "与原 prompt 相同，门会退化成无操作，这一条的结果无效")
 
             for arm, s, gbg in arms:
                 if (idx, arm) in done:
@@ -246,14 +256,17 @@ def main():
         print("\n跳过测量。之后单独跑本脚本（生成会因 manifest 全命中而跳过）。")
         return 0
 
-    # ---------- 测量：背景高频 + delta ----------
+    # ---------- 测量：背景高频（P1）----------
     print("\n========== 测量 ==========")
     from PIL import Image
     import numpy as np
-    from count_objects import Detector
-    from caption_audit import conditioned_text, load_tokenizer
-    det = Detector()
-    tok = load_tokenizer()
+    # 检测器默认不加载：它已降级为方向参考（§8.9a 判死），却要在 SDXL 之后
+    # 再占一次显存 —— 白添一个崩溃点，而生成结果已经落盘，不该为它冒险。
+    det = tok = None
+    if a.detector:
+        from count_objects import Detector
+        from caption_audit import conditioned_text, load_tokenizer
+        det, tok = Detector(), load_tokenizer()
     rows = [json.loads(l) for l in mani.open()]
     rows = [r for r in rows if "arm" in r and "idx" in r and r.get("files")]
     res_hi = 1024 * (2 ** a.stage)
@@ -284,13 +297,19 @@ def main():
                          .resize(im_hi.size, Image.BILINEAR)) / 255.0
             mask_bg = m < 0.3
         e_bg = lap_energy(im_hi, mask_bg)
-        text, _, _ = conditioned_text(tok, r["prompt"])
-        n_lo = len(det.detect(im_lo, text)[0])
-        n_dn = len(det.detect(im_hi.resize(im_lo.size, Image.LANCZOS), text)[0])
-        d = n_dn - n_lo
+        if det is not None:
+            from caption_audit import conditioned_text
+            text, _, _ = conditioned_text(tok, r["prompt"])
+            n_lo = len(det.detect(im_lo, text)[0])
+            n_dn = len(det.detect(
+                im_hi.resize(im_lo.size, Image.LANCZOS), text)[0])
+            d = n_dn - n_lo
+        else:
+            n_lo = n_dn = "-"
+            d = None
         stats.setdefault(r["idx"], {})[r["arm"]] = (e_bg, d)
         print(f"{r['idx']:<4}{r['arm']:<14}{e_bg:>10.1f}{n_lo:>10}{n_dn:>14}"
-              f"{d:>+7}{r['sec']:>7.0f}")
+              f"{('-' if d is None else f'{d:+d}'):>7}{r['sec']:>7.0f}")
 
     print("\n判读（预注册在 docstring）：")
     for g in a.gbg:
@@ -301,12 +320,13 @@ def main():
             n += 1
             e1, d1 = arm_d["v1"]
             e2, d2 = arm_d[f"v2_g{g:g}"]
-            eb, db = arm_d.get("base", (float("nan"), 0))
+            eb, db = arm_d.get("base", (float("nan"), None))
             _, dvo = arm_d.get(f"v2only_g{g:g}", (None, None))
             p1 += (e2 >= e1 * 1.10)
-            if dvo is not None:
+            if None not in (dvo, db):
                 p2a += (dvo >= db + 1)
-            p2b += (d2 <= d1 + 0.5)
+            if None not in (d1, d2):
+                p2b += (d2 <= d1 + 0.5)
         print(f"  g_bg={g:g}   **P1 细节 {p1}/{n} 过（这一条现在就算数）**"
               f"   P2a* 互锁(v2only 回潮) {p2a}/{n}"
               f"   P2b* 门压得住 {p2b}/{n}")

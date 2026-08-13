@@ -491,6 +491,10 @@ def main():
                     help="method_v2 四臂输出的权威计数（P2a/P2b 以它定案）")
     ap.add_argument("--dir", default=str(root / "method_v2"),
                     help="--armdelta 的目录")
+    ap.add_argument("--resubject", default=None,
+                    help="JSON {\"157\": \"person\"}：主体词规则修订"
+                         "（具体可数名词；集体名词映射到成员）。更新主体缓存、"
+                         "删掉受影响的 delta 行；配合 --delta 同跑即只重数这几条")
     ap.add_argument("--cards", type=int, nargs="*", default=[2, 3, 4, 5],
                     help="--gt-sheet 的分层档；默认只取运行域内（<=6 实例）")
     ap.add_argument("--per", type=int, default=15, help="--gt-sheet 每档张数")
@@ -504,6 +508,27 @@ def main():
         do_regt(root, a.which,
                 a.gt or (root / "cococount_base" / "gt_template.json"))
         return 0
+
+    if a.resubject:
+        # 主体词修订不需要模型：改缓存、删行；重数交给随后的 --delta
+        hi = Path(a.hi)
+        over = json.loads(Path(a.resubject).read_text())
+        sp = hi / "vlm_subjects.json"
+        subj = json.loads(sp.read_text()) if sp.exists() else {}
+        for k, s_new in over.items():
+            print(f"  [{k}] 主体 {subj.get(k)!r} -> {s_new!r}")
+            subj[k] = s_new
+        sp.write_text(json.dumps(subj, ensure_ascii=False))
+        dp = hi / "vlm_delta.jsonl"
+        if dp.exists():
+            keep = [l for l in dp.open()
+                    if str(json.loads(l)["idx"]) not in over]
+            dropped = sum(1 for _ in dp.open()) - len(keep)
+            dp.write_text("".join(keep))
+            print(f"删除 {dropped} 条旧 delta 行；接下来 --delta 只会重数这几条")
+        if not (a.probe or a.calibrate or a.delta or a.null or a.armdelta):
+            print("没有带 --delta，只改了缓存和删行，未加载模型。")
+            return 0
 
     v = VlmCounter()
     if a.probe:

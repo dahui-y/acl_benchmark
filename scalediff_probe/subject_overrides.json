@@ -1,0 +1,7 @@
+{
+ "_rule": "计数主体必须是具体可数名词；集体名词映射到成员名词（team->person, family->astronaut）；对纪念碑场景把泛化词收窄到专名（statue->Statue of Liberty，否则方尖碑/基座也被数进去——263 基图读 3 就是这么来的）。场景/抽象名词（highway/cityscape/justice）不在此改，由 parti_reconcile 的排除名单处理。仪器开发期的事后修订，全集统一适用，论文里如实披露。",
+ "157": "person",
+ "1119": "astronaut",
+ "263": "Statue of Liberty",
+ "331": "Statue of Liberty"
+}

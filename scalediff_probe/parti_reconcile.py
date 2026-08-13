@@ -20,6 +20,9 @@ from pathlib import Path
 CONFIRMED = {263: "+1 整尊女神（实锤）"}
 SUSPECT = {157: "+1 人", 146: "+1 杯", 553: "+1 小象", 994: "+1 画框（弱）"}
 TEXTURE = {583: "网纹克隆——计数看不见，应读 0"}
+# 无可数主体 -> 不进主指标（诊断协议 CARD=None 的老规则，jsonl 复盘后补闸）
+EXCLUDE = {342: "抽象 prompt（fairness）", 536: "场景名词 cityscape",
+           1445: "场景名词 highway（U.S. 101 无可数主体）"}
 
 
 def main():
@@ -34,6 +37,14 @@ def main():
     byidx = {r["idx"]: r for r in recs}
 
     mean = lambda v: sum(v) / max(len(v), 1)
+    ex = [r for r in recs if r["idx"] in EXCLUDE]
+    recs = [r for r in recs if r["idx"] not in EXCLUDE]
+    if ex:
+        print("== 排除（无可数主体，不进主指标）==")
+        for r in ex:
+            print(f"  [{r['idx']:>4}] {EXCLUDE[r['idx']]}  "
+                  f"(subj={r['subject']!r}, delta={r.get('delta')})")
+        print()
     groups = {}
     for r in recs:
         t = pred.get(str(r["idx"]), {}).get("tag", "?")

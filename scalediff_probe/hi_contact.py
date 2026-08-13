@@ -10,6 +10,8 @@
 
     python scalediff_probe/hi_contact.py --stratum C_high
     python scalediff_probe/hi_contact.py --top-raw 12      # delta_raw 最大的 12 张
+    python scalediff_probe/hi_contact.py --hi $SD_OUT/parti_hi   # 触发集：全取，
+        # 按预注册标签 scenic -> mid -> flat 分组排（parti_trigger_predictions.json）
 """
 
 import argparse
@@ -24,7 +26,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--hi", default=str(root / "laion_hi"))
     ap.add_argument("--stratum", default=None,
-                    choices=["A_evf0", "B_low", "C_high", "D_undef"])
+                    help="LAION 跑用 A_evf0/B_low/C_high/D_undef；"
+                         "--idx-file 名单跑出来的 manifest 全是 'trigger'。"
+                         "不传时：有 C_high 取 C_high，否则全取")
     ap.add_argument("--top-raw", type=int, default=0,
                     help="改为取 delta_raw 最大的 N 张（跨层）")
     ap.add_argument("--cell", type=int, default=384)
@@ -41,15 +45,30 @@ def main():
             x = json.loads(l)
             deltas[x["idx"]] = x
 
+    # 预注册标签（scenic/mid/flat）—— 有就用来分组排版和标注
+    pred_p = Path(__file__).resolve().parent / "parti_trigger_predictions.json"
+    pred = (json.loads(pred_p.read_text())["tags"]
+            if pred_p.exists() else {})
+    ptag = lambda r: pred.get(str(r["idx"]), {}).get("tag", "")
+
     rows = list(mani.values())
     if a.top_raw:
         rows = sorted(rows, key=lambda r: -(deltas.get(r["idx"], {})
                                             .get("delta_raw", -99)))[:a.top_raw]
         tag = f"topraw{a.top_raw}"
+    elif a.stratum:
+        rows = [r for r in rows if r["stratum"] == a.stratum]
+        tag = a.stratum
     else:
-        st = a.stratum or "C_high"
-        rows = [r for r in rows if r["stratum"] == st]
-        tag = st
+        sel = [r for r in rows if r["stratum"] == "C_high"]
+        if sel:
+            rows, tag = sel, "C_high"
+        else:
+            # --idx-file 名单跑（如 parti_hi）：全取，
+            # 按预注册标签分组排：scenic（预测该重复）在前，flat 殿后
+            order = {"scenic": 0, "mid": 1, "flat": 2, "": 3}
+            rows = sorted(rows, key=lambda r: (order.get(ptag(r), 3), r["idx"]))
+            tag = "all"
 
     if not rows:
         sys.exit("没有符合条件的行")
@@ -72,10 +91,11 @@ def main():
         sheet.paste(im_hi, (x, y))
         sheet.paste(im_b, (x + C + 4, y))
         d = deltas.get(r["idx"], {})
+        t = ptag(r)
         dr.text((x + 2, y + C + 2),
-                f"[{r['idx']}] {r['stratum']}  evf={r.get('evf')}"
+                f"[{r['idx']}] {t or r['stratum']}  evf={r.get('evf')}"
                 f"  dc={d.get('delta_content','?')}  raw={d.get('delta_raw','?')}",
-                fill="black")
+                fill={"scenic": (180, 0, 0), "flat": (0, 100, 0)}.get(t, "black"))
         dr.text((x + 2, y + C + 16), r["prompt"][:64], fill=(90, 90, 90))
     p = hi / f"contact_{tag}.jpg"
     sheet.save(p, "JPEG", quality=90)

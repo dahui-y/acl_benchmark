@@ -239,7 +239,7 @@ def main():
                     files[im.width] = p.name
                 mpath = out / f"{idx:02d}_{arm}_mask.pt"
                 if gate.map is not None:
-                    torch.save(gate.map, mpath)
+                    torch.save(gate.map.cpu(), mpath)   # 落盘前离开 GPU
                 mf.write(json.dumps({
                     "idx": idx, "arm": arm, "s": s, "gbg": gbg,
                     "sec": round(dt, 1), "n_modulated": sg.n_mod,
@@ -248,7 +248,7 @@ def main():
                 mf.flush()
                 print(f"    {arm:<14} {dt:6.1f}s  调制 {sg.n_mod:>3} 次"
                       + ("  <- 应为 0" if gbg >= 1 else
-                         f"  <- stage2 应为 ~60"))
+                         "  <- 应 >0 且各 gbg<1 臂相等（实测 stage2 = 40）"))
                 pipe.noise_pred_step = orig_step
     sg.restore()
 
@@ -292,7 +292,9 @@ def main():
         im_lo = Image.open(out / f_lo).convert("RGB")
         mask_bg = None
         if r.get("mask"):
-            m = torch.load(out / r["mask"]).numpy()
+            # mask 是在 CUDA 上 torch.save 的，load 会原样恢复到 GPU —— 测量
+            # 是纯 CPU 步骤，强制落回 CPU（顺便兼容没有 GPU 的机器上重算）
+            m = torch.load(out / r["mask"], map_location="cpu").float().numpy()
             m = np.array(Image.fromarray((m * 255).astype("uint8"))
                          .resize(im_hi.size, Image.BILINEAR)) / 255.0
             mask_bg = m < 0.3

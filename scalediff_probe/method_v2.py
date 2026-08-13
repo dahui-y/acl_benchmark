@@ -153,12 +153,23 @@ def main():
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     mani = out / "manifest.jsonl"
-    done = set()
+    done, foreign = set(), 0
     if mani.exists():
+        # **这个目录名早期被别的实验用过**（30 条诊断集上的 v0/v1/v2 选型），
+        # 那批行没有 arm 字段。断点续跑只认本脚本自己的 schema；
+        # 外来行既不计入 done，也不进测量 —— 否则会拿别的实验的图
+        # 冒充某个臂，是最难查的那种污染。
         for l in mani.open():
             r = json.loads(l)
-            done.add((r["idx"], r["arm"]))
-        print(f"manifest 已有 {len(done)} 条，跳过")
+            if "arm" in r and "idx" in r:
+                done.add((r["idx"], r["arm"]))
+            else:
+                foreign += 1
+        print(f"manifest 已有 {len(done)} 条本实验的行，跳过")
+        if foreign:
+            print(f"**忽略 {foreign} 行外来 schema**（无 arm 字段，"
+                  f"应是早期实验留在 {out.name}/ 里的）。"
+                  f"\n  它们不会进测量。若想彻底隔离，用 --out 换个目录。")
 
     arms = [("base", 0.0, 1.0), ("v1", 1.0, 1.0)]
     for g in a.gbg:
@@ -244,10 +255,19 @@ def main():
     det = Detector()
     tok = load_tokenizer()
     rows = [json.loads(l) for l in mani.open()]
+    rows = [r for r in rows if "arm" in r and "idx" in r and r.get("files")]
     res_hi = 1024 * (2 ** a.stage)
+    if not rows:
+        print("manifest 里没有本实验的行，无可测量。")
+        return 0
 
+    # **计数这一列用的是已判死的检测器**（§8.9a：饱和在 2–3 个，
+    # bias ≈ −(card−2)）。P1 是 Laplacian 能量，与它无关，照常判读；
+    # **P2a/P2b 是纯计数判据，不以这一列定案** —— 权威读数来自
+    #     python scalediff_probe/vlm_count.py --armdelta --dir <本目录>
+    # 这里保留该列只作方向参考，且模型已占显存、装不下 VLM，只能分两趟。
     print(f"\n{'idx':<4}{'arm':<14}{'背景高频':>10}{'count1024':>10}"
-          f"{'count_hi↓1024':>14}{'delta':>7}{'sec':>7}")
+          f"{'count_hi↓1024':>14}{'delta*':>7}{'sec':>7}")
     print("-" * 66)
     stats = {}
     for r in sorted(rows, key=lambda r: (r["idx"], r["arm"])):
@@ -287,13 +307,17 @@ def main():
             if dvo is not None:
                 p2a += (dvo >= db + 1)
             p2b += (d2 <= d1 + 0.5)
-        print(f"  g_bg={g:g}   P1 细节 {p1}/{n} 过"
-              f"   P2a 互锁(v2only 回潮) {p2a}/{n}"
-              f"   P2b 门压得住 {p2b}/{n}")
+        print(f"  g_bg={g:g}   **P1 细节 {p1}/{n} 过（这一条现在就算数）**"
+              f"   P2a* 互锁(v2only 回潮) {p2a}/{n}"
+              f"   P2b* 门压得住 {p2b}/{n}")
     print("  P1 多数不过 -> 过平滑主因不在 Structure Guidance，v2 撤；"
           "\n  P2a 多数不过 -> 互锁故事不成立，v2 降级为独立旋钮；"
           "\n  P2b 多数不过 -> g_bg 太激进，扫小些。"
-          "\n  数字之外必看图：背景是长出真细节还是长出噪声/伪影。")
+          "\n  数字之外必看图：背景是长出真细节还是长出噪声/伪影。"
+          "\n\n  ***** 带 * 的两列来自已判死的检测器（§8.9a 饱和在 2–3 个），"
+          "\n  只作方向参考，P2a/P2b 不以它定案。权威计数分开跑："
+          "\n      python scalediff_probe/vlm_count.py --armdelta --dir "
+          + str(out))
     return 0
 
 

@@ -358,6 +358,75 @@ def do_regt(root, which, gt_path):
           "\n运行域限定：结论只在 <= 6 个实例的场景上声明。")
 
 
+def do_armdelta(v, d):
+    """method_v2 的四臂输出：按 (idx, arm) 数 delta，判 P2a/P2b。
+
+    为什么单独一趟：SDXL 管线还占着显存时装不下 7B VLM，所以生成与
+    权威计数必须分开跑。为什么不用 method_v2 里那一列：那是检测器，
+    §8.9a 已判死（饱和在 2–3 个），而 P2a/P2b 恰恰是纯计数判据。
+
+    **同一 idx 的四个臂必须用同一个主体词**，否则臂间不可比 —— 所以
+    主体按 idx 缓存，不按 (idx, arm)。
+    """
+    d = Path(d)
+    rows = [json.loads(l) for l in (d / "manifest.jsonl").open()]
+    rows = [r for r in rows if "arm" in r and r.get("files")]
+    if not rows:
+        print(f"{d}/manifest.jsonl 里没有带 arm 的行")
+        return
+    subj_p = d / "vlm_subjects.json"
+    subj = json.loads(subj_p.read_text()) if subj_p.exists() else {}
+    outp = d / "vlm_armdelta.jsonl"
+    key = lambda r: f"{r['idx']}_{r['arm']}"
+    done = {json.loads(l)["key"]: json.loads(l)
+            for l in outp.open()} if outp.exists() else {}
+    todo = [r for r in rows if key(r) not in done]
+    print(f"{len(rows)} 个臂样本，待算 {len(todo)}")
+    t0 = time.time()
+    with outp.open("a") as f:
+        for n, r in enumerate(todo, 1):
+            ik = str(r["idx"])
+            if ik not in subj:
+                subj[ik] = v.subject_of(r["prompt"])
+                subj_p.write_text(json.dumps(subj, ensure_ascii=False))
+            fl = r["files"]
+            f_lo = fl.get("1024") or fl.get(1024)
+            f_hi = max((k for k in fl if str(k).isdigit()), key=lambda k: int(k))
+            n_b, _ = v.count(load_img(d / f_lo), subj[ik])
+            n_h, _ = v.count(load_img(d / fl[f_hi]), subj[ik])
+            rec = {"key": key(r), "idx": r["idx"], "arm": r["arm"],
+                   "subject": subj[ik], "n_base": n_b, "n_hi_dn": n_h,
+                   "delta": (n_h - n_b) if None not in (n_b, n_h) else None}
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            f.flush()
+            done[key(r)] = rec
+            print(f"\r  {n}/{len(todo)}  {(time.time()-t0)/60:.1f} 分钟",
+                  end="", flush=True)
+    print()
+    by = {}
+    for x in done.values():
+        by.setdefault(x["idx"], {})[x["arm"]] = x["delta"]
+    arms = sorted({x["arm"] for x in done.values()})
+    print(f"\n{'idx':<5}" + "".join(f"{a:>16}" for a in arms))
+    for i in sorted(by):
+        print(f"{i:<5}" + "".join(
+            f"{by[i].get(a, '-'):>16}" for a in arms))
+    gs = sorted({a.split("_g")[1] for a in arms if "_g" in a})
+    for g in gs:
+        p2a = p2b = n = 0
+        for i, ad in by.items():
+            d1, db = ad.get("v1"), ad.get("base")
+            d2, dvo = ad.get(f"v2_g{g}"), ad.get(f"v2only_g{g}")
+            if None in (d1, d2):
+                continue
+            n += 1
+            if None not in (dvo, db):
+                p2a += (dvo >= db + 1)
+            p2b += (d2 <= d1 + 0.5)
+        print(f"\ng_bg={g}   P2a 互锁(v2only 回潮) {p2a}/{n}"
+              f"   P2b 门压得住 {p2b}/{n}   （VLM 计数，权威读数）")
+
+
 def do_delta(v, hi, base):
     hi, base = Path(hi), Path(base)
     rows = [json.loads(l) for l in (hi / "manifest.jsonl").open()]
@@ -418,6 +487,10 @@ def main():
     ap.add_argument("--regt", action="store_true",
                     help="用核对好的真值重算，复用已落盘计数（不用 GPU）")
     ap.add_argument("--gt", default=None, help="--regt 读的真值文件")
+    ap.add_argument("--armdelta", action="store_true",
+                    help="method_v2 四臂输出的权威计数（P2a/P2b 以它定案）")
+    ap.add_argument("--dir", default=str(root / "method_v2"),
+                    help="--armdelta 的目录")
     ap.add_argument("--cards", type=int, nargs="*", default=[2, 3, 4, 5],
                     help="--gt-sheet 的分层档；默认只取运行域内（<=6 实例）")
     ap.add_argument("--per", type=int, default=15, help="--gt-sheet 每档张数")
@@ -441,9 +514,11 @@ def main():
         do_null(v, a.hi, a.limit)
     if a.delta:
         do_delta(v, a.hi, a.base)
-    if not (a.probe or a.calibrate or a.delta or a.null):
+    if a.armdelta:
+        do_armdelta(v, a.dir)
+    if not (a.probe or a.calibrate or a.delta or a.null or a.armdelta):
         print("选一个：--probe / --calibrate / --null / --delta "
-              "/ --gt-sheet / --regt")
+              "/ --armdelta / --gt-sheet / --regt")
     return 0
 
 

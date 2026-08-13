@@ -1,0 +1,153 @@
+{
+ "written_before_4096_run": true,
+ "source_sheet": "parti_base/trigger_vis_trigset.jpg",
+ "hypothesis": "第三因子：空视野要触发重复，还需空处是可作画的场景（scenic），素底/平涂（flat）只会生成更多素底。mid 为桌面/室内中间态，不进主判据。",
+ "prediction": {
+  "scenic": "基线 delta_content 组均值 >= +1.5（该组该重复）",
+  "flat": "组均值 <= +0.5（该组不该重复）",
+  "readings": {
+   "scenic高_flat低": "第三因子成立 -> 门的判据升级为 evf×场景性，律加因子",
+   "都低": "Parti 尾部也不燃 -> §5.0 止损分支",
+   "都高": "evf 单独就够 -> 更简单的律成立，第三因子不需要"
+  }
+ },
+ "note": "部分样本的高 evf 来自漏检（茶杯/Corvette/T恤未框全）——不影响 delta（两臂对称），但说明 evf 单独不够、标签必须人工看图打。",
+ "tags": {
+  "167": {
+   "tag": "scenic",
+   "desc": "海滩棒球队"
+  },
+  "230": {
+   "tag": "scenic",
+   "desc": "Corvette+滨海公路"
+  },
+  "283": {
+   "tag": "scenic",
+   "desc": "自由女神+方尖碑(天空)"
+  },
+  "311": {
+   "tag": "scenic",
+   "desc": "直升机群+自由女神"
+  },
+  "474": {
+   "tag": "scenic",
+   "desc": "街角男子(画)"
+  },
+  "715": {
+   "tag": "scenic",
+   "desc": "山顶小屋"
+  },
+  "734": {
+   "tag": "scenic",
+   "desc": "飞艇+帕特农"
+  },
+  "738": {
+   "tag": "scenic",
+   "desc": "红卡车+间歇泉"
+  },
+  "838": {
+   "tag": "scenic",
+   "desc": "stop sign 街景"
+  },
+  "928": {
+   "tag": "scenic",
+   "desc": "老人与船(水面)"
+  },
+  "956": {
+   "tag": "scenic",
+   "desc": "湖边城堡"
+  },
+  "998": {
+   "tag": "scenic",
+   "desc": "帕特农+金字塔"
+  },
+  "1056": {
+   "tag": "scenic",
+   "desc": "盘山路皮卡"
+  },
+  "1119": {
+   "tag": "scenic",
+   "desc": "月面全家福"
+  },
+  "1168": {
+   "tag": "scenic",
+   "desc": "街角男子(照片)"
+  },
+  "1187": {
+   "tag": "scenic",
+   "desc": "女孩去农场"
+  },
+  "1257": {
+   "tag": "scenic",
+   "desc": "长城飞机"
+  },
+  "1291": {
+   "tag": "scenic",
+   "desc": "太空电梯(云)"
+  },
+  "1445": {
+   "tag": "scenic",
+   "desc": "US101 公路"
+  },
+  "56": {
+   "tag": "flat",
+   "desc": "猫脸花插画(铺满)"
+  },
+  "342": {
+   "tag": "flat",
+   "desc": "fairness 室内"
+  },
+  "466": {
+   "tag": "flat",
+   "desc": "孩子企鹅月亮(平涂)"
+  },
+  "536": {
+   "tag": "flat",
+   "desc": "旧金山水墨(稠密)"
+  },
+  "643": {
+   "tag": "flat",
+   "desc": "T恤+素墙"
+  },
+  "663": {
+   "tag": "flat",
+   "desc": "大象剪影(平涂)"
+  },
+  "1218": {
+   "tag": "flat",
+   "desc": "咖啡杯(素底原型)"
+  },
+  "1379": {
+   "tag": "flat",
+   "desc": "大象剪影2(平涂)"
+  },
+  "1627": {
+   "tag": "flat",
+   "desc": "猫进门(室内)"
+  },
+  "146": {
+   "tag": "mid",
+   "desc": "四茶杯"
+  },
+  "583": {
+   "tag": "mid",
+   "desc": "网球场摇椅"
+  },
+  "648": {
+   "tag": "mid",
+   "desc": "小提琴静物"
+  },
+  "674": {
+   "tag": "mid",
+   "desc": "显示器桌面"
+  },
+  "964": {
+   "tag": "mid",
+   "desc": "打牌的狗"
+  },
+  "1019": {
+   "tag": "mid",
+   "desc": "泰迪熊玩具车"
+  }
+ }
+}

@@ -33,6 +33,11 @@ def main():
     ap.add_argument("--idx", type=int, nargs="+", required=True)
     ap.add_argument("--cell", type=int, default=900)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--crop", type=float, nargs=3, default=None,
+                    metavar=("CX", "CY", "S"),
+                    help="病灶区域裁剪：中心 (CX,CY) 与边长 S，全部是 0~1 的"
+                         "图幅比例，三列同框。例：--idx 263 --crop 0.18 0.55 0.35"
+                         "（整图缩略认不出的克隆，裁出来就是论文图）")
     a = ap.parse_args()
 
     from PIL import Image, ImageDraw
@@ -60,15 +65,25 @@ def main():
                                "基线 4096↓（门关）", "v1 4096↓（门开）")):
         dr.text((pad + k * (C + pad) + 4, 6), title, fill="black")
 
+    def prep(im):
+        if a.crop:
+            cx, cy, s = a.crop
+            W, H = im.size
+            half = s * W / 2
+            x0 = min(max(cx * W - half, 0), W - 2 * half)
+            y0 = min(max(cy * H - half, 0), H - 2 * half)
+            im = im.crop((int(x0), int(y0),
+                          int(x0 + 2 * half), int(y0 + 2 * half)))
+        return im.resize((C, C), Image.LANCZOS)
+
     def img_of(mani_dir, r, res):
         f = r["files"].get(str(res)) or r["files"].get(res)
-        return (Image.open(Path(mani_dir) / f).convert("RGB")
-                .resize((C, C), Image.LANCZOS)) if f else None
+        return prep(Image.open(Path(mani_dir) / f).convert("RGB")) if f else None
 
     for n, i in enumerate(rows):
         ra, rb = ma[i], mb[i]
         f_lo = ra["files"].get("1024") or ra["files"].get(1024)
-        base = Image.open(A / f_lo).convert("RGB").resize((C, C), Image.LANCZOS)
+        base = prep(Image.open(A / f_lo).convert("RGB"))
         hi_a = img_of(A, ra, 4096)
         hi_b = img_of(B, rb, 4096)
         y = hdr + pad + n * (C + cap_h + pad)
@@ -87,8 +102,10 @@ def main():
                 f"（{tb.get('n_base', '?')}->{tb.get('n_hi_dn', '?')}）   "
                 f"head={mb[i].get('head')!r}",
                 fill=(90, 90, 90))
-    p = Path(a.out) if a.out else B / (
-        "arm_compare_" + "_".join(str(i) for i in rows) + ".jpg")
+    tag = "_".join(str(i) for i in rows)
+    if a.crop:
+        tag += f"_crop{a.crop[0]:g}_{a.crop[1]:g}_{a.crop[2]:g}"
+    p = Path(a.out) if a.out else B / f"arm_compare_{tag}.jpg"
     sheet.save(p, "JPEG", quality=92)
     print(f"写出 {p}")
     print("左：共享基图；中：基线臂病发；右：v1 臂病除。中列里有、"

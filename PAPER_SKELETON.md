@@ -2117,6 +2117,37 @@ card=10 让 SDXL 画一堆领带，画出 14 条是它的常态，VLM 读 14.3
 "结构引导净正贡献"这条新负结果。方向不缺证据，缺执行。
 换方向 = 律/协议/参考集/仪器/harness/双管线代码全部清零。
 
+### 9.5 DemoFusion 移植侦察（2026-08-13，读完 pipeline_demofusion_sdxl.py）
+
+**前向结构**（1446 行，单文件）：Phase 1 = 标准 1024 全图去噪
+（latent 128，与 ScaleDiff 基础阶段同构 -> **门控图录制零改动可用**，
+BlendCrossAttn 的 phase-1 录制逻辑原样成立）。Phase k = 每步三合一：
+① **MultiDiffusion patch 支**：get_views 出 128×128 latent 窗
+（stride 64 + random jitter），每窗**喂完整 prompt**（L1157
+prompt_embeds_input = cat([prompt_embeds]*vb_size)）——
+**重复的病灶就在这行**：每个窗都被告知"画一个 XX"；
+② **Dilated Sampling 支**：按 scale 跨步抽全局子网格 + 高斯滤波，
+同样喂完整 prompt；③ c1/c2/c3 余弦调度混合 + 与初始噪声版本插值。
+
+**门的挂法**：窗坐标 (h_start..w_end) 已知 -> 把门控图裁到窗内，
+BlendCrossAttn 逐位置混合逻辑**原样适用**，只差"当前批的窗坐标"
+这个上下文：views 按 vb_size 批进 UNet（repeat_interleave(2) 后
+批元素 i 的窗 = batch_view[i//2]），在 unet 调用前
+gate.set_views(batch_view, jitter) 即可。dilated 支的子网格 =
+map[h::s, w::s] 同理可裁（是否也上门 -> 消融决定）。
+
+**实施方式**：拷贝管线文件为 pipeline_demofusion_gated.py 显式加钩
+（monkeypatch 1400 行 __call__ 不现实）；改动点三处：
+phase-1 结束 finalize / patch 支 set_views / dilated 支 set_views。
+**门关 = 不装 processor = 逐字节原版**（同一文件跑基线臂）。
+
+**E4 协议草案**：同 prompt 同 seed 四臂 —— DemoFusion 原版 /
+DemoFusion+门 / AccDiffusion v1 / v2；语料 = Parti 34 触发集 +
+LAION-1k 抽样（分层）；读数 = VLM-Δdelta（检定过）+ 并排图 +
+时间/显存；DemoFusion 声明 3090-24GB 可跑 4096（lowvram），
+4090 无障碍。他们管线出成片重复（AccDiffusion 全文为证）——
+门在那里的每一分修复都是正面战果。
+
 **执行清单（每步带判据）**：
 1. 仪器收官：--armdelta / --null / --gt-sheet -> --regt（本周，便宜）。
 2. **v1 真考**：34 条触发集跑 v1 臂 —— 263 女神消失？583 网纹清掉？

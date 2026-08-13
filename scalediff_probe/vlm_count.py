@@ -27,6 +27,23 @@ prompt 是规整英文，用 VLM 自己抽一次主体名词（每条 prompt 只
     python scalediff_probe/vlm_count.py --calibrate              # 表 C 检定
     python scalediff_probe/vlm_count.py --delta --hi $SD_OUT/parti_hi \\
         --base $SD_OUT/parti_base                                # 34 条触发集
+
+**2026-08-13 补：原 --calibrate 那张考卷作废（§8.9b）。**
+`card` 是 prompt 声明的数，不是图里实际有的数；GenEval 这个基准存在的
+理由恰恰是 T2I 数不对（SDXL counting 准确率 ~0.4），所以量到的误差是
+"计数器误差 + 生成器没听懂数量"的和，不可分。**VLM 的计数本身照常有效
+且已落盘**，作废的只是拿 `card` 当真值这件事。三个补丁模式：
+
+    --null      空对照：基图 vs 它的重采样往返版（1024->4096->1024），
+                内容同源、物体数必然相同，**Δ 的真值恒为 0**。
+                零标注、零人眼，直接量 delta 的噪声地板 —— 这比单图
+                绝对精度更贴近 delta 的实际用法。
+                预注册：mean|Δ| <= 0.3 且 95% 分位 <= 1 -> 通过。
+    --gt-sheet  渲染分层接触表，供**作者逐图核对实际物体数**（不是标注员，
+                论文里写明"由作者核对"），产出 gt_template.json。
+    --regt      拿核对好的真值重算 MAE/bias，**复用已落盘的 VLM 计数，
+                不再动 GPU**；同时给出 SDXL 的数量服从率
+                （= 实际数 == 声明数 的比例），它本身就是考卷作废的证据。
 """
 
 import argparse
@@ -186,6 +203,161 @@ def do_calibrate(v, root, which, limit):
           "\n不过 -> 判死：弃计数，改成对偏好判决。")
 
 
+def roundtrip(im, up=4096, back=1024):
+    """基图 -> 双三次放大 -> 走与 delta 相同的降采样路径回 1024。
+
+    内容逐像素同源，**物体数必然不变**，所以这一对的 Δ 真值恒为 0，
+    不需要任何标注。量到的非零就是仪器在 delta 实际配置下的噪声。
+    注意披露：这一关只含"重采样"这层扰动，不含"重新生成"那层，
+    所以它是噪声地板的**下界**。含生成扰动的空对照来自 --delta 里
+    那 25 对眼睛判为无重复的样本（见 §5.49e），两者并列报。
+    """
+    from PIL import Image
+    return im.resize((up, up), Image.BICUBIC).resize((back, back), Image.LANCZOS)
+
+
+def do_null(v, hi, limit):
+    hi = Path(hi)
+    rows = [json.loads(l) for l in (hi / "manifest.jsonl").open()]
+    if limit:
+        rows = rows[:limit]
+    subj_p = hi / "vlm_subjects.json"
+    subj = json.loads(subj_p.read_text()) if subj_p.exists() else {}
+    outp = hi / "vlm_null.jsonl"
+    done = {json.loads(l)["idx"]: json.loads(l)
+            for l in outp.open()} if outp.exists() else {}
+    todo = [r for r in rows if r["idx"] not in done]
+    print(f"空对照：{len(rows)} 条，待算 {len(todo)}")
+    t0 = time.time()
+    with outp.open("a") as f:
+        for n, r in enumerate(todo, 1):
+            key = str(r["idx"])
+            if key not in subj:
+                subj[key] = v.subject_of(r["prompt"])
+                subj_p.write_text(json.dumps(subj, ensure_ascii=False))
+            f1 = r["files"].get("1024") or r["files"].get(1024)
+            im = load_img(hi / f1)
+            n_a, _ = v.count(im, subj[key])
+            n_b, _ = v.count(roundtrip(im), subj[key])
+            rec = {"idx": r["idx"], "subject": subj[key], "n_base": n_a,
+                   "n_roundtrip": n_b,
+                   "d": (n_b - n_a) if None not in (n_a, n_b) else None}
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            f.flush()
+            done[r["idx"]] = rec
+            print(f"\r  {n}/{len(todo)}  {(time.time()-t0)/60:.1f} 分钟",
+                  end="", flush=True)
+    print()
+    ds = [x["d"] for x in done.values() if x.get("d") is not None]
+    if not ds:
+        print("没有有效样本")
+        return
+    mean = lambda x: sum(x) / max(len(x), 1)
+    a = sorted(abs(d) for d in ds)
+    p95 = a[min(len(a) - 1, int(0.95 * len(a)))]
+    m = mean(a)
+    print(f"\nn={len(ds)}  mean|Δ|={m:.2f}  95% 分位={p95}  "
+          f"Δ=0 的占 {mean([d == 0 for d in ds]):.1%}  "
+          f"bias={mean(ds):+.2f}")
+    ok = m <= 0.3 and p95 <= 1
+    print("**空对照过（预注册 mean|Δ|<=0.3 且 95%<=1）：噪声地板够低，"
+          "delta 读到的 +1 是内容，不是仪器**" if ok else
+          "**空对照没过** —— 仪器在同源内容上就会自己抖出 Δ，"
+          "delta 的 +1 无法与噪声区分。走判死支：弃计数，改成对偏好判决。")
+
+
+def do_gt_sheet(root, cards, per, cell, cols):
+    """渲染分层接触表，供作者逐图核对**实际**物体数。"""
+    from PIL import Image, ImageDraw
+    base = root / "cococount_base"
+    meta = json.loads((root / "count_cococount.json").read_text())["items"]
+    rows = [json.loads(l) for l in (base / "manifest.jsonl").open()]
+    by = {}
+    for r in rows:
+        c = meta[r["idx"]].get("card")
+        if c in cards:
+            by.setdefault(c, []).append(r)
+    pick = []
+    for c in cards:
+        pick += by.get(c, [])[:per]
+    print(f"取 {len(pick)} 张（每档 {per}，档 {cards}）")
+    tmpl, nsheet = {}, 0
+    for s in range(0, len(pick), cols * 2):
+        chunk = pick[s:s + cols * 2]
+        nrow = (len(chunk) + cols - 1) // cols
+        pad, cap = 8, 22
+        sheet = Image.new("RGB", (cols * (cell + pad) + pad,
+                                  nrow * (cell + cap + pad) + pad), "white")
+        dr = ImageDraw.Draw(sheet)
+        for k, r in enumerate(chunk):
+            im = Image.open(base / r["file"]).convert("RGB").resize(
+                (cell, cell), Image.LANCZOS)
+            x = pad + (k % cols) * (cell + pad)
+            y = pad + (k // cols) * (cell + cap + pad)
+            sheet.paste(im, (x, y))
+            it = meta[r["idx"]]
+            dr.text((x + 2, y + cell + 4),
+                    f"[{r['idx']}] subject={it['subject']}  card={it['card']}",
+                    fill="black")
+            tmpl[str(r["idx"])] = {"subject": it["subject"],
+                                   "card": it["card"], "n_actual": None}
+        p = base / f"gt_sheet_{nsheet:02d}.jpg"
+        sheet.save(p, "JPEG", quality=94)
+        print(f"  写出 {p}")
+        nsheet += 1
+    tp = base / "gt_template.json"
+    tp.write_text(json.dumps(tmpl, ensure_ascii=False, indent=1))
+    print(f"\n模板 {tp} —— 逐图填 n_actual（图里**实际**数得出几个 subject），"
+          f"填完跑 --regt")
+
+
+def do_regt(root, which, gt_path):
+    """用核对好的真值重算，**复用已落盘的 VLM 计数，不动 GPU**。"""
+    mean = lambda x: sum(x) / max(len(x), 1)
+    gp = Path(gt_path)
+    if not gp.exists():
+        print(f"没有真值文件 {gp} —— 先跑 --gt-sheet，核对后填 n_actual")
+        return
+    gt = json.loads(gp.read_text())
+    gt = {k: v for k, v in gt.items() if v.get("n_actual") is not None}
+    if not gt:
+        print(f"{gt_path} 里没有填好的 n_actual")
+        return
+    cfg = {"geneval": root / "geneval_base", "cococount": root / "cococount_base"}
+    for name in which:
+        p = cfg[name] / "vlm_calib.jsonl"
+        if not p.exists():
+            continue
+        recs = [json.loads(l) for l in p.open()]
+        recs = [r for r in recs
+                if str(r["idx"]) in gt and r.get("n_vlm") is not None]
+        if not recs:
+            continue
+        act = lambda r: gt[str(r["idx"])]["n_actual"]
+        err = [r["n_vlm"] - act(r) for r in recs]
+        derr = [r["n_vlm"] - r["card"] for r in recs]
+        comply = mean([act(r) == r["card"] for r in recs])
+        print(f"\n== {name}  n={len(recs)} ==")
+        print(f"  对**实际数**：MAE={mean([abs(e) for e in err]):.2f}  "
+              f"bias={mean(err):+.2f}  严格命中={mean([e == 0 for e in err]):.1%}"
+              f"  ±1 内={mean([abs(e) <= 1 for e in err]):.1%}")
+        print(f"  对**声明数**（作废的旧算法，对照用）："
+              f"MAE={mean([abs(e) for e in derr]):.2f}  bias={mean(derr):+.2f}")
+        print(f"  **SDXL 数量服从率={comply:.1%}** "
+              f"（实际数 == 声明数的比例 —— 这就是旧考卷作废的直接证据）")
+        from collections import defaultdict
+        byc = defaultdict(list)
+        for r in recs:
+            byc[r["card"]].append(r["n_vlm"] - act(r))
+        for c in sorted(byc):
+            vv = byc[c]
+            print(f"    card={c:<3} n={len(vv):<4} "
+                  f"MAE={mean([abs(e) for e in vv]):.2f} bias={mean(vv):+.2f}")
+    print("\n门槛不变（预注册）：对**实际数** MAE <= 1.0 且 |bias| < 0.5 "
+          "-> VLM 上岗主尺；不过 -> 弃计数，改成对偏好判决。"
+          "\n运行域限定：结论只在 <= 6 个实例的场景上声明。")
+
+
 def do_delta(v, hi, base):
     hi, base = Path(hi), Path(base)
     rows = [json.loads(l) for l in (hi / "manifest.jsonl").open()]
@@ -239,17 +411,39 @@ def main():
     ap.add_argument("--hi", default=str(root / "parti_hi"))
     ap.add_argument("--base", default=str(root / "parti_base"))
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--null", action="store_true",
+                    help="空对照：基图 vs 重采样往返版，Δ 真值恒为 0")
+    ap.add_argument("--gt-sheet", action="store_true",
+                    help="渲染分层接触表供作者核对实际物体数（不用 GPU）")
+    ap.add_argument("--regt", action="store_true",
+                    help="用核对好的真值重算，复用已落盘计数（不用 GPU）")
+    ap.add_argument("--gt", default=None, help="--regt 读的真值文件")
+    ap.add_argument("--cards", type=int, nargs="*", default=[2, 3, 4, 5],
+                    help="--gt-sheet 的分层档；默认只取运行域内（<=6 实例）")
+    ap.add_argument("--per", type=int, default=15, help="--gt-sheet 每档张数")
     a = ap.parse_args()
+
+    # 这两个模式不碰模型，先分流，免得白等 40 秒载入
+    if a.gt_sheet:
+        do_gt_sheet(root, a.cards, a.per, 512, 3)
+        return 0
+    if a.regt:
+        do_regt(root, a.which,
+                a.gt or (root / "cococount_base" / "gt_template.json"))
+        return 0
 
     v = VlmCounter()
     if a.probe:
         return 0 if do_probe(v) else 1
     if a.calibrate:
         do_calibrate(v, root, a.which, a.limit)
+    if a.null:
+        do_null(v, a.hi, a.limit)
     if a.delta:
         do_delta(v, a.hi, a.base)
-    if not (a.probe or a.calibrate or a.delta):
-        print("选一个：--probe / --calibrate / --delta")
+    if not (a.probe or a.calibrate or a.delta or a.null):
+        print("选一个：--probe / --calibrate / --null / --delta "
+              "/ --gt-sheet / --regt")
     return 0
 
 

@@ -135,6 +135,22 @@ def strip_subject(prompt, head):
         for j in range(hi + 1, min(hi + 5, len(words))):
             if _base(words[j]) in PREPS:
                 hj = j
+                # **专名复合词**（2026-08-13，Parti 触发集暴露）：吃进的介词
+                # 是 "of" 且下一词大写开头 -> 专名归主体短语，一起吃，
+                # 再继续找一个介词。否则 "the statue of Liberty next to the
+                # Washington Monument" 只摘到 "the statue of"，替代文本里
+                # 留着 "Liberty ..."，等于告诉背景继续长女神 —— 门被自己的
+                # 替代文本反杀。263/331 都中过这一枪。
+                if _base(words[j]) == "of" and j + 1 < len(words) \
+                        and words[j + 1][:1].isupper() \
+                        and not _ends_clause(words[j + 1]):
+                    hj = j + 1
+                    for j2 in range(j + 2, min(j + 6, len(words))):
+                        if _base(words[j2]) in PREPS:
+                            hj = j2
+                            break
+                        if _ends_clause(words[j2]):
+                            break
                 break
             if _ends_clause(words[j]):
                 break

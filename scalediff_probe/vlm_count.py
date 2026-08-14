@@ -318,15 +318,22 @@ def do_regt(root, which, gt_path):
     if not gp.exists():
         print(f"没有真值文件 {gp} —— 先跑 --gt-sheet，核对后填 n_actual")
         return
-    gt = json.loads(gp.read_text())
+    raw = json.loads(gp.read_text())
+    # 真值文件属于哪个基准就只用于哪个基准 —— 两个基准的 idx 都是小整数，
+    # 混用会索引撞车（GenEval 的第 7 张被拿去对 CoCoCount 第 7 张的真值，
+    # 2026-08-14 实跑出过一块 MAE=2.02 的假结果）
+    gt_bench = raw.get("_bench")
     # 跳过 _note 之类的说明字段（值是字符串不是 dict）
-    gt = {k: v for k, v in gt.items()
+    gt = {k: v for k, v in raw.items()
           if isinstance(v, dict) and v.get("n_actual") is not None}
     if not gt:
         print(f"{gt_path} 里没有填好的 n_actual")
         return
     cfg = {"geneval": root / "geneval_base", "cococount": root / "cococount_base"}
     for name in which:
+        if gt_bench and name != gt_bench:
+            print(f"\n== {name}: 真值文件属于 {gt_bench}，跳过 ==")
+            continue
         p = cfg[name] / "vlm_calib.jsonl"
         if not p.exists():
             continue

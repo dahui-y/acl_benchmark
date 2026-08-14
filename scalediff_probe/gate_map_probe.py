@@ -87,6 +87,28 @@ def norm_linear(m, k=1.0, width=0.5):
     return ((r - k) / width + 0.5).clamp(0, 1)
 
 
+def norm_otsu(m):
+    """Otsu 自动阈值：让图自己说主体占多少，不预设面积。
+    阈值两侧各留 5% 动态范围做过渡带。"""
+    f = m.flatten()
+    lo_, hi_ = f.min(), f.max()
+    bins = 64
+    hist = torch.histc(f, bins=bins, min=float(lo_), max=float(hi_))
+    prob = hist / hist.sum()
+    centers = torch.linspace(float(lo_), float(hi_), bins)
+    w0 = torch.cumsum(prob, 0)
+    mu = torch.cumsum(prob * centers, 0)
+    muT = mu[-1]
+    denom = (w0 * (1 - w0)).clamp_min(1e-8)
+    var_b = (muT * w0 - mu) ** 2 / denom
+    # 退化 bin 屏蔽：w0 逼近 0/1 时 denom->0 会把 var_b 顶上天，
+    # 在极度偏斜的直方图（小主体图就是）上会选到边界。实测踩过。
+    var_b[(w0 < 0.02) | (w0 > 0.98)] = -1.0
+    thr = centers[int(torch.argmax(var_b))]
+    half = 0.05 * (hi_ - lo_)
+    return ((m - (thr - half)) / (2 * half + 1e-8)).clamp(0, 1)
+
+
 def norm_quantile(m, lo=0.55, hi=0.85):
     """分位数归一化：**直接规定**多少面积落在背景/主体侧，
     与 r 本身平不平无关 —— 这是对"图太平"最直接的解药。"""
@@ -168,11 +190,17 @@ def main():
     keys = sorted({k for m in allres.values() for k in m},
                   key=lambda k: (str(k[0]), str(k[1])))
     print(f"\n{'层':>6}{'步桶':>6}{'  归一化':>10}"
-          f"{'主体>0.7':>10}{'背景<0.3':>10}{'过渡带':>9}   判读")
-    print("-" * 66)
+          f"{'主体>0.7':>10}{'背景<0.3':>10}{'过渡带':>9}{'覆盖跨度':>9}   判读")
+    print("-" * 78)
     best = []
     for key in keys:
-        for nm, fn in (("linear", norm_linear), ("quantile", norm_quantile)):
+        cfgs = [("rel_w.5", lambda m: norm_linear(m, width=0.5)),
+                ("rel_w.2", lambda m: norm_linear(m, width=0.2)),
+                ("rel_w.1", lambda m: norm_linear(m, width=0.1)),
+                ("rel_w.05", lambda m: norm_linear(m, width=0.05)),
+                ("otsu", norm_otsu),
+                ("quantile", norm_quantile)]
+        for nm, fn in cfgs:
             bs = [band(fn(allres[i][key])) for i in allres if key in allres[i]]
             if not bs:
                 continue
@@ -180,17 +208,34 @@ def main():
             lo = sum(b[1] for b in bs) / len(bs)
             tb = sum(b[2] for b in bs) / len(bs)
             ok = hi > 0.10 and lo > 0.10 and tb < 0.40
-            if ok:
-                best.append((tb, key, nm, hi, lo))
+            # **自适应性判据（决定性）**：主体覆盖必须随图变化 ——
+            # lone 类该小、portrait 类该大。固定分位数会全给同一个数。
+            covs = [band(fn(allres[i][key]))[0] for i in allres if key in allres[i]]
+            spread = (max(covs) - min(covs)) if len(covs) > 1 else 0.0
+            adapt = spread > 0.15
+            if ok and adapt:
+                best.append((tb, key, nm, hi, lo, spread))
             print(f"{str(key[0]):>6}{str(key[1]):>6}{nm:>10}"
-                  f"{hi:>10.1%}{lo:>10.1%}{tb:>9.1%}   "
-                  f"{'**合格**' if ok else ''}")
-    print("\n判据：主体>0.7 与 背景<0.3 的面积都 >10%，且过渡带 <40%。")
+                  f"{hi:>10.1%}{lo:>10.1%}{tb:>9.1%}{spread:>9.1%}   "
+                  f"{'**合格**' if ok and adapt else ('带宽OK但不自适应' if ok else '')}")
+    print("\n判据：主体>0.7 与 背景<0.3 都 >10%、过渡带 <40%，"
+          "**且覆盖跨度 >15%（主体大小必须自适应 —— 固定分位数会失败）**。")
+    # 逐样本覆盖率：自适应性一眼可见
+    print(f"\n逐样本主体覆盖（挑几个配置对照，lone 应小 / portrait 应大）：")
+    show = [((32, "all"), "rel_w.1", lambda m: norm_linear(m, width=0.1)),
+            ((32, "all"), "otsu", norm_otsu),
+            ((32, "all"), "quantile", norm_quantile)]
+    print(f"{'配置':>16}" + "".join(f"{('idx'+str(i)):>10}" for i in allres))
+    for key, nm, fn in show:
+        row = [band(fn(allres[i][key]))[0] if key in allres[i] else float('nan')
+               for i in allres]
+        print(f"{nm:>16}" + "".join(f"{v:>10.1%}" for v in row))
     if best:
         best.sort()
-        tb, key, nm, hi, lo = best[0]
-        print(f"**推荐配置：层={key[0]} 步桶={key[1]} 归一化={nm}"
-              f"（过渡带 {tb:.1%}，主体 {hi:.1%}，背景 {lo:.1%}）**")
+        tb, key, nm, hi, lo, sp = best[0]
+        print(f"\n**推荐配置：层={key[0]} 步桶={key[1]} 归一化={nm}"
+              f"（过渡带 {tb:.1%}，主体 {hi:.1%}，背景 {lo:.1%}，"
+              f"覆盖跨度 {sp:.1%}）**")
     else:
         print("**没有配置合格** —— 主体图本身可能就不带足够对比度，"
               "要换信号（如 self-attention 聚类 / 多 token 对比）。")

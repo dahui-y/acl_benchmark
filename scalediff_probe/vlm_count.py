@@ -439,7 +439,16 @@ def do_armdelta(v, d):
 def do_delta(v, hi, base):
     hi, base = Path(hi), Path(base)
     rows = [json.loads(l) for l in (hi / "manifest.jsonl").open()]
-    subj_cache_p = hi / "vlm_subjects.json"
+    # 主体缓存必须**全局共用**。按目录各存一份会漂：实测 157 在 hi/v1
+    # 被解析成 'person'（6 个人），在 v12/acc 被解析成 'team'（2 支队）——
+    # 同一张逐字节相同的基图数出 6 和 2，两个答案都对，只是问题不同。
+    # Δdelta 在臂内仍自洽（base 与 hi 用同一个词），但**跨臂比较就废了**。
+    # 优先读 SD_OUT 根目录的全局缓存；没有才回落到本目录（旧行为）。
+    _g = Path(os.environ.get("SD_OUT", ".")) / "vlm_subjects_global.json"
+    subj_cache_p = _g if (_g.exists() or os.environ.get("VLM_GLOBAL_SUBJ")) \
+        else hi / "vlm_subjects.json"
+    if subj_cache_p == _g:
+        print(f"主体缓存：全局 {_g}")
     subj_cache = (json.loads(subj_cache_p.read_text())
                   if subj_cache_p.exists() else {})
     outp = hi / "vlm_delta.jsonl"

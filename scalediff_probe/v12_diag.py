@@ -148,6 +148,29 @@ def main():
     reg1 = [i for i in both if d1[i]["delta"] <= -1] if both else []
     print(f"\n{'='*66}\nR3 主体误伤：v1.2 有 {len(reg12)} 行 delta<=-1 {reg12}"
           f"（v1 是 {len(reg1)} 行 {reg1}）")
+    # ---------- Rep+ / Dmg- 分解 ----------
+    # 签名均值有结构性缺陷：**主体被毁（负 delta）会冲抵重复（正 delta）**，
+    # 一个"把主体全删光"的方法能在均值上刷出漂亮数字。实测两臂 delta 总和
+    # 都是 +3，但 v1 = 6 个 +1 减一个 -3，v1.2 = 5 个 +1 减两个 -1 ——
+    # 完全不同的行为，同一个均值。故必须拆成两列报，且两列都要变好才算赢。
+    def decomp(dd, keys):
+        pos = sum(max(dd[i]["delta"], 0) for i in keys if i in dd)
+        neg = sum(max(-dd[i]["delta"], 0) for i in keys if i in dd)
+        n = len([i for i in keys if i in dd]) or 1
+        return pos / n, neg / n, pos, neg
+    print(f"\n{'='*66}\nRep+ / Dmg- 分解（签名均值会让误伤冲抵重复，必须拆开）")
+    print(f"{'':>8}{'Rep+ 重复':>12}{'Dmg- 误伤':>12}{'签名均值':>10}"
+          f"{'   正/负实例数'}")
+    for nm, dd in (("基线", dhi), ("v1", d1), ("v1.2", d12)):
+        if not dd:
+            continue
+        rp, dm, pos, neg = decomp(dd, ids)
+        sg = sum(dd[i]["delta"] for i in ids if i in dd) / max(
+            len([i for i in ids if i in dd]), 1)
+        print(f"{nm:>8}{rp:>12.3f}{dm:>12.3f}{sg:>+10.3f}   {pos} / {neg}")
+    print("  判读：**两列都要变好才算赢**。只看签名均值会把"
+          "'把主体删光'当成进步。")
+
     tot = sum(max(d12[i]["delta"], 0) for i in ids)
     base_tot = sum(max(dhi[i]["delta"], 0) for i in ids if i in dhi)
     print(f"\n地板效应（任何结论的置信上限）：")

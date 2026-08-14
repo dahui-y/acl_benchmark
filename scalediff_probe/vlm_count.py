@@ -472,9 +472,21 @@ def do_delta(v, hi, base):
     print()
     recs = [x for x in done.values() if x.get("delta") is not None]
     mean = lambda x: sum(x) / max(len(x), 1)
+    # 签名均值单独报是**不安全**的：负 delta（主体被毁）会冲抵正 delta
+    # （重复）。实测 v1 与 v1.2 的 delta 总和都是 +3，但 v1 是 6 个 +1
+    # 减一个 -3、v1.2 是 5 个 +1 减两个 -1 —— 行为完全不同、均值相同。
+    # 一个"把主体全删光"的方法能靠这个刷分。故 Rep+ / Dmg- 必须同时报，
+    # **两列都变好才算赢**。（2026-08-14 锁定，在闸门实验之前。）
+    pos = sum(max(x['delta'], 0) for x in recs)
+    neg = sum(max(-x['delta'], 0) for x in recs)
+    n = max(len(recs), 1)
     print(f"\nn={len(recs)}  delta 均值 {mean([x['delta'] for x in recs]):+.2f}"
           f"   >=1 的 {sum(1 for x in recs if x['delta'] >= 1)}"
           f"   >=3 的 {sum(1 for x in recs if x['delta'] >= 3)}")
+    print(f"  Rep+ (重复) {pos/n:.3f}  [{pos} 个实例]     "
+          f"Dmg- (主体误伤) {neg/n:.3f}  [{neg} 个实例]")
+    print(f"  判读：两列都要变好才算赢；只看签名均值会把'把主体删光'"
+          f"当成进步。")
     print("分组判读（scenic/flat）用 parti_trigger_predictions.json 对账 ——"
           "见 vlm_delta.jsonl 逐条。")
 

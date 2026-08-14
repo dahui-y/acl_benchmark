@@ -82,8 +82,14 @@ class BlendGate:
     """
 
     def __init__(self, token_ids, strength=1.0, canon=64,
-                 norm="rel", k=1.0, width=0.5, layers=None):
+                 norm="rel", k=1.0, width=0.5, layers=None, uniform=False):
         self.tok = token_ids
+        # 消融：把门控图拍平成常数（= 它自己的均值），**介入强度不变、
+        # 空间结构全去掉**。这是"逐位置自适应真的有用吗"的判决实验 ——
+        # v1 拿 +0.10 时门是全图 0.5 的半开态，若均匀门也能拿到同样的数，
+        # 那 v1 实际上就是一次空间均匀的全局削弱，
+        # 也就是我们在论文里批 ScaleCrafter/DemoFusion/FAM 的那一类。
+        self.uniform = uniform
         # v1.2 选层：只从这几层录图。None = 全收（原版行为）。
         # 依据 gate_layers.json —— 全层平均的对比度只有 1.50，
         # 而最锐的层单独就有 4.24，层 64 是椒盐噪声（1.1）。
@@ -119,6 +125,10 @@ class BlendGate:
             self.map = ((r - self.k) / max(self.width, 1e-6) + 0.5).clamp(0, 1)
         else:
             self.map = (m - m.min()) / (m.max() - m.min() + 1e-8)
+        if self.uniform:
+            # 均值对齐后拍平：两臂逐位置权重的**均值完全相同**，
+            # 差别只剩"这些权重是不是按内容分布的"。
+            self.map = torch.full_like(self.map, float(self.map.mean()))
         self._acc, self._n = None, 0
 
     def stats(self):

@@ -128,6 +128,10 @@ def main():
     ap.add_argument("--seed", type=int, default=77)
     ap.add_argument("--stage", type=int, default=2)
     ap.add_argument("--steps", type=int, default=50)
+    ap.add_argument("--uniform", action="store_true",
+                    help="消融：门控图拍平成常数（均值不变、空间结构去掉）。"
+                         "回答\"逐位置自适应是不是真的在起作用\" —— "
+                         "若均匀门也能拿到同样的 delta，空间主张即告死亡")
     ap.add_argument("--layers", default="all",
                     help="v1.2 选层：top4 / top8 / all（gate_layers.json）。"
                          "全层平均对比度仅 1.50，top4 为 3.68")
@@ -218,7 +222,8 @@ def main():
                                 refresh_canon=a.refresh_canon,
                                 refresh_steps=a.refresh)
                     if a.refresh > 0
-                    else BlendGate(tids, strength=a.s, layers=LAYERS))
+                    else BlendGate(tids, strength=a.s, layers=LAYERS,
+                                   uniform=a.uniform))
             pe, npe, _, _ = pipe.encode_prompt(
                 prompt=nosubj, device="cuda", num_images_per_prompt=1,
                 do_classifier_free_guidance=True, negative_prompt=NEGATIVE)
@@ -296,6 +301,7 @@ def main():
                 "head": head, "removed": removed, "s": a.s, "seed": a.seed,
                 "files": files, "gate_cov": cov, "band": band,
                 "refresh": a.refresh, "layers": a.layers,
+                "uniform": a.uniform,
                 "sec": round(dt, 1),
                 "peak_gb": round(torch.cuda.max_memory_allocated() / 2**30, 2),
             }, ensure_ascii=False) + "\n")

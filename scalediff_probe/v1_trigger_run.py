@@ -76,6 +76,29 @@ def surface_head(prompt, vlm_subject):
     return None, f"主体 {vlm_subject!r} 的任何形态都不在 prompt 里"
 
 
+# 推拉注入负分支的短语必须是**干净的名词短语**。strip_subject 吐出的
+# `removed` 是"从 prompt 里摘掉的那一段"，常带悬空介词：
+#     "The Statue of Liberty surrounded by"   <- 以 by 结尾
+#     "a flower with"                          <- 以 with 结尾
+# 实测 31 条里 **17 条**这样。把残句塞进 negative prompt 语义接近噪声，
+# 会把"推拉有没有用"这个问题变得不可解读（v2a 第一轮就栽在这）。
+_TAIL = {"with", "of", "in", "on", "at", "and", "or", "a", "an", "the",
+         "next", "to", "by", "near", "beside", "under", "over", "from",
+         "into", "onto", "for", "as", "than", "that", "which", "surrounded",
+         "sitting", "standing", "going", "coming", "flying", "parked"}
+
+
+def clean_np(removed, head):
+    """把 removed 修成干净名词短语；修不出来就退回 head。"""
+    w = removed.strip().strip(",.;:").split()
+    while w and w[-1].lower().strip(",.;:") in _TAIL:
+        w.pop()
+    while w and w[0].lower() in {"and", "or"}:
+        w.pop(0)
+    out = " ".join(w).strip(",.;: ")
+    return out if out else head
+
+
 def token_ids_of(tok, prompt, subject):
     """subject 在 77 长度截断序列里的位置（与 method_v0 同逻辑，
     只依赖 tokenizer，--plan 不用加载整个管线）。"""
@@ -177,10 +200,19 @@ def main():
     ok, skip = resolve(rows, subjects, overrides, tok)
 
     print(f"{len(rows)} 条：可跑 {len(ok)}，跳过 {len(skip)}\n")
+    n_fixed = 0
     for r, head, nosubj, removed, tids in ok:
+        np_ = clean_np(removed, head)
+        fixed = np_ != removed.strip()
+        n_fixed += fixed
         print(f"[{r['idx']:>4}] head={head!r:<14} tok={tids}"
               f"\n       摘掉: {removed!r}"
-              f"\n       剩下: {nosubj[:72]}")
+              f"\n       剩下: {nosubj[:72]}"
+              + (f"\n       推拉负分支: {np_!r}"
+                 + ("  <- 已清洗" if fixed else "") if a.push else ""))
+    if a.push:
+        print(f"\n推拉短语：{len(ok)} 条中 {n_fixed} 条需要清洗"
+              f"（第一轮 v2a 没清洗，17/31 是残句，结果作废）")
     if skip:
         print("\n跳过（--heads-file 可救）：")
         for r, why in skip:
@@ -243,14 +275,18 @@ def main():
             # "不要求"变成"**主动排斥**"，且**额外成本为零**（只多一次
             # 文本编码，前向次数不变）。
             neg_bg = NEGATIVE
-            if a.push and removed:
-                neg_bg = f"{NEGATIVE}, {removed}"
+            np_ = clean_np(removed, head) if a.push else ""
+            if a.push and np_:
+                neg_bg = f"{NEGATIVE}, {np_}"
             pe, npe, _, _ = pipe.encode_prompt(
                 prompt=nosubj, device="cuda", num_images_per_prompt=1,
                 do_classifier_free_guidance=True, negative_prompt=neg_bg)
             gate.alt = torch.cat([npe, pe])
-            if a.push and n == 1:
-                print(f"    推拉开：背景负分支 = NEGATIVE + {removed!r}")
+            if a.push:
+                # 逐条打印，便于事后审计注入了什么（第一轮只打了第一条，
+                # 结果 17/31 的残句直到跑完才发现）
+                flag = "" if np_ == removed.strip() else f"  <- 清洗自 {removed!r}"
+                print(f"    推拉：负分支 += {np_!r}{flag}")
             procs = dict(pipe.unet.attn_processors)
             for k_ in procs:
                 if k_.endswith("attn2.processor"):

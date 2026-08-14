@@ -169,7 +169,9 @@ class BlendCrossAttn:
         # 不参与前向 —— 否则 fp16 下两条路径的数值差会改掉基图，第一步的微小
         # 扰动一路放大，A/B 的两边就不是同一张基图了（实测 19/30 行基图计数变了）。
         out = F.scaled_dot_product_attention(qh, kh, vh)
-        if is_cross and self.gate.phase == 1:
+        # phase 'r' = 放大阶段的重录窗口（v1.1，gate_refresh.RefreshGate）：
+        # 与基础阶段一样只录不混，拿放大阶段更细的注意力刷新门控图
+        if is_cross and self.gate.phase in (1, "r"):
             with torch.no_grad():
                 probs = (qh @ kh.transpose(-1, -2) * (hd ** -0.5)).softmax(-1)
             self.gate.record(probs, HW)

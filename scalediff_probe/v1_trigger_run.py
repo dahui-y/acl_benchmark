@@ -42,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from prompts import NEGATIVE                                  # noqa: E402
 from subject_phrases import strip_subject, _base              # noqa: E402
 from method_v1 import BlendGate, BlendCrossAttn               # noqa: E402
+from gate_refresh import RefreshGate                          # noqa: E402
 
 CKPT = "stabilityai/stable-diffusion-xl-base-1.0"
 STOP = {"of", "a", "an", "the"}
@@ -127,6 +128,10 @@ def main():
     ap.add_argument("--seed", type=int, default=77)
     ap.add_argument("--stage", type=int, default=2)
     ap.add_argument("--steps", type=int, default=50)
+    ap.add_argument("--refresh", type=int, default=0,
+                    help="v1.1：放大阶段前 N 步重录门控图（建议 1）。"
+                         "0 = 原版 v1。预注册判据见 gate_refresh.py")
+    ap.add_argument("--refresh-canon", type=int, default=256)
     ap.add_argument("--plan", action="store_true",
                     help="只打印解析结果，不加载模型不烧 GPU")
     a = ap.parse_args()
@@ -195,7 +200,10 @@ def main():
     with mani.open("a") as mf:
         for n, (r, head, nosubj, removed, tids) in enumerate(todo, 1):
             idx = r["idx"]
-            gate = BlendGate(tids, strength=a.s)
+            gate = (RefreshGate(tids, strength=a.s,
+                                refresh_canon=a.refresh_canon,
+                                refresh_steps=a.refresh)
+                    if a.refresh > 0 else BlendGate(tids, strength=a.s))
             pe, npe, _, _ = pipe.encode_prompt(
                 prompt=nosubj, device="cuda", num_images_per_prompt=1,
                 do_classifier_free_guidance=True, negative_prompt=NEGATIVE)
@@ -209,9 +217,17 @@ def main():
             def patched(latents, t, *args, _o=orig_step, _g=gate, **kw2):
                 ph = 1 if latents.shape[-1] <= 128 else 2
                 if ph == 2 and _g.phase == 1:
-                    _g.finalize()
-                _g.phase = ph
-                return _o(latents, t, *args, **kw2)
+                    _g.finalize()                       # 基础阶段那张先定格
+                    if isinstance(_g, RefreshGate):
+                        _g.begin_refresh()              # phase -> 'r'，开重录窗口
+                    else:
+                        _g.phase = 2
+                elif ph == 1:
+                    _g.phase = 1                        # 'r' 不许被踩回去
+                out = _o(latents, t, *args, **kw2)
+                if getattr(_g, "phase", None) == "r":
+                    _g.step_done()
+                return out
             pipe.noise_pred_step = patched
 
             pin(a.seed)
@@ -239,10 +255,15 @@ def main():
             if gate.map is not None:
                 torch.save(gate.map.cpu(), out / f"{idx:05d}_mask.pt")
             cov = gate.stats()
+            band = gate.band_stats() if isinstance(gate, RefreshGate) else None
+            if band:
+                print(f"\n    门控图重录：{band['before']} -> {band['after']}"
+                      f"  图尺寸 {band['map_size']}  重录 {band['n_refresh']} 次")
             mf.write(json.dumps({
                 "idx": idx, "stratum": "v1", "prompt": r["prompt"],
                 "head": head, "removed": removed, "s": a.s, "seed": a.seed,
-                "files": files, "gate_cov": cov, "sec": round(dt, 1),
+                "files": files, "gate_cov": cov, "band": band,
+                "refresh": a.refresh, "sec": round(dt, 1),
                 "peak_gb": round(torch.cuda.max_memory_allocated() / 2**30, 2),
             }, ensure_ascii=False) + "\n")
             mf.flush()

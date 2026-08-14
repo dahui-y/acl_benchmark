@@ -15,7 +15,7 @@
 | **AccDiffusion v2** | **TPAMI** | ✅ | ❌ **引而不比** | |
 | **ScaleDiff** | **NeurIPS 2025** | ✅ | ❌ **引而不比** | baseline：ScaleCrafter / HiDiffusion / DiffuseHigh / FreeScale / DemoFusion / AccDiffusion v2 / UltraPixel |
 | **ResDiT** | CVPR 2026 | ❌ **未引** | ❌ | DiT，单阶段 |
-| PixelRush | 2026 arXiv | ✅ | 未确认 | 摘要不点名任何方法 |
+| PixelRush | **CVPR（已核定：CVF Open Access 水印，页码 35946）** | ✅ | ❌ **引而不比** | 2026-08-14 读原文订正（原记"2026 arXiv 未确认"有误）。baseline 仅 SDXL-DI/FouriScale/DemoFusion/FreeScale；**无开源码** |
 | PhotoQuilt | 2026 arXiv | ✅ | 未确认 | |
 | Latent Wavelet Diffusion / APT | 2025 arXiv | ✅ | 未确认 | |
 | TNNLS 2026（超高分辨率**编辑**） | TNNLS | ✅ | — | 非本任务 |

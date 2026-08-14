@@ -2380,6 +2380,62 @@ regime 选 one-step 还是 few-step **不由我们定，跟着靶子走**。
 挂载点，one-step 管线可能只有个位数次。机制不靠跨步累积，理论上一次
 也成立，但"够不够把副本压下去"未知，须实测。
 
+### 9.5e PixelRush 原文核定：闸一判死 few-step 转向，但**主线被加固**（2026-08-14）
+
+**身份争议已解决**：PDF 带 CVF Open Access 水印 ——
+*"This CVPR paper is the Open Access version ... identical to the
+accepted version"*，正文页码 35946。**是 CVPR 正式接收**，
+`survey_pixelsmith_citers.md` 记的"2026 arXiv | 未确认"是错的，
+§5.46 的"CVPR"是对的。作者 Qualcomm AI Research。
+
+**闸一判决：转向 few-step —— 死。** 三条各自足够：
+1. **全文零 github、无代码发布**（用户确认无开源）。我们自己的地基筛
+   是"开源码 + 会议接收"，不能对自己放水。无代码 = 无法复现 =
+   **无法用我们的尺去量它** = 攻其未验证宣称这条路不存在。
+2. 它跑 **A100-40GB**；我们是 4090-24GB。即便有码也未必复现得了。
+3. 它已 CVPR 接收并占住该 regime。**带着"无法与之比较"进场是坏位置** ——
+   审稿人一句"PixelRush 已在 CVPR 做过 few-step training-free 高分辨率"
+   就够了。故**也不独立进场**（不用 SDXL-Lightning 另起炉灶）。
+判死干净，代价 20 分钟，不是三个月。
+
+**但读完原文，主线反而被加固 —— 谱系现在是完整的**：
+
+| 方法 | 对重复的处方 | 空间上 | 重复指标 |
+|---|---|---|---|
+| ScaleCrafter | 扩张卷积 | 均匀 | 零 |
+| DemoFusion | dilated sampling / skip residual | 均匀 | 零 |
+| FouriScale / FreeScale | 频域对齐 | 均匀 | 零 |
+| HiWave | DDIM 反演噪声作结构先验 | 均匀 | 零 |
+| FAM（CVPR 2025） | 频率调制 κ(t) + 全局 λ | 均匀 | 零 |
+| ScaleDiff | 结构引导 | 均匀 | 零 |
+| **PixelRush（CVPR）** | **DDIM 反演 latent 作结构先验** | **均匀** | **零** |
+| AccDiffusion（ECCV） | 逐 patch prompt —— **唯一空间自适应** | 逐 patch | 零 |
+
+> **七家开出同一张处方："给它一个更好的结构先验"，且全部空间均匀。
+> 八家宣称缓解重复，零家测量过。**
+
+**而且 PixelRush 自己就是 patch-based**（原文：*"builds upon the
+established patch-based inference paradigm"*，用 SDXL-Turbo 做放大）——
+即它明知 *"patch ... frequently exhibit object repetition"*，仍只用
+结构先验去治，没有碰文本条件。
+
+**我们有该处方族的实测反例**：ScaleDiff **带**结构引导，触发集上仍
++0.61，331 上 1->4。这是对整族前提的**可测量的反证**，不是修辞。
+
+**证据标准的另一面（对我们不利，须正视）**：这条线的定性证据靠**人工
+偏好研究** —— PixelRush 盲测 30 人（82.83/84.09/86.49%）、HiWave 81.2%。
+**我们无标注人力，这条轴对我们关闭。** 反过来说，一个检定过的自动
+计数器（MAE 0.20、可复现、有 null control）比一次 30 人的偏好投票
+更可复现 —— 这是我们唯一能出、且站得住的证据形态。
+
+**顺带一条协议不稳定的新证据**：PixelRush 的 baseline 是
+SDXL-DI / FouriScale / DemoFusion / FreeScale ——
+**不含 AccDiffusion、不含 ScaleDiff、不含 HiWave**。
+与 §9.5c 的两张相反排序合并成同一条论证：这条线的标准表互不可比。
+
+**结论：不转。回到主线，论点收紧为"处方族的可测量反证 + 唯一空间
+自适应的低成本实例化"。AccDiffusion 正面测量仍是唯一的去留闸门。**
+
 ### 9.5c 两篇顶会给出**完全相反的排序**（2026-08-14，用户举证）
 
 同样两个方法、同样 4096²、同样 LAION-1k 式协议，两张已发表的表：

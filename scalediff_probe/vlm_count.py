@@ -319,7 +319,9 @@ def do_regt(root, which, gt_path):
         print(f"没有真值文件 {gp} —— 先跑 --gt-sheet，核对后填 n_actual")
         return
     gt = json.loads(gp.read_text())
-    gt = {k: v for k, v in gt.items() if v.get("n_actual") is not None}
+    # 跳过 _note 之类的说明字段（值是字符串不是 dict）
+    gt = {k: v for k, v in gt.items()
+          if isinstance(v, dict) and v.get("n_actual") is not None}
     if not gt:
         print(f"{gt_path} 里没有填好的 n_actual")
         return

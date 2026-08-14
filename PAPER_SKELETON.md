@@ -2487,6 +2487,53 @@ SDXL-DI / FouriScale / DemoFusion / FreeScale ——
 **结论：不转。回到主线，论点收紧为"处方族的可测量反证 + 唯一空间
 自适应的低成本实例化"。AccDiffusion 正面测量仍是唯一的去留闸门。**
 
+### 9.5f **AccDiffusion 自己写明"现有定量指标测不出重复"**（2026-08-14，原文核定）
+
+读 AccDiffusion.pdf 原文（不是转述），三条硬事实：
+
+**① 他们没有做人工评测。** 全文
+`user study` / `human` / `participant` / `preference` / `volunteer`
+**各出现 0 次**。（对照：PixelRush 30 人盲测、HiWave 81.2% 偏好。）
+
+**② 框是手画的。** Fig.6 图注原话：
+> *"**We draw a red box** upon the generated images to highlight the
+> repeated objects. Best viewed zoomed in."*
+
+**③ 他们在正文里宣布了测量缺口**（Fig.6 正下方）：
+> *"Considering the fact that **existing quantitative metrics are unable
+> to accurately reflect the extent of object repetition**, we choose to
+> provide visualizations to demonstrate the effectiveness of our core
+> modules in preventing repeated generation."*
+
+**这一句是本项目最重要的外部授权，必须进论文正文（引用 [AccDiffusion]）。**
+它一次做三件事：
+- 证实"重复无法被现有指标反映"是**领域公认**，不是我们的自说自话；
+- 把度量缺口变成一张**公开的邀请函** —— SOTA 自己宣布这个位置空着；
+- 因此我们的尺子**不必是卖点**，它是"补上 SOTA 自己承认的缺口"，
+  放附录/辅助表即可，一句引文就立住，不心虚。
+
+**对证据策略的直接推论（本轮定案）**：
+> 这条线接受的证据格式 = **带框的定性图 + 标准表**。
+> 我们**照办**（box_figure.py），不再把度量当贡献。
+> 用户连续两轮把方向从"度量优先"拉回"方法优先"，两次都对，已记账。
+
+**版面上有意与他们不同**：他们是「一个 prompt × 四种长宽比 × 四个方法」；
+我们用「**一行一个 prompt × 各方法一列**」—— 多几个 prompt 比多几个
+长宽比有说服力，尤其我们要打的正是"他们在更难的 prompt 上没解决"。
+
+**可直接打的靶子**：他们 Fig.6 的 (d) AccDiffusion 那一块**一个红框都没有**，
+图面含义是"我们零重复"，而那是在**单个 prompt**（Astronaut on Mars）上
+展示的。我们的实测：AccDiffusion 在硬子集上 **Rep⁺ = 0.667**，
+**734 是 +3**（帕特农被镜像复制 + 水面凭空一艘发光大船）。
+-> **用他们的格式、他们的画框规则，在他们没展示的 prompt 上，
+把红框画到 AccDiffusion 的输出里。** 这是论文第一张图的形状。
+
+**我们比他们多的一条诚实规则**（box_figure.py 已实现）：
+标注文件里该臂**键不存在** = "NOT ANNOTATED YET"（红字）；
+该臂是**空表** = "no repetition found (author-checked)"。
+两者绝不能都渲染成留白 —— 留白会被读成"漏画了"。
+作者自行标注这件事必须在论文里明写（与他们同一做法）。
+
 ### 9.5c 两篇顶会给出**完全相反的排序**（2026-08-14，用户举证）
 
 同样两个方法、同样 4096²、同样 LAION-1k 式协议，两张已发表的表：

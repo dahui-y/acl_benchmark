@@ -36,6 +36,10 @@ class DemoGate(BlendGate):
         self._pads = (0, 0)
         self._canvas = None            # (H, W) 当前 scale 的画布 latent 尺寸
         self._map_canvas = None        # 门控图上采样到画布尺寸的缓存
+        # 仪表：门到底有没有在这条管线里工作 —— 用数字回答，不靠看图争
+        self.n_blend = 0               # 实际做了逐位置混合的注意力层调用数
+        self.n_skip = 0                # 因上下文缺失被跳过的调用数
+        self._alt_frac_sum = 0.0       # 累计"背景（拿替代文本）的画面占比"
 
     # ---- alt 嵌入：基础 (2,77,D)，按当前批的视图数平铺 ----
     def set_alt(self, alt2):
@@ -85,9 +89,11 @@ class DemoGate(BlendGate):
     def weights(self, hw, device, dtype):
         if self.map is None or self.s <= 0 or self.mode is None \
                 or not self._views:
+            self.n_skip += 1
             return None
         h = w = int(hw ** 0.5)
         if h * w != hw:
+            self.n_skip += 1
             return None
         cm = self._canvas_map(device, torch.float32)
         H, W = cm.shape
@@ -119,4 +125,16 @@ class DemoGate(BlendGate):
             for c in crops
         ])                                            # (V, hw)
         ms = ms.repeat_interleave(2, dim=0)[..., None]  # (2V, hw, 1)，u/c 同图
-        return (1.0 - self.s * (1.0 - ms)).to(device=device, dtype=dtype)
+        w_out = 1.0 - self.s * (1.0 - ms)
+        self.n_blend += 1
+        # 权重 <0.5 的位置 = 主要拿替代（去主体）文本的位置
+        self._alt_frac_sum += float((w_out < 0.5).float().mean())
+        return w_out.to(device=device, dtype=dtype)
+
+    def report(self):
+        """跑完打一行：门是否真的在这条管线里动过手。"""
+        n = self.n_blend
+        frac = self._alt_frac_sum / max(n, 1)
+        return (f"门仪表：混合调用 {n} 次，跳过 {self.n_skip} 次，"
+                f"背景（拿替代文本）平均占画面 {frac:.1%}"
+                + ("   <- **混合 0 次 = 门根本没工作，先查这个**" if n == 0 else ""))

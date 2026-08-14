@@ -113,10 +113,17 @@ def run_one(pipe, prompt, head, seed, size, arm, out, tag,
     peak = torch.cuda.max_memory_allocated() / 2**30
     print(f"    {arm:<5} {dt/60:.1f} 分钟  峰值 {peak:.1f}GB  "
           f"出图 {sorted(files)}")
+    rep = {}
+    if gate is not None:
+        print("    " + gate.report())
+        rep = {"n_blend": gate.n_blend, "n_skip": gate.n_skip,
+               "alt_frac": round(gate._alt_frac_sum / max(gate.n_blend, 1), 4),
+               "alt_prompt": nosubj}
     if gate is not None:
         gate.clear_views()
     pipe.gate = None
-    return {"files": files, "sec": round(dt, 1), "peak_gb": round(peak, 2)}
+    return {"files": files, "sec": round(dt, 1), "peak_gb": round(peak, 2),
+            **rep}
 
 
 def main():

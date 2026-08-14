@@ -2183,9 +2183,43 @@ overheads"* —— 正是我们"单次前向 vs N 次 patch 前向"那条轴）�
 两模块 = Frequency Modulation（傅里叶保全局结构）+ **Attention
 Modulation**（局部纹理一致性，自称 *"a problem largely ignored in
 prior works"*）。
-**待核（最高优先级，需原文 PDF，openaccess 与 arxiv 正文均 403）**：
-AM 调的是 self-attention 矩阵（保纹理）还是碰了文本条件？
-若前者 -> 位点不同、目标不同，我们站得住；若后者 -> 方法柱要重估。
+**已核定（2026-08-14，用户推 PDF，全文读毕）**：
+
+1. **AM = self-attention 矩阵混合，不碰文本条件**（Eq. 7:
+   `M̄ᵐ = λ·U(Mⁿ,s) + (1−λ)·Mᵐ`，只在 up_block_0，目标是局部纹理
+   一致性 —— "狐狸毛长到衬衫领子上"）。**我们的位点（cross-attention
+   文本条件逐位置混合）安全。**
+2. **FM = 频域版结构引导，与 ScaleDiff 同族**：
+   Eq. 5 `fₜ = zₜ + κ(t) ⊛ (z̃ₜ − zₜ)` vs ScaleDiff
+   `x_pred + scale·(lowpass(x_ref) − lowpass(x_pred))` —— 区别只在
+   κ(t) 是频率选择性时变核、ScaleDiff 是固定低通+标量时间调度。
+   **他们写 "FM module ... solves the issue of object duplication"，
+   证据只有定性图，全文零重复指标**（评测 = LAION 1K captions +
+   10K 真图，FID/KID/FIDc/KIDc/CLIP + latency）。
+   -> **我们有该族的实测反例**（ScaleDiff 带结构引导仍 +0.61、
+   331 上 1->4）：一篇 CVPR 2025 的未验证主张，我们有仪器可检验。
+3. **两个旋钮在空间上都均匀**：κ(t) 是卷积核（平移不变）、λ 是全局
+   标量。**母题"均匀条件 × 异质内容"正落在最新在位者头上。**
+   谱系补完：ScaleCrafter 均匀膨胀 / DemoFusion 均匀 skip residual /
+   **AccDiffusion 逐 patch prompt（唯一空间自适应，代价 N 次前向）**/
+   ScaleDiff 均匀结构引导 / **FAM 均匀频率核+均匀 λ** /
+   **我们：单次前向内逐位置文本条件**。
+4. **无公开代码**（GitHub 遍搜 happy-hsy / SamsungLabs / Samsung 均无）
+   -> 只能作引用行进表，无法复现；但也意味着无人能验证其重复主张。
+
+**被 FAM 拿走、必须放弃的三个卖点**：① "更快"（SDXL+FAM 2×2 仅
+1 min vs DemoFusion 2.5 / AccDiffusion 2.6；3×3 为 2.5 vs 8.6/10）；
+② "首个避开 patch 的单次前向"（其核心叙事）；③ "跨家族通用"
+（已装在 SDXL 直推 + **HiDiffusion 窗口注意力**上）——
+**柱三撤销是对的，否则正面撞车。**
+
+**坏消息（诚实记账）**：FAM 赢的正是 **patch 三列**（FIDc/KIDc/CLIP），
+而 FID 不稳（3×3 时 69.25 输给 DemoFusion 68.82）。patch 列反映
+细节/纹理质量 = Campaign A 的目标 = v2b 负责而 v2b 不出货的那块。
+-> **"标准表打赢 patch 三列"这条路前面挡着一个带强数字的 CVPR 2025。**
+战略结论：**重心彻底压在"重复 + 测量"，patch 列降为护栏**（落在
+噪声地板内即可），不再当胜负手 —— 与"v1 出货、v2b 退实验室"一致，
+现在有了外部理由。
 
 **创新模式（四种，无一涉及跨框架移植）**：
 | 模式 | 内容 | 实例 |

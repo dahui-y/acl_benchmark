@@ -46,8 +46,12 @@ CANON = 64
 class ProbeGate:
     """只录不混，按 (注意力边长, 时间步桶) 分立累积。"""
 
-    def __init__(self, token_ids, n_steps=50, n_buckets=5):
+    def __init__(self, token_ids, n_steps=50, n_buckets=5, n_content=None):
         self.tok = token_ids
+        # n_content = prompt 的真实 token 数（含 BOS/EOS）。CLIP 的 77 长
+        # 序列里其余全是 padding，而 padding/EOS 常吸走大量注意力且空间
+        # 均匀 —— 用完整 softmax 当分母，主体信号被均匀底噪稀释。
+        self.n_content = n_content
         self.phase = 1
         self.alt = None
         self.map = None
@@ -66,14 +70,19 @@ class ProbeGate:
         h = int(hw ** 0.5)
         if h * h != hw:
             return
-        m = probs[-1, :, :, self.tok].sum(-1).mean(0).reshape(1, 1, h, h).float()
-        m = F.interpolate(m, (CANON, CANON), mode="bilinear",
-                          align_corners=False)[0, 0]
-        for key in ((h, self.bucket()), (h, "all"), ("all", self.bucket()),
-                    ("all", "all")):
-            a = self.acc[key]
-            a[0] = m if a[0] is None else a[0] + m
-            a[1] += 1
+        sub = probs[-1, :, :, self.tok].sum(-1).mean(0).float()      # (hw,)
+        sigs = {"raw": sub}
+        if self.n_content:
+            tot = probs[-1, :, :, :self.n_content].sum(-1).mean(0).float()
+            sigs["content"] = sub / (tot + 1e-8)
+        for sig, v in sigs.items():
+            m = F.interpolate(v.reshape(1, 1, h, h), (CANON, CANON),
+                              mode="bilinear", align_corners=False)[0, 0]
+            for key in ((h, self.bucket(), sig), (h, "all", sig),
+                        ("all", self.bucket(), sig), ("all", "all", sig)):
+                a = self.acc[key]
+                a[0] = m if a[0] is None else a[0] + m
+                a[1] += 1
 
     def weights(self, hw, device, dtype):
         return None
@@ -95,7 +104,8 @@ def norm_otsu(m):
     bins = 64
     hist = torch.histc(f, bins=bins, min=float(lo_), max=float(hi_))
     prob = hist / hist.sum()
-    centers = torch.linspace(float(lo_), float(hi_), bins)
+    centers = torch.linspace(float(lo_), float(hi_), bins,
+                             device=m.device, dtype=m.dtype)
     w0 = torch.cumsum(prob, 0)
     mu = torch.cumsum(prob * centers, 0)
     muT = mu[-1]
@@ -116,6 +126,17 @@ def norm_quantile(m, lo=0.55, hi=0.85):
     a = torch.quantile(f, lo)
     b = torch.quantile(f, hi)
     return ((m - a) / (b - a + 1e-8)).clamp(0, 1)
+
+
+def contrast(m):
+    """与归一化**无关**的原始对比度。
+
+    用 **p99/p50 与 max/p50**，不用 p95 —— 小主体（lone 类真实占比
+    ~2%）在 p95 处还落在背景里，比值会被读成 1.00（自检踩过）。"""
+    f = m.flatten().float()
+    p99 = torch.quantile(f, 0.99)
+    p50 = torch.quantile(f, 0.50)
+    return float(p99 / (p50 + 1e-8)), float(f.max() / (p50 + 1e-8))
 
 
 def band(m):
@@ -156,7 +177,10 @@ def main():
             print(f"[{idx}] 无主体，跳过")
             continue
         tids = subject_token_ids(pipe, prompt, head)
-        gate = ProbeGate(tids, n_steps=a.steps)
+        n_content = int(pipe.tokenizer(prompt, truncation=True,
+                                       max_length=77).input_ids.__len__())
+        gate = ProbeGate(tids, n_steps=a.steps, n_content=n_content)
+        print(f"  内容 token 数 {n_content} / 77（其余是 padding）")
         procs = dict(pipe.unet.attn_processors)
         for k in procs:
             if k.endswith("attn2.processor"):
@@ -189,9 +213,9 @@ def main():
     # ---- 汇总：每个配置在所有 prompt 上的平均对比度 ----
     keys = sorted({k for m in allres.values() for k in m},
                   key=lambda k: (str(k[0]), str(k[1])))
-    print(f"\n{'层':>6}{'步桶':>6}{'  归一化':>10}"
-          f"{'主体>0.7':>10}{'背景<0.3':>10}{'过渡带':>9}{'覆盖跨度':>9}   判读")
-    print("-" * 78)
+    print(f"\n{'层':>5}{'步桶':>5}{'信号':>9}{'  归一化':>10}"
+          f"{'p99/p50':>9}{'max/p50':>9}{'主体>.7':>9}{'背景<.3':>9}{'过渡带':>8}{'跨度':>8}  判读")
+    print("-" * 97)
     best = []
     for key in keys:
         cfgs = [("rel_w.5", lambda m: norm_linear(m, width=0.5)),
@@ -215,16 +239,22 @@ def main():
             adapt = spread > 0.15
             if ok and adapt:
                 best.append((tb, key, nm, hi, lo, spread))
-            print(f"{str(key[0]):>6}{str(key[1]):>6}{nm:>10}"
-                  f"{hi:>10.1%}{lo:>10.1%}{tb:>9.1%}{spread:>9.1%}   "
-                  f"{'**合格**' if ok and adapt else ('带宽OK但不自适应' if ok else '')}")
+            cs = [contrast(allres[i][key]) for i in allres if key in allres[i]]
+            cr = sum(c[0] for c in cs) / max(len(cs), 1)
+            cmx = sum(c[1] for c in cs) / max(len(cs), 1)
+            print(f"{str(key[0]):>5}{str(key[1]):>5}{str(key[2]):>9}{nm:>10}"
+                  f"{cr:>9.2f}{cmx:>9.2f}{hi:>9.1%}{lo:>9.1%}{tb:>8.1%}{spread:>8.1%}  "
+                  f"{'**合格**' if ok and adapt else ('带宽OK不自适应' if ok else '')}")
     print("\n判据：主体>0.7 与 背景<0.3 都 >10%、过渡带 <40%，"
           "**且覆盖跨度 >15%（主体大小必须自适应 —— 固定分位数会失败）**。")
     # 逐样本覆盖率：自适应性一眼可见
     print(f"\n逐样本主体覆盖（挑几个配置对照，lone 应小 / portrait 应大）：")
-    show = [((32, "all"), "rel_w.1", lambda m: norm_linear(m, width=0.1)),
-            ((32, "all"), "otsu", norm_otsu),
-            ((32, "all"), "quantile", norm_quantile)]
+    show = [((32, "all", "raw"), "raw+rel_w.1",
+             lambda m: norm_linear(m, width=0.1)),
+            ((32, "all", "content"), "content+rel_w.1",
+             lambda m: norm_linear(m, width=0.1)),
+            ((32, "all", "content"), "content+rel_w.05",
+             lambda m: norm_linear(m, width=0.05))]
     print(f"{'配置':>16}" + "".join(f"{('idx'+str(i)):>10}" for i in allres))
     for key, nm, fn in show:
         row = [band(fn(allres[i][key]))[0] if key in allres[i] else float('nan')
@@ -233,7 +263,7 @@ def main():
     if best:
         best.sort()
         tb, key, nm, hi, lo, sp = best[0]
-        print(f"\n**推荐配置：层={key[0]} 步桶={key[1]} 归一化={nm}"
+        print(f"\n**推荐配置：层={key[0]} 步桶={key[1]} 信号={key[2]} 归一化={nm}"
               f"（过渡带 {tb:.1%}，主体 {hi:.1%}，背景 {lo:.1%}，"
               f"覆盖跨度 {sp:.1%}）**")
     else:
@@ -244,7 +274,7 @@ def main():
         from PIL import Image
         import numpy as np
         idx0 = list(allres)[0]
-        ks = [k for k in keys if k in allres[idx0]][:12]
+        ks = [k for k in keys if k in allres[idx0] and k[1] == "all"][:12]
         C = 128
         sheet = Image.new("L", (len(ks) * C, 2 * C), 255)
         for j, key in enumerate(ks):
@@ -255,7 +285,7 @@ def main():
         p = out / f"maps_{idx0}.png"
         sheet.save(p)
         print(f"\n可视化 {p}（上行 linear，下行 quantile，列 = {ks}）")
-    json.dump({str(i): {str(k): band(norm_quantile(v))
+    json.dump({str(i): {str(k): [band(norm_linear(v, width=0.1)), contrast(v)]
                         for k, v in m.items()} for i, m in allres.items()},
               (out / "band_stats.json").open("w"), indent=1)
     return 0

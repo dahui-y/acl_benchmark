@@ -274,6 +274,40 @@ def main():
                                               for v, nm in rank[-3:]))
     print("=" * 74)
 
+    # ---- **选层组合**：只用最锐的 K 层，看对比度与覆盖能否回来 ----
+    # 逐层累积已在内存里，**不用重跑生成**。
+    if pl:
+        rank_names = [nm for _, nm in rank]
+        print("\n" + "=" * 74)
+        print("选层组合（只用最锐的 K 层；层的排名在诊断集上定，§6.9 允许）")
+        print(f"  {'K':>4}{'对比度 max/p50':>16}{'  逐样本主体覆盖（rel_w.2）':>28}")
+        topk_maps = {}
+        for K in (2, 4, 8, 16):
+            names = rank_names[:K]
+            per_idx, covs2 = {}, []
+            for i, g in zip(allres, gates):
+                acc, n = None, 0
+                for nm in names:
+                    a = g.per_layer.get(nm)
+                    if a and a[0] is not None and a[1]:
+                        acc = a[0] / a[1] if acc is None else acc + a[0] / a[1]
+                        n += 1
+                if acc is None or not n:
+                    continue
+                m = acc / n
+                per_idx[i] = m
+                covs2.append((i, contrast(m)[1],
+                              band(norm_linear(m, width=0.2))[0]))
+            if not covs2:
+                continue
+            topk_maps[K] = per_idx
+            cr = sum(c for _, c, _ in covs2) / len(covs2)
+            cov_s = "  ".join(f"idx{i}:{v:.0%}" for i, _, v in covs2)
+            print(f"  {K:>4}{cr:>16.2f}   {cov_s}")
+        print("  判读：对比度应随 K 减小而升；覆盖应 lone 小 / portrait(idx20) 大。"
+              "\n  全层平均的基准是 1.5（对比度）与 41%/18%（idx0/idx8 覆盖，顺序是反的）。")
+        print("=" * 74)
+
     # ---- 汇总：每个配置在所有 prompt 上的平均对比度 ----
     keys = sorted({k for m in allres.values() for k in m},
                   key=lambda k: (str(k[0]), str(k[1])))

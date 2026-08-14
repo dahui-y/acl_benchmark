@@ -128,6 +128,11 @@ def main():
     ap.add_argument("--seed", type=int, default=77)
     ap.add_argument("--stage", type=int, default=2)
     ap.add_argument("--steps", type=int, default=50)
+    ap.add_argument("--push", action="store_true",
+                    help="v2a：背景位置的负分支加入被摘掉的主体短语，"
+                         "把'不要求画'升级为'主动排斥'。零额外成本 —— "
+                         "CFG 的负分支本来每步都在算。"
+                         "动机见代码内注释（v1.2 锐化门零增益）")
     ap.add_argument("--uniform", action="store_true",
                     help="消融：门控图拍平成常数（均值不变、空间结构去掉）。"
                          "回答\"逐位置自适应是不是真的在起作用\" —— "
@@ -224,10 +229,28 @@ def main():
                     if a.refresh > 0
                     else BlendGate(tids, strength=a.s, layers=LAYERS,
                                    uniform=a.uniform))
+            # v2a 推拉：背景位置的**负分支**里加入被摘掉的主体短语。
+            #
+            # 为什么要这一刀 —— 我们自己的数据逼出来的：
+            #   v1.2 把门锐化（过渡带 100%->40%，20/31 真开）后 Rep+ 纹丝
+            #   不动（0.500），说明**残留重复不是定位不准造成的**。定位对了，
+            #   副本照样长。病根在于 v1 的干预是**被动**的：只是"没要求你
+            #   画女神像"，而律的高段（空视野大）本就缺约束 —— 空天上结构
+            #   引导几乎不提供信息，文本是唯一信号，删一个词拦不住它。
+            #
+            # CFG 是 eps = eps_neg + s*(eps_pos - eps_neg)，负分支每一步都
+            # 在算却一直没用。把主体短语放进背景位置的负分支，性质就从
+            # "不要求"变成"**主动排斥**"，且**额外成本为零**（只多一次
+            # 文本编码，前向次数不变）。
+            neg_bg = NEGATIVE
+            if a.push and removed:
+                neg_bg = f"{NEGATIVE}, {removed}"
             pe, npe, _, _ = pipe.encode_prompt(
                 prompt=nosubj, device="cuda", num_images_per_prompt=1,
-                do_classifier_free_guidance=True, negative_prompt=NEGATIVE)
+                do_classifier_free_guidance=True, negative_prompt=neg_bg)
             gate.alt = torch.cat([npe, pe])
+            if a.push and n == 1:
+                print(f"    推拉开：背景负分支 = NEGATIVE + {removed!r}")
             procs = dict(pipe.unet.attn_processors)
             for k_ in procs:
                 if k_.endswith("attn2.processor"):
@@ -301,7 +324,7 @@ def main():
                 "head": head, "removed": removed, "s": a.s, "seed": a.seed,
                 "files": files, "gate_cov": cov, "band": band,
                 "refresh": a.refresh, "layers": a.layers,
-                "uniform": a.uniform,
+                "uniform": a.uniform, "push": a.push,
                 "sec": round(dt, 1),
                 "peak_gb": round(torch.cuda.max_memory_allocated() / 2**30, 2),
             }, ensure_ascii=False) + "\n")

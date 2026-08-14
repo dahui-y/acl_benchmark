@@ -82,10 +82,21 @@ def surface_head(prompt, vlm_subject):
 #     "a flower with"                          <- 以 with 结尾
 # 实测 31 条里 **17 条**这样。把残句塞进 negative prompt 语义接近噪声，
 # 会把"推拉有没有用"这个问题变得不可解读（v2a 第一轮就栽在这）。
-_TAIL = {"with", "of", "in", "on", "at", "and", "or", "a", "an", "the",
-         "next", "to", "by", "near", "beside", "under", "over", "from",
-         "into", "onto", "for", "as", "than", "that", "which", "surrounded",
-         "sitting", "standing", "going", "coming", "flying", "parked"}
+_TAIL = {
+    # 介词 / 方位词 / 小品词
+    "with", "of", "in", "on", "at", "and", "or", "a", "an", "the",
+    "next", "to", "by", "near", "beside", "under", "over", "from",
+    "into", "onto", "for", "as", "than", "that", "which",
+    "around", "up", "down", "past", "through", "across", "along",
+    "behind", "above", "below", "off", "out", "against", "toward",
+    "towards", "inside", "outside", "beneath", "between", "among",
+    "within", "without", "during", "before", "after", "upon",
+    # 常见分词（只在**末尾**才剥；"a team playing baseball" 以名词结尾，
+    # 不会被动到）
+    "surrounded", "sitting", "standing", "going", "coming", "flying",
+    "parked", "playing", "walking", "running", "gliding", "riding",
+    "holding", "wearing", "looking", "facing", "resting", "lying",
+}
 
 
 def clean_np(removed, head):

@@ -57,7 +57,8 @@ def load_pipe(gated=True):
     return pipe
 
 
-def run_one(pipe, prompt, head, seed, size, arm, out, tag, gate_dilated=True):
+def run_one(pipe, prompt, head, seed, size, arm, out, tag,
+            gate_dilated=True, vb=8, lowvram=False):
     import torch
     gate = None
     if arm == "v1":
@@ -83,6 +84,14 @@ def run_one(pipe, prompt, head, seed, size, arm, out, tag, gate_dilated=True):
         pipe.unet.set_default_attn_processor()
     pipe.gate = gate
 
+    # DemoFusion 的窗口抖动走 Python random（get_views random_jitter），
+    # 不钉它的话臂间抖动序列不同 —— 配对性被破坏，md5 也对不上。
+    # 首轮冒烟 2048 md5 就是栽在这里：phase-1（无 get_views）一致，
+    # phase-2 不一致。三个 RNG 全钉。
+    import random as _random
+    import numpy as _np
+    _random.seed(seed)
+    _np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.cuda.reset_peak_memory_stats()
@@ -91,10 +100,10 @@ def run_one(pipe, prompt, head, seed, size, arm, out, tag, gate_dilated=True):
                   height=size, width=size,
                   generator=torch.Generator(device="cuda").manual_seed(seed),
                   num_inference_steps=50, guidance_scale=7.5,
-                  view_batch_size=8, stride=64,
+                  view_batch_size=vb, stride=64,
                   cosine_scale_1=3., cosine_scale_2=1., cosine_scale_3=1.,
                   sigma=0.8, multi_decoder=True, show_image=False,
-                  lowvram=False)
+                  lowvram=lowvram)
     dt = time.time() - t0
     files = {}
     for im in images:
@@ -124,6 +133,9 @@ def main():
     ap.add_argument("--arms", nargs="+", default=["base", "v1"])
     ap.add_argument("--no-gate-dilated", action="store_true")
     ap.add_argument("--out", default=str(root / "demo_e4"))
+    ap.add_argument("--vb", type=int, default=8, help="view_batch_size")
+    ap.add_argument("--lowvram", action="store_true",
+                    help="4096 建议开：2048 冒烟峰值已 18GB")
     a = ap.parse_args()
 
     out = Path(a.out)
@@ -166,7 +178,8 @@ def main():
                     print(f"    {arm} 已有，跳过")
                     continue
                 rec = run_one(pipe, prompt, head, a.seed, a.size, arm, out,
-                              tag, gate_dilated=not a.no_gate_dilated)
+                              tag, gate_dilated=not a.no_gate_dilated,
+                              vb=a.vb, lowvram=a.lowvram)
                 if rec:
                     mf.write(json.dumps({
                         "tag": tag, "arm": arm, "size": a.size,
@@ -181,7 +194,8 @@ def main():
         torch.cuda.empty_cache()
         pipe0 = load_pipe(gated=False)
         tag, prompt, head = ("smoke331",) + SMOKE_PROMPT
-        rec = run_one(pipe0, prompt, head, a.seed, a.size, "orig", out, tag)
+        rec = run_one(pipe0, prompt, head, a.seed, a.size, "orig", out, tag,
+                      vb=a.vb, lowvram=a.lowvram)
         if rec:
             for wdt, f in rec["files"].items():
                 g = out / f"{tag}_base_{wdt}.png"

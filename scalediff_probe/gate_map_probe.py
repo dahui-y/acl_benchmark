@@ -1,0 +1,220 @@
+"""门控图探针：找出"哪些层 / 哪些时间步"才给出有结构的主体图。
+
+**为什么需要它**（v1.1 重录实验的失败指出来的）：
+band_stats 显示 263/474 的过渡带 = **1.00**、低权重区 = **0.00** ——
+整张门控图没有任何位置被判为背景，**门从来只是"半开"**。
+病根不是分辨率（重录到 256×256 毫无改善），是 `record` 把
+**~70 个 attn2 层 × 50 个时间步**一锅平均，把结构洗平了：
+归一化后 r 几乎处处落在均值 ±10% 内 -> map 全挤在 [0.3, 0.7]。
+
+**这个探针只跑基础阶段**（upsample_stage=0，~8 秒/张），一次前向
+同时累积所有 (层分辨率 × 时间步桶) 的分立版本，跑完直接报出每种
+配置的对比度。选配置用**诊断集**（§6.9 允许：脚手架就是干这个的），
+选定后才上触发集验证。
+
+判据（选哪个配置）：
+    对比度 = 低权重区(<0.3) 与 高权重区(>0.7) 的面积都 > 10%，
+    且过渡带 < 40%；在多条 prompt 上稳定。
+
+    python scalediff_probe/gate_map_probe.py --idx 0 2 4 8 20
+    python scalediff_probe/gate_map_probe.py --idx 0 --vis   # 出可视化
+"""
+
+import argparse
+import json
+import os
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+import torch
+import torch.nn.functional as F
+
+REPO = Path(__file__).resolve().parent.parent
+SDXL_DIR = REPO / "help_code" / "ScaleDiff" / "SDXL"
+sys.path.insert(0, str(SDXL_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from prompts import PROMPTS, NEGATIVE                        # noqa: E402
+from subject_phrases import HEADS, strip_subject             # noqa: E402
+from method_v0 import subject_token_ids                      # noqa: E402
+from method_v1 import BlendCrossAttn                         # noqa: E402
+
+CKPT = "stabilityai/stable-diffusion-xl-base-1.0"
+CANON = 64
+
+
+class ProbeGate:
+    """只录不混，按 (注意力边长, 时间步桶) 分立累积。"""
+
+    def __init__(self, token_ids, n_steps=50, n_buckets=5):
+        self.tok = token_ids
+        self.phase = 1
+        self.alt = None
+        self.map = None
+        self.s = 0.0                      # 永不混合
+        self.step = 0
+        self.n_steps, self.n_buckets = n_steps, n_buckets
+        self.acc = defaultdict(lambda: [None, 0])
+
+    def bucket(self):
+        return min(self.step * self.n_buckets // max(self.n_steps, 1),
+                   self.n_buckets - 1)
+
+    def record(self, probs, hw):
+        if not self.tok:
+            return
+        h = int(hw ** 0.5)
+        if h * h != hw:
+            return
+        m = probs[-1, :, :, self.tok].sum(-1).mean(0).reshape(1, 1, h, h).float()
+        m = F.interpolate(m, (CANON, CANON), mode="bilinear",
+                          align_corners=False)[0, 0]
+        for key in ((h, self.bucket()), (h, "all"), ("all", self.bucket()),
+                    ("all", "all")):
+            a = self.acc[key]
+            a[0] = m if a[0] is None else a[0] + m
+            a[1] += 1
+
+    def weights(self, hw, device, dtype):
+        return None
+
+    def finalize(self):
+        pass
+
+
+def norm_linear(m, k=1.0, width=0.5):
+    r = m / (m.mean() + 1e-8)
+    return ((r - k) / width + 0.5).clamp(0, 1)
+
+
+def norm_quantile(m, lo=0.55, hi=0.85):
+    """分位数归一化：**直接规定**多少面积落在背景/主体侧，
+    与 r 本身平不平无关 —— 这是对"图太平"最直接的解药。"""
+    f = m.flatten()
+    a = torch.quantile(f, lo)
+    b = torch.quantile(f, hi)
+    return ((m - a) / (b - a + 1e-8)).clamp(0, 1)
+
+
+def band(m):
+    return (float((m > 0.7).float().mean()),
+            float((m < 0.3).float().mean()),
+            float(((m >= 0.3) & (m <= 0.7)).float().mean()))
+
+
+def main():
+    root = Path(os.environ.get("SD_OUT", "./scalediff_out"))
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--idx", type=int, nargs="+", default=[0, 2, 4])
+    ap.add_argument("--steps", type=int, default=50)
+    ap.add_argument("--seed", type=int, default=77)
+    ap.add_argument("--out", default=str(root / "gate_probe"))
+    ap.add_argument("--vis", action="store_true")
+    a = ap.parse_args()
+
+    from pipeline_scalediff_sdxl import CustomStableDiffusionXLPipeline
+    hub = Path(os.environ.get("HF_HOME", "")) / "hub"
+    kw = {"torch_dtype": torch.float16}
+    for s_ in (hub / "models--stabilityai--stable-diffusion-xl-base-1.0"
+               / "snapshots").glob("*"):
+        if not (s_ / "unet" / "diffusion_pytorch_model.safetensors").exists() \
+                and list((s_ / "unet").glob("*.fp16.safetensors")):
+            kw["variant"] = "fp16"
+    pipe = CustomStableDiffusionXLPipeline.from_pretrained(CKPT, **kw).to("cuda")
+    pipe.set_progress_bar_config(disable=True)
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+
+    orig_step = pipe.noise_pred_step
+    allres = {}
+    for idx in a.idx:
+        cat, subj, prompt = PROMPTS[idx]
+        head = HEADS[idx]
+        if not head:
+            print(f"[{idx}] 无主体，跳过")
+            continue
+        tids = subject_token_ids(pipe, prompt, head)
+        gate = ProbeGate(tids, n_steps=a.steps)
+        procs = dict(pipe.unet.attn_processors)
+        for k in procs:
+            if k.endswith("attn2.processor"):
+                procs[k] = BlendCrossAttn(gate)
+        pipe.unet.set_attn_processor(procs)
+
+        def patched(latents, t, *args, _o=orig_step, _g=gate, **kw2):
+            r = _o(latents, t, *args, **kw2)
+            _g.step += 1
+            return r
+        pipe.noise_pred_step = patched
+
+        torch.manual_seed(a.seed)
+        torch.cuda.manual_seed_all(a.seed)
+        pipe(prompt, negative_prompt=NEGATIVE, height=1024, width=1024,
+             generator=torch.Generator(device="cuda").manual_seed(a.seed),
+             num_inference_steps=a.steps, guidance_scale=7.5,
+             restart_ratio=0.4, scale_factor=0.125, upsample_stage=0)
+        pipe.noise_pred_step = orig_step
+
+        maps = {}
+        for key, (acc, n) in gate.acc.items():
+            if acc is None or not n:
+                continue
+            maps[key] = acc / n
+        allres[idx] = maps
+        print(f"\n[{idx}] {cat}/{subj}  tok={tids}  "
+              f"层分辨率 {sorted({k[0] for k in maps if k[0] != 'all'})}")
+
+    # ---- 汇总：每个配置在所有 prompt 上的平均对比度 ----
+    keys = sorted({k for m in allres.values() for k in m},
+                  key=lambda k: (str(k[0]), str(k[1])))
+    print(f"\n{'层':>6}{'步桶':>6}{'  归一化':>10}"
+          f"{'主体>0.7':>10}{'背景<0.3':>10}{'过渡带':>9}   判读")
+    print("-" * 66)
+    best = []
+    for key in keys:
+        for nm, fn in (("linear", norm_linear), ("quantile", norm_quantile)):
+            bs = [band(fn(allres[i][key])) for i in allres if key in allres[i]]
+            if not bs:
+                continue
+            hi = sum(b[0] for b in bs) / len(bs)
+            lo = sum(b[1] for b in bs) / len(bs)
+            tb = sum(b[2] for b in bs) / len(bs)
+            ok = hi > 0.10 and lo > 0.10 and tb < 0.40
+            if ok:
+                best.append((tb, key, nm, hi, lo))
+            print(f"{str(key[0]):>6}{str(key[1]):>6}{nm:>10}"
+                  f"{hi:>10.1%}{lo:>10.1%}{tb:>9.1%}   "
+                  f"{'**合格**' if ok else ''}")
+    print("\n判据：主体>0.7 与 背景<0.3 的面积都 >10%，且过渡带 <40%。")
+    if best:
+        best.sort()
+        tb, key, nm, hi, lo = best[0]
+        print(f"**推荐配置：层={key[0]} 步桶={key[1]} 归一化={nm}"
+              f"（过渡带 {tb:.1%}，主体 {hi:.1%}，背景 {lo:.1%}）**")
+    else:
+        print("**没有配置合格** —— 主体图本身可能就不带足够对比度，"
+              "要换信号（如 self-attention 聚类 / 多 token 对比）。")
+
+    if a.vis and allres:
+        from PIL import Image
+        import numpy as np
+        idx0 = list(allres)[0]
+        ks = [k for k in keys if k in allres[idx0]][:12]
+        C = 128
+        sheet = Image.new("L", (len(ks) * C, 2 * C), 255)
+        for j, key in enumerate(ks):
+            for r_, fn in enumerate((norm_linear, norm_quantile)):
+                m = fn(allres[idx0][key]).cpu().numpy()
+                im = Image.fromarray((m * 255).astype(np.uint8)).resize((C, C))
+                sheet.paste(im, (j * C, r_ * C))
+        p = out / f"maps_{idx0}.png"
+        sheet.save(p)
+        print(f"\n可视化 {p}（上行 linear，下行 quantile，列 = {ks}）")
+    json.dump({str(i): {str(k): band(norm_quantile(v))
+                        for k, v in m.items()} for i, m in allres.items()},
+              (out / "band_stats.json").open("w"), indent=1)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

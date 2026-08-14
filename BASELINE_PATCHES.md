@@ -63,6 +63,42 @@ window=  32 scale=2  视图数   9  逐元素相同 True
 
 ---
 
+## C1 · **不得使用 `--lowvram`**（配置决定，非代码改动，但会静默污染结果）
+
+**日期** 2026-08-14 ｜ **代价** 已烧掉一条 19 分钟的样本
+
+`lowvram=True` 不是一个中性的显存开关，它**改数值**：
+
+```python
+# accdiffusion_sdxl.py:1247
+if self.lowvram:
+    needs_upcasting = False   # use madebyollin/sdxl-vae-fp16-fix in lowvram mode!
+```
+
+即 lowvram 分支**关掉 VAE 的 fp32 升位**，前提是使用者换了 fp16-fix
+的 VAE。用原版 SDXL VAE（`force_upcast=True`）时 VAE 在 fp16 下解码 ->
+溢出出 NaN -> `postprocess` 里 `(images*255).round().astype("uint8")`
+把 NaN 铸成垃圾像素。**图照样存盘**，只在 stderr 留一行
+`RuntimeWarning: invalid value encountered in cast`。
+
+第二个副作用：lowvram 在调用结束时把 `unet`/`vae` 留在 CPU
+（L1245），下一次调用 `self._execution_device` 解析成 cpu，与 cuda
+generator 冲突 -> `Cannot generate a cpu tensor from a generator of
+type cuda`。**管线在 lowvram 下不可重复调用。**
+
+**结论**：4096² 实测峰值仅 **10.1 GB**，24GB 卡不需要 lowvram。
+一律不开。三道防线已就位：
+- `acc_batch.py` 开了就打印显式警告；
+- 逐条生成后**当场体检**（纯黑 >30% 或标准差 <4 即判可疑），
+  可疑条目**不写入 manifest**，不会进入测量；
+- `img_sanity.py` 跑批后全量复检，`--rm` 可删坏图让脚本重跑。
+
+> 教训写在这里：**一张坏图以"对手的正常输出"身份进入闸门测量，
+> 足以让整个结论作废，而它只会留下一行 warning。** 任何对手方法的
+> 输出在计数之前都必须过体检。
+
+---
+
 ## 未改动但需在论文中声明的配置选择
 
 这些不是代码改动，是**调用参数的选择**，同样可能被质疑，先记在这里：
@@ -74,4 +110,4 @@ window=  32 scale=2  视图数   9  逐元素相同 True
 | `c`（重复阈值） | 0.3 | Readme 默认 |
 | steps / guidance | 50 / 7.5 | Readme 默认 |
 | seed | 77 | 与我们两臂同 seed，保证逐条配对 |
-| `--lowvram` | 开 | 4090-24GB 显存所迫，非算法项 |
+| `--lowvram` | **关** | 见 C1 —— 它会关掉 VAE 升位、静默产生 NaN 图。实测峰值 10.1 GB，不需要 |

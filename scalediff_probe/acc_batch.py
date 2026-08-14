@@ -42,6 +42,8 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
+
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "help_code" / "AccDiffusion"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -55,7 +57,6 @@ ACC_NEGATIVE = "blurry, ugly, duplicate, poorly drawn, deformed, mosaic"
 
 def pin(seed):
     """三处 RNG 全钉：shuffle 与窗口 jitter 走标准库 random。"""
-    import numpy as np
     import torch
     random.seed(seed)
     np.random.seed(seed)
@@ -92,7 +93,11 @@ def main():
     ap.add_argument("--c", type=float, default=0.3,
                     help="他们的重复阈值，Readme 默认 0.3")
     ap.add_argument("--lowvram", action="store_true",
-                    help="24GB 卡上 4096² 大概率要开")
+                    help="**别开，除非你换了 fp16-fix 的 VAE**。上游在 "
+                         "lowvram 分支里关掉了 VAE 的 fp32 升位"
+                         "（accdiffusion_sdxl.py:1247），用原版 SDXL VAE "
+                         "会 fp16 溢出出 NaN，图照存、只留一行 warning。"
+                         "实测峰值仅 10.1 GB，24GB 卡根本不需要它")
     ap.add_argument("--our-negative", action="store_true",
                     help="改用我们的 NEGATIVE（默认用他们 Readme 的，"
                          "那才是他们论文里的系统）")
@@ -121,6 +126,16 @@ def main():
     if a.our_negative:
         from prompts import NEGATIVE
         neg = NEGATIVE
+
+    if a.lowvram:
+        print("\n⚠⚠ --lowvram 会让上游关掉 VAE 的 fp32 升位"
+              "（accdiffusion_sdxl.py:1247，注释写明要配 fp16-fix VAE）。\n"
+              "   用原版 SDXL VAE 会解出 NaN，坏图照样存盘，只留一行 "
+              "RuntimeWarning。\n"
+              "   而且 lowvram 把 unet/vae 留在 CPU，管线**不可重复调用**"
+              "（第二条就崩）。\n"
+              "   实测峰值 10.1 GB —— 24GB 卡不需要它。跑完务必过 "
+              "img_sanity.py。\n")
 
     print(f"名单 {len(rows)} 条，已完成 {len(done)}，待跑 {len(todo)}")
     print(f"seed={a.seed}  {a.size}²  steps={a.steps}  c={a.c}  "
@@ -154,6 +169,11 @@ def main():
     with mpath.open("a") as mf:
         for n, r in enumerate(todo, 1):
             idx, prompt = r["idx"], r["prompt"]
+            # 上游 lowvram 分支会把 unet/vae 留在 CPU，下一次调用时
+            # `self._execution_device` 解析成 cpu，而我们的 generator 是
+            # cuda 的 -> "Cannot generate a cpu tensor from a generator of
+            # type cuda"。逐条拉回 cuda，管线才是可重复调用的。
+            pipe.to("cuda")
             pin(a.seed)
             torch.cuda.reset_peak_memory_stats()
             t0 = time.time()
@@ -194,11 +214,22 @@ def main():
                 continue
             dt = time.time() - t0
 
-            files = {}
+            files, suspect = {}, []
             for im in images:
                 p = out / f"{idx:05d}_{im.width}.png"
                 im.save(p)
                 files[str(im.width)] = p.name
+                # 当场体检：NaN/溢出的图会被 postprocess 静默铸成垃圾像素，
+                # 一张坏图以"对手的正常输出"身份进入闸门测量足以让结论作废
+                arr = np.asarray(im.convert("RGB").resize((256, 256)),
+                                 np.float32)
+                if (arr.sum(-1) == 0).mean() > 0.30 or arr.std() < 4:
+                    suspect.append(im.width)
+            if suspect:
+                print(f"[{idx}] ⚠ {suspect} 疑似坏图（NaN/溢出）——"
+                      f" **不写入 manifest**，该条不参与测量。"
+                      f"{' 多半是 --lowvram 关掉了 VAE 升位。' if a.lowvram else ''}")
+                continue
             if "1024" not in files:
                 # --delta 拿 files["1024"] 当基图；没有它这一行是废的，
                 # 与其静默落盘不如当场喊出来

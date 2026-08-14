@@ -285,6 +285,12 @@ def main():
             if band:
                 print(f"\n    门控图重录：{band['before']} -> {band['after']}"
                       f"  图尺寸 {band['map_size']}  重录 {band['n_refresh']} 次")
+            elif cov:
+                # R1 是预注册判据（§3.14c），每一行都得留下带宽读数，
+                # 不能只在 RefreshGate 那条支路上才有
+                print(f"\n    门控图：主体 {cov[0]:.0%}  背景<0.3 {cov[1]:.0%}"
+                      f"  过渡带 {cov[2]:.0%}"
+                      + ("  ← 仍是半开" if cov[2] > 0.5 or cov[1] < 0.1 else ""))
             mf.write(json.dumps({
                 "idx": idx, "stratum": "v1", "prompt": r["prompt"],
                 "head": head, "removed": removed, "s": a.s, "seed": a.seed,

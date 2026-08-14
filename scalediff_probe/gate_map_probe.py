@@ -288,9 +288,9 @@ def main():
             for i, g in zip(allres, gates):
                 acc, n = None, 0
                 for nm in names:
-                    a = g.per_layer.get(nm)
-                    if a and a[0] is not None and a[1]:
-                        acc = a[0] / a[1] if acc is None else acc + a[0] / a[1]
+                    e = g.per_layer.get(nm)      # 不要用 a：会遮蔽 argparse 的 a
+                    if e and e[0] is not None and e[1]:
+                        acc = e[0] / e[1] if acc is None else acc + e[0] / e[1]
                         n += 1
                 if acc is None or not n:
                     continue

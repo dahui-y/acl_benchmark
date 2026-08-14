@@ -82,8 +82,13 @@ class BlendGate:
     """
 
     def __init__(self, token_ids, strength=1.0, canon=64,
-                 norm="rel", k=1.0, width=0.5):
+                 norm="rel", k=1.0, width=0.5, layers=None):
         self.tok = token_ids
+        # v1.2 选层：只从这几层录图。None = 全收（原版行为）。
+        # 依据 gate_layers.json —— 全层平均的对比度只有 1.50，
+        # 而最锐的层单独就有 4.24，层 64 是椒盐噪声（1.1）。
+        # 一锅平均等于用噪声稀释信号，门因此长期"半开"。
+        self.layers = set(layers) if layers else None
         self.s = strength
         self.canon = canon
         self.norm, self.k, self.width = norm, k, width
@@ -91,8 +96,10 @@ class BlendGate:
         self.alt = None           # (B, 77, D) 去主体 prompt 的嵌入，与 batch 同序
         self._acc, self._n, self.map = None, 0, None
 
-    def record(self, probs, hw):
+    def record(self, probs, hw, name=None):
         if not self.tok:
+            return
+        if self.layers is not None and (name is None or name not in self.layers):
             return
         h = w = int(hw ** 0.5)
         if h * w != hw:
@@ -137,8 +144,9 @@ class BlendGate:
 
 
 class BlendCrossAttn:
-    def __init__(self, gate):
+    def __init__(self, gate, name=None):
         self.gate = gate
+        self.name = name        # 层名，供 gate 做选层过滤（v1.2）
 
     def __call__(self, attn, hidden_states, encoder_hidden_states=None,
                  attention_mask=None, temb=None, *args, **kw):
@@ -174,7 +182,7 @@ class BlendCrossAttn:
         if is_cross and self.gate.phase in (1, "r"):
             with torch.no_grad():
                 probs = (qh @ kh.transpose(-1, -2) * (hd ** -0.5)).softmax(-1)
-            self.gate.record(probs, HW)
+            self.gate.record(probs, HW, self.name)
         else:
             wmap = self.gate.weights(HW, q.device, q.dtype) if is_cross else None
             if wmap is not None and self.gate.alt is not None:

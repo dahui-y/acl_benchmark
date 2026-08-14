@@ -128,6 +128,9 @@ def main():
     ap.add_argument("--seed", type=int, default=77)
     ap.add_argument("--stage", type=int, default=2)
     ap.add_argument("--steps", type=int, default=50)
+    ap.add_argument("--layers", default="all",
+                    help="v1.2 选层：top4 / top8 / all（gate_layers.json）。"
+                         "全层平均对比度仅 1.50，top4 为 3.68")
     ap.add_argument("--refresh", type=int, default=0,
                     help="v1.1：放大阶段前 N 步重录门控图（建议 1）。"
                          "0 = 原版 v1。预注册判据见 gate_refresh.py")
@@ -148,6 +151,17 @@ def main():
     subjects = json.loads(subj_p.read_text())
     overrides = (json.loads(Path(a.heads_file).read_text())
                  if a.heads_file else {})
+
+    LAYERS = None
+    if a.layers != "all":
+        _g = json.loads((Path(__file__).resolve().parent
+                         / "gate_layers.json").read_text())
+        LAYERS = list(_g["top4"])
+        if a.layers == "top8":
+            LAYERS += _g["top8_extra"]
+        print(f"选层：{a.layers} -> {len(LAYERS)} 层"
+              f"（对比度 {_g['contrast_measured'].get(a.layers, '?')} "
+              f"vs 全层 {_g['contrast_measured']['all_layers']}）")
 
     from caption_audit import load_tokenizer
     tok = load_tokenizer()
@@ -200,10 +214,11 @@ def main():
     with mani.open("a") as mf:
         for n, (r, head, nosubj, removed, tids) in enumerate(todo, 1):
             idx = r["idx"]
-            gate = (RefreshGate(tids, strength=a.s,
+            gate = (RefreshGate(tids, strength=a.s, layers=LAYERS,
                                 refresh_canon=a.refresh_canon,
                                 refresh_steps=a.refresh)
-                    if a.refresh > 0 else BlendGate(tids, strength=a.s))
+                    if a.refresh > 0
+                    else BlendGate(tids, strength=a.s, layers=LAYERS))
             pe, npe, _, _ = pipe.encode_prompt(
                 prompt=nosubj, device="cuda", num_images_per_prompt=1,
                 do_classifier_free_guidance=True, negative_prompt=NEGATIVE)
@@ -211,7 +226,18 @@ def main():
             procs = dict(pipe.unet.attn_processors)
             for k_ in procs:
                 if k_.endswith("attn2.processor"):
-                    procs[k_] = BlendCrossAttn(gate)
+                    procs[k_] = BlendCrossAttn(gate,
+                                               k_.replace(".processor", ""))
+            # 选层名单必须真的对得上处理器键名。对不上的话门控图一张都录不到，
+            # map 恒为 None -> weights() 返回 None -> 完全不混合，输出与基线
+            # 逐字节相同 —— 那是一次“看起来跑了、其实什么都没做”的静默失败。
+            if LAYERS is not None:
+                have = {k_.replace(".processor", "") for k_ in procs}
+                miss = [n for n in LAYERS if n not in have]
+                if miss:
+                    raise SystemExit(
+                        f"选层名单有 {len(miss)} 个名字不在 UNet 里，"
+                        f"门会静默失效：{miss[:3]}")
             pipe.unet.set_attn_processor(procs)
 
             def patched(latents, t, *args, _o=orig_step, _g=gate, **kw2):
@@ -263,7 +289,8 @@ def main():
                 "idx": idx, "stratum": "v1", "prompt": r["prompt"],
                 "head": head, "removed": removed, "s": a.s, "seed": a.seed,
                 "files": files, "gate_cov": cov, "band": band,
-                "refresh": a.refresh, "sec": round(dt, 1),
+                "refresh": a.refresh, "layers": a.layers,
+                "sec": round(dt, 1),
                 "peak_gb": round(torch.cuda.max_memory_allocated() / 2**30, 2),
             }, ensure_ascii=False) + "\n")
             mf.flush()

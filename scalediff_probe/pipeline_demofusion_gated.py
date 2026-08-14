@@ -907,7 +907,11 @@ class DemoFusionSDXLPipeline(DiffusionPipeline, FromSingleFileMixin, LoraLoaderM
             self.unet.cpu()
             self.text_encoder.to(device)
             self.text_encoder_2.to(device)
-            image_lr.cpu()
+            # GATED FORK 上游 bug 修复（fork 中唯一非钩子改动）：原版在此
+            # 无条件 image_lr.cpu()，文生图模式 image_lr=None 直接崩 ——
+            # 上游 lowvram 演示只测过真图输入路径。加 None 护栏，行为不变。
+            if image_lr is not None:
+                image_lr.cpu()
 
         # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
         # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`

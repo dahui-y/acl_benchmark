@@ -43,6 +43,20 @@ CKPT = "stabilityai/stable-diffusion-xl-base-1.0"
 CANON = 64
 
 
+class NamedCrossAttn(BlendCrossAttn):
+    """带层名的录制器：把层身份传给 gate（用于逐层诊断）。"""
+
+    def __init__(self, gate, name):
+        super().__init__(gate)
+        self.name = name
+
+    def __call__(self, attn, hidden_states, encoder_hidden_states=None,
+                 *args, **kw):
+        self.gate._cur_name = self.name
+        return super().__call__(attn, hidden_states, encoder_hidden_states,
+                                *args, **kw)
+
+
 class ProbeGate:
     """只录不混，按 (注意力边长, 时间步桶) 分立累积。"""
 

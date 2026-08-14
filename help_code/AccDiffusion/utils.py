@@ -732,7 +732,14 @@ def get_views(height, width, window_size=32, stride=16, random_jitter=False):
                 w_start = 0
             
             if random_jitter:
-                jitter_range = (window_size - stride) // 4
+                # [BASELINE PATCH 2026-08-14] 上游 Python 3.12+ 兼容 bug，
+                # 非算法改动。调用处 (utils.py:801) 传 stride=window_size/2
+                # 是浮点，故 jitter_range 也是浮点，而 random.randrange 自
+                # Python 3.12 起不再接受浮点 -> TypeError。
+                # int() 是**数值恒等**的：`//4` 已经取整，结果本就是整数值。
+                # 依据：上游自己在 utils.py:811 与 accdiffusion_sdxl.py:1369
+                # 的同一表达式上就写了 int(...)，此处是漏网。
+                jitter_range = int((window_size - stride) // 4)
                 w_jitter = 0
                 h_jitter = 0
                 if (w_start != 0) and (w_end != width):

@@ -2172,6 +2172,45 @@ LAION-1k 抽样（分层）；读数 = VLM-Δdelta（检定过）+ 并排图 +
 4090 无障碍。他们管线出成片重复（AccDiffusion 全文为证）——
 门在那里的每一分修复都是正面战果。
 
+### 9.5b 调研：同问题不同 backbone 如何中顶会 + **一个漏掉的近邻**（2026-08-14）
+
+**⚠️ 文献缺口：FAM Diffusion（CVPR 2025，Samsung，arXiv 2411.18552）
+我们的文献库零记录。** 定位与我们高度重叠：training-free、可插任何
+latent diffusion、**明确避开 patch/渐进式以求低延迟**（原文
+*"avoids redundant inference tricks for improved consistency such as
+patch-based or progressive generation, leading to negligible latency
+overheads"* —— 正是我们"单次前向 vs N 次 patch 前向"那条轴）；
+两模块 = Frequency Modulation（傅里叶保全局结构）+ **Attention
+Modulation**（局部纹理一致性，自称 *"a problem largely ignored in
+prior works"*）。
+**待核（最高优先级，需原文 PDF，openaccess 与 arxiv 正文均 403）**：
+AM 调的是 self-attention 矩阵（保纹理）还是碰了文本条件？
+若前者 -> 位点不同、目标不同，我们站得住；若后者 -> 方法柱要重估。
+
+**创新模式（四种，无一涉及跨框架移植）**：
+| 模式 | 内容 | 实例 |
+|---|---|---|
+| A 换干预位点（主流） | 同病换下手处，论证该位点能修别人修不了的 | ScaleCrafter 卷积/FouriScale 频域/DemoFusion skip residual/AccDiffusion patch 级 prompt/Pixelsmith patch 级结构条件/FAM 傅里叶+注意力矩阵/HiWave 小波/ScaleDiff 窗口注意力 |
+| B 点名被忽略的子失效 | 先发明问题再发明方法 | AccDiffusion「物体重复」；FAM「局部纹理一致性」 |
+| C 换 regime | 推进到范式会崩的新状态 | PixelRush few-step，换 10–35× |
+| D 加实用轴 | 延迟/显存/单卡/分辨率上限 | FAM 零延迟开销；PixelRush 速度 |
+
+**可比性从哪来**：同基座（SDXL）+ 同评测协议（LAION prompts、
+FID/KID/IS + patch 三列、CLIP）。**不是靠移植机制。**
+
+**证据标准比预期宽松**：HiWave 拿 SIGGRAPH Asia 2025 靠定性对比 +
+偏好研究（80% 胜率）；AccDiffusion 进 ECCV，重复问题**零量化指标**。
+-> **这条线至今没有一把重复的定量尺，我们那把检定过的（MAE 0.20）
+是全场唯一，属超配。**
+
+**对我们的推论**：① 移植彻底作废（无人如此，写了不加分）；
+② 位点仍空 —— AccDiffusion=patch 级文本条件（需 N 前向）、
+FAM=注意力矩阵+频域（不碰文本条件）、Pixelsmith=patch 级结构条件，
+**「单次全图前向内逐位置混合文本条件 + 免费门控图」无人占据**（待
+FAM 原文确认）；③ 我们占 B+D：点名的不是"重复"（已被占两次）而是
+**"重复从未被测量、以及它何时发生"**（律 + 触发率 <3% + seed 主导
++ 图表错位），实用轴 = 1/N 代价 + 门关零开销。
+
 ### 9.5a 移植降级为附录：**这条线没人这么做**（2026-08-14，用户指出，核实属实）
 
 AccDiffusion v2 源码原话（accdiffusion_plus.py L1016）：
@@ -2220,6 +2259,17 @@ AccDiffusion v2 臂 1599s/张另计（~15h）。
 自检工具 resid_count.py（图现成，几分钟 VLM）：
 坐实 -> **v1.1 = 替代文本摘掉所有可数名词、只留场景词**（自然推广，
 可写成一节）+ 成绩单附该列如实披露；不成立 -> 成绩单照旧。
+
+**自检结果（2026-08-14）：转嫁假说被推翻，成绩单不打折。**
+22 条可比（6 条替代文本纯场景跳过）：差值均值 **−0.50**，
+增加的仅 1 条（146 kettle 1->2），减少 4 条（998 pyramid 4->3、
+734 airplane 3->2、1187 cow 2->1、1257 wall 10->1），持平 17 条。
+方向甚至相反 —— 门降低的是整幅画的复制冲动，不只主体。
+**关键：331 的 helicopter 在 ScaleDiff 上 10->10 纹丝不动** ——
+DemoFusion 那边的蚊群直升机是那条管线自身的行为，不是我们的替代
+文本造成的；我上一轮的自责撤回。+0.61 -> +0.10 如实成立。
+待查一项：1257 "wall" 10->1 跨度过大（长城近不可数、超出 <=6 运行域），
+放大看一眼定是仪器噪声还是门压掉了背景结构。
 
 **执行清单（每步带判据）**：
 1. 仪器收官：--armdelta / --null / --gt-sheet -> --regt（本周，便宜）。

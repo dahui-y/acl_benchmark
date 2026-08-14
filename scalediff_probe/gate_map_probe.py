@@ -59,17 +59,24 @@ class ProbeGate:
         self.step = 0
         self.n_steps, self.n_buckets = n_steps, n_buckets
         self.acc = defaultdict(lambda: [None, 0])
+        self.per_layer = defaultdict(lambda: [None, 0])
+        self.single = []          # (层名, 边长, 步桶, 单图 max/p50)
 
     def bucket(self):
         return min(self.step * self.n_buckets // max(self.n_steps, 1),
                    self.n_buckets - 1)
 
-    def record(self, probs, hw):
+    def record(self, probs, hw, name=None):
+        """name = 具体层名。**先平均再量对比度分不开两种情况**：
+        单图很锐但彼此不一致（平均抵消） vs 单图本来就平。
+        所以这里同时记 (a) 逐层名的累积图 和 (b) 平均**之前**每张图的
+        对比度 —— 后者是判决 (a)/(b) 的唯一依据。"""
         if not self.tok:
             return
         h = int(hw ** 0.5)
         if h * h != hw:
             return
+        name = getattr(self, "_cur_name", None)
         sub = probs[-1, :, :, self.tok].sum(-1).mean(0).float()      # (hw,)
         sigs = {"raw": sub}
         if self.n_content:
@@ -78,6 +85,14 @@ class ProbeGate:
         for sig, v in sigs.items():
             m = F.interpolate(v.reshape(1, 1, h, h), (CANON, CANON),
                               mode="bilinear", align_corners=False)[0, 0]
+            if sig == "raw":
+                # 平均之前的单图对比度（judge (a) vs (b) 的关键）
+                self.single.append((name or f"res{h}", h, self.bucket(),
+                                    contrast(m)[1]))
+                if name:
+                    a = self.per_layer[name]
+                    a[0] = m if a[0] is None else a[0] + m
+                    a[1] += 1
             for key in ((h, self.bucket(), sig), (h, "all", sig),
                         ("all", self.bucket(), sig), ("all", "all", sig)):
                 a = self.acc[key]
@@ -169,7 +184,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
 
     orig_step = pipe.noise_pred_step
-    allres = {}
+    allres, gates = {}, []
     for idx in a.idx:
         cat, subj, prompt = PROMPTS[idx]
         head = HEADS[idx]
@@ -184,7 +199,7 @@ def main():
         procs = dict(pipe.unet.attn_processors)
         for k in procs:
             if k.endswith("attn2.processor"):
-                procs[k] = BlendCrossAttn(gate)
+                procs[k] = NamedCrossAttn(gate, k.replace(".processor", ""))
         pipe.unet.set_attn_processor(procs)
 
         def patched(latents, t, *args, _o=orig_step, _g=gate, **kw2):
@@ -207,8 +222,43 @@ def main():
                 continue
             maps[key] = acc / n
         allres[idx] = maps
+        gates.append(gate)
         print(f"\n[{idx}] {cat}/{subj}  tok={tids}  "
               f"层分辨率 {sorted({k[0] for k in maps if k[0] != 'all'})}")
+
+    # ---- 判决 (a)/(b)：平均前 vs 平均后 ----
+    print("\n" + "=" * 74)
+    print("判决：单图对比度（平均**之前**） vs 该层平均后的对比度")
+    print("  单图高、平均后低 -> (a) 各层空间不一致，平均抵消 -> 选层可救")
+    print("  单图也低         -> (b) 交叉注意力本身就弥散 -> 换信号/改叙述")
+    sing = [c for g in gates for c in g.single]
+    if sing:
+        import statistics as st
+        vals = [c[3] for c in sing]
+        print(f"\n  单图 max/p50：n={len(vals)}  中位 {st.median(vals):.2f}  "
+              f"p90 {sorted(vals)[int(.9*len(vals))]:.2f}  最大 {max(vals):.2f}")
+        by = defaultdict(list)
+        for nm, h, b, v in sing:
+            by[(h, b)].append(v)
+        print(f"\n  {'边长':>6}{'步桶':>6}{'单图 max/p50 中位':>18}{'最大':>8}")
+        for k in sorted(by, key=lambda k: (k[0], str(k[1]))):
+            v = by[k]
+            print(f"{k[0]:>6}{str(k[1]):>6}{st.median(v):>18.2f}{max(v):>8.2f}")
+    # 逐层名：哪一层的平均图最锐
+    pl = defaultdict(list)
+    for g in gates:
+        for nm, (acc, n) in g.per_layer.items():
+            if acc is not None and n:
+                pl[nm].append(contrast(acc / n)[1])
+    if pl:
+        rank = sorted(((sum(v) / len(v), nm) for nm, v in pl.items()),
+                      reverse=True)
+        print(f"\n  最锐的 8 个层（该层自身平均后的 max/p50）：")
+        for v, nm in rank[:8]:
+            print(f"    {v:>6.2f}  {nm}")
+        print(f"  最平的 3 个：" + ", ".join(f"{v:.2f} {nm.split('.')[-3:][0]}"
+                                              for v, nm in rank[-3:]))
+    print("=" * 74)
 
     # ---- 汇总：每个配置在所有 prompt 上的平均对比度 ----
     keys = sorted({k for m in allres.values() for k in m},

@@ -2997,3 +2997,70 @@ ScaleDiff 4096² 七列赢六列，唯独 KIDp 0.0080 输给三家的 0.0079；
   天花板就低 —— 故 P0 必须三臂，判据二写在跑之前。
 - PixelRush 报 FID 52.87→50.13，ScaleDiff 报 62.98/61.87 —— 又一次印证
   §9.5c：**这条线的标准表互不可比**，基线行必须自己复现（§10.7 P1）。
+
+### 10.11 标准表打分器落地 + patch 裁法的**推导**（2026-08-15，`std_table.py`）
+
+打分代码写好了：FID / KID / IS + FIDp / KIDp / ISp + CLIP，
+`scalediff_probe/std_table.py`。三件事必须写进论文的 Evaluation 一节。
+
+#### ① patch 裁法：三家原文一致，真图那侧是**推**出来的
+
+| 来源 | 原话 |
+|---|---|
+| AccDiffusion / v2 | *"we crop **10 local patches at 1x resolution** (native resolution) from each generated high-resolution image and subsequently resize them, yielding FIDc and ISc"* |
+| FAM（CVPR25） | *"we extract **10 random crops** from each image before calculating FID and KID"* |
+| PixelRush（CVPR） | *"FIDc, a variant of FID computed on local crops **without resizing**"* |
+| ScaleDiff | 只写 *"following [8]"*，而 DemoFusion 仓库**没有评测代码** |
+
+生成侧三家一致：**每图 10 个原生分辨率（SDXL=1024²）随机裁块**。
+**真图侧三家都没写**，但 AccDiffusion Table 1 的 1× 行把它定死了：
+
+    1024x1024 (1x)   SDXL-DI   FIDr 58.49   FIDc 58.08
+
+1× 时"10 个 1024² 裁块"退化为同一张整图重复十次；两数几乎相等，
+**只可能在参考侧完全相同的情况下成立**。
+-> **参考侧 = 真图整图，FID 与 FIDp 共用一套特征，差别全在生成侧。**
+这也解释了 FIDp(38.89) 反而低于 FID(61.87)：4096² 缩到 299² 不像任何真实
+照片，而 1024² 裁块缩到 299² 就很像。
+
+#### ② 特征塔只认一个
+
+`torch-fidelity` 的 InceptionV3（`weights-inception-2015-12-05`，TF 移植版）
+—— pytorch-fid / torch-fidelity / torchmetrics 共用，也是全线发表数字的来源。
+换 torchvision 自带的 `inception_v3` 数值整体平移，**与发表值不可比**；
+代码里那条路要显式 `--allow-torchvision` 才走，且一路打警告。
+本机已验通：uint8 NCHW 输入、塔内部 resize 到 299²，返回 2048-d + 1008-d。
+**外面不做任何缩放** —— 两步重采样会偏离发表路径。
+
+#### ③ 两个数值陷阱，都已实测
+
+**FID 的小样本偏差。** 合成高斯自检（d=64，真值 16.0）：
+
+    n=400 -> 20.85     n=2000 -> 17.17     n=20000 -> 16.08
+
+d=2048 时更严重。**这是 P0（n=200）不算 FID、只算 KID（无偏）与 IS
+（不需参考集）的实测依据**，不是省事。代码在 n<1000 时会主动打警告。
+
+**KID 依赖 subset_size。** n=200 与 n=1000 的 KID 不是同一个数。
+故 P0 的 KIDp **只用 A/B 差值**，绝对值到 P1 才谈；`subset_size` 写进输出 json。
+
+#### ④ 这把尺的量程：bootstrap 噪声地板
+
+沿用 §8.9 的纪律 —— 先报量程再报读数。按**图**（不是按裁块）有放回重抽
+B 次重算指标，取标准差。按图重抽是关键：同一张图的 10 个裁块彼此相关，
+按裁块抽会把地板压低，读数就会显得比实际显著。
+
+> **判据只在差值 > 2× bootstrap 标准差时才算数。** 写死，不许看到数字再商量。
+
+KID/IS 默认 B=100；FID 每次要一个 2048² 的 sqrtm（实测很慢），默认不做，
+需要时 `--boot-fid`。
+
+#### ⑤ 已验通的路径（合成图端到端，CPU）
+
+`clean.json`（键是 `alive_idx`）解析 / `--real-split tune|eval` 过滤 /
+随机裁块 / 变尺寸按像素预算攒批 / 特征落盘缓存（键含文件指纹+裁块参数）/
+bootstrap / `--patch-only` / `--boot-fid`。
+指标本身对过三处：`FID(X,X)=0`、FID 收敛到闭式 `‖μ‖²`、
+`IS(确定且均匀,k=8)=8.0` 与 `IS(无信息)=1.0`。
+
+**纪律**：`tune` split 开发用，`eval` split **只在最后出表时用一次**。

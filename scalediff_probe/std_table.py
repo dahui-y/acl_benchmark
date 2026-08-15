@@ -671,6 +671,15 @@ def main():
                          (f"{v:>12d}" if c == "n" else
                           (f"{v:>12.4f}" if "KID" in c else f"{v:>12.2f}")))
         print(f"{name:<22}" + "".join(cells))
+    ns = {nm: r["n"] for nm, r in res.items()}
+    if len(set(ns.values())) > 1:
+        print(f"\n⚠ 各臂样本数不等：{ns}")
+        print("  **逐臂表里的 ISp 因此不可横比** —— IS 是 n 依赖量"
+              "（第五节），每份 split 的样本数不同，偏向样本多的那一臂。"
+              "\n  KIDp 不受影响（U 统计量）。臂间比较一律看下面的配对表，"
+              "它只取共同 idx，两边样本数强制相等。"
+              "\n  样本数不等通常意味着某臂 OOM 跳了图 —— 顺手查一下 log。")
+
     if a.boot:
         print(f"\nbootstrap 标准差（按图重抽 {a.boot} 次）：")
         for name, m in out["arms"].items():

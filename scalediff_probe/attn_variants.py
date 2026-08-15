@@ -214,6 +214,9 @@ class MDProcessor(AttnProcessor2_0_local):
         B, nH, _, C = qs
         N = nr * nc
         x = x.reshape(B, N, nH, -1, C).permute(0, 2, 1, 3, 4)   # B,nH,N,L,C
+        # 注：index_add_ 在 CUDA 上走原子加，**不是逐位可复现**的。
+        # 对 C 臂（我们复现的对照，不是我们的方法）可以接受；
+        # 若将来要拿 md 当主结果，这里要换成确定性的 scatter。
         out = torch.zeros(B, nH, H * W, C, dtype=x.dtype, device=x.device)
         cnt = torch.zeros(1, 1, H * W, 1, dtype=x.dtype, device=x.device)
         flat = view.reshape(-1)

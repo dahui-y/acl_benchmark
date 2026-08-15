@@ -276,6 +276,25 @@ def arm_files(d, res):
     return {i: v[1] for i, v in out.items()}
 
 
+def prompt_items(path):
+    """读 eval_prompts.json。
+
+    **schema 写死在这里，别再猜**（`fetch_eval_prompts.py:375` 的产物）：
+
+        {"items": [{"prompt": ..., "url": ..., "split": "tune"|"eval"}, ...],
+         "split_rule": ..., ...}
+
+    · 顶层是 **dict**，不是 list —— 顶层当 list 读会得到一串 key 字符串；
+    · 条目里**没有 idx 字段**，idx 就是列表下标（`fetch_real_images.py:110`
+      的 `{**x, "idx": i}` 与 `real_audit.py:100` 的 `meta["items"]` 同此约定）。
+    """
+    meta = json.loads(Path(path).read_text())
+    items = meta["items"] if isinstance(meta, dict) else meta
+    if items and not isinstance(items[0], dict):
+        sys.exit(f"{path} 的 items 不是对象表，schema 变了，先看一眼文件")
+    return items
+
+
 def real_files(d, prompts, split):
     """真图：优先 clean.json（`real_audit.py --apply` 的产物）。
 
@@ -296,7 +315,7 @@ def real_files(d, prompts, split):
         pp = Path(prompts)
         if not pp.exists():
             sys.exit(f"要按 split={split} 过滤，但 {pp} 不存在")
-        items = json.loads(pp.read_text())
+        items = prompt_items(pp)
         want = {i for i, x in enumerate(items) if x.get("split") == split}
         before = len(keep)
         keep &= want
@@ -561,11 +580,10 @@ def main():
             sys.path.insert(0, str(Path(__file__).resolve().parent))
             from clip_score import load_clip
             clip = load_clip()
-            pr = {}
             pp = Path(a.prompts)
-            if pp.exists():
-                for x in json.loads(pp.read_text()):
-                    pr[int(x["idx"])] = x.get("prompt") or x.get("caption", "")
+            # idx 是列表下标，不是字段 —— 见 prompt_items 的说明
+            pr = {i: (x.get("prompt") or x.get("caption", ""))
+                  for i, x in enumerate(prompt_items(pp))} if pp.exists() else {}
             for name, r in res.items():
                 sc = [clip.score(Image.open(p).convert("RGB"), pr[i])
                       for i, p in zip(r["idxs"], r["paths"]) if i in pr]

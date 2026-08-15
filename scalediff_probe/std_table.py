@@ -251,6 +251,9 @@ def kid(f1, f2, subset_size, n_subsets, rng):
 
     数值依赖 subset_size，两个臂必须用同一个（见文件头第四节）。
     """
+    # 注：bootstrap 里 f1 含重复行（按图有放回重抽），重复样本会让
+    # kxx 的非对角项混入 k(x,x)，把 KID 抬高一点。两个臂同样处理、
+    # 取差值时大部分抵消，故对**地板估计**可接受；点估计走全量、无重复。
     d = f1.shape[1]
     m = min(subset_size, len(f1), len(f2))
     vals = []
@@ -364,6 +367,15 @@ def real_files(d, prompts, split):
     return ps
 
 
+def _idx_of(path, fallback):
+    """从文件名取 idx。两套命名都是 5 位数字打头：
+    真图 `00042.jpg`、生成图 `00042_4096.png`。取不到就退回序号。"""
+    try:
+        return int(path.stem.split("_")[0])
+    except ValueError:
+        return fallback
+
+
 def crops_of(im, n, size, rng):
     """n 个原生分辨率随机裁块。图小于 size 时退化为整图（1× 那一档）。"""
     W, H = im.size
@@ -393,7 +405,7 @@ def extract(tower, paths, want_crops, cache, tag, px_budget, ncrop=CROPS,
     1024² 裁块能放几十张，自动适应。
     """
     key = hashlib.sha256(
-        (tag + "|" + str(want_crops) + f"|{ncrop}|{csize}|{cseed}|"
+        (tag + "|v2|" + str(want_crops) + f"|{ncrop}|{csize}|{cseed}|"
          + "|".join(f"{p.name}:{p.stat().st_size}" for p in paths))
         .encode()).hexdigest()[:16]
     cp = Path(cache) / f"{tag}_{key}.npz"
@@ -403,7 +415,6 @@ def extract(tower, paths, want_crops, cache, tag, px_budget, ncrop=CROPS,
         return z["feat"], z["logit"], list(z["idx"])
 
     Path(cache).mkdir(parents=True, exist_ok=True)
-    rng = np.random.default_rng(cseed)
     F, L, I = [], [], []
     buf, bidx = [], []
     t0 = time.time()
@@ -425,6 +436,13 @@ def extract(tower, paths, want_crops, cache, tag, px_budget, ncrop=CROPS,
         except Exception as e:
             print(f"  跳过 {p.name}：{type(e).__name__}")
             continue
+        # **裁块位置按 idx 定种子，不按文件顺序。**
+        # 原先用一条贯穿全表的 rng：没有 OOM 时三臂图数相同、顺序相同，
+        # 裁块位置碰巧一致（这正是我们要的共同随机数）；可是某臂一旦
+        # OOM 跳了一张，它之后**所有**图的裁块位置就与另两臂错开 ——
+        # 不产生偏差，却恰好在最需要配对的时候悄悄削弱配对，而且看不出来。
+        # 按 idx 定种子后与文件顺序无关，缺图也不影响其余图的对齐。
+        rng = np.random.default_rng(cseed * 1000003 + _idx_of(p, k))
         for pc in (crops_of(im, ncrop, csize, rng) if want_crops else [im]):
             px = pc.size[0] * pc.size[1]
             if buf and (pc.size != buf[0].size

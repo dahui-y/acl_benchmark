@@ -26,13 +26,13 @@ substantial computational overhead."* 缺口就是我们要拿回来的东西。
 
 所以三个臂回答的是**同一个问题的两半**：
 
-    A  NPA                 基准（他们的评测配置）
-    B  NPA + shifting      缺口里**边界伪影**占多少
-    C  MultiDiffusion      缺口总共有多大
+    A  npa      基准（他们的评测配置）
+    B  shift    NPA + 逐层随机平移的 query 网格
+    C  ovl      重叠 query 窗口 + 层内平均（**不是 MultiDiffusion**，见下）
 
-令 g = C−A、b = B−A：b/g 就是"边界"在缺口里的占比。
-b≥0.6g -> 缺口主要住在边界，他们那个没开的开关吃掉大半，天花板低；
-b≤0.3g -> 住在**上下文不足**，那才是可攻的机制。**先量，再定方法。**
+⚠️ 原先写的 "g=C−A 是缺口总量、b/g 是边界占比" 那套读法**已作废** ——
+它锚在"C 复现了他们发表的 MultiDiffusion 行"这个前提上，而该前提是错的。
+重写后的判据见 p0_run.py 文件头。
 
 ────────────────────────────────────────────────────────────────────────
 Query Window Random Shifting 的实现（照附录 B.1 的字面）
@@ -59,11 +59,40 @@ are discarded. Since offsets are independently resampled at each layer..."*
 `AttnControl` 的索引和输出**逐元素相同**。不同就是实现错了，不是"差不多"。
 
 ────────────────────────────────────────────────────────────────────────
-MultiDiffusion 臂
+`md` 臂 —— **它不是 MultiDiffusion。订正一处实质性错误（2026-08-15）**
 ────────────────────────────────────────────────────────────────────────
-query 与 K/V 用**同一个** p1×p1 重叠窗口（步长 p1/2，即附录 A 说的
-overlap ratio 50%），窗口内做完整自注意力，重叠处按计数平均。
-窗口数 (2s−1)²，与他们 Table 1 的 FLOPs 行一致。
+本臂 query 与 K/V 用**同一个** p1×p1 重叠窗口（步长 p1/2），窗口内做完整
+自注意力，重叠处按计数平均，窗口数 (2s−1)²。
+
+我原以为这就复现了他们 Table 3 的 MultiDiffusion 行。**错了。**
+实测 85s vs NPA 75s = **1.13×**，而论文是 239/113 = **2.11×**。
+证据在他们 Table 1（我先前读漏了）：
+
+    Method          Linear         Conv              Cross-Attn     Self-Attn
+    Base            s2hwd2         s2hwk2d2          s2hwld         s4h2w2d
+    MultiDiffusion  (2s-1)2hwd2    (2s-1)2hwk2d2     (2s-1)2hwld    (2s-1)2h2w2d
+    NPA             s2hwd2         s2hwk2d2          s2hwld         s2h2w2d
+
+**MultiDiffusion 的 Linear / Conv / Cross-Attn 三列全按 (2s−1)² 缩放**
+—— 它把**整个 UNet 在每个重叠 patch 上各跑一遍**再平均。原文讲 NPA 的
+卖点时也说得很清楚：*"eliminates redundant computations caused by
+overlapping patches, thereby keeping the computational cost of
+non-self-attention layers unchanged"*。
+本实现只换了注意力，卷积/线性仍是一次全图前向，故只贵 13%。
+
+**那本臂到底是什么**：「MultiDiffusion 的注意力模式 + NPA 的其余部分」。
+还有一处性质要记牢 —— 它给每个 query 的上下文**比 NPA 更少**：
+
+    A npa   query 1024 token，KV 4096  -> 上下文 4x，无重叠
+    C 本臂  query 4096 token，KV 4096  -> 上下文 1x，有层内重叠平均
+
+所以它既不是 MultiDiffusion，也不是"上下文更多"那一端；
+它测的是**重叠平均**单独值多少钱。目录名沿用 `md`（改名会断续跑），
+但报表里一律标为 `ovl-attn`，别让错标传下去。
+
+**顺带记一条失败的检查**：我曾提议用峰值显存判断 MD 有没有装上 ——
+没用。峰值由 UNet 别处的激活决定（三臂都是 11.9~12.0GB），注意力的
+瞬时张量淹在里面。**真正抓到问题的是单张时长。**
 
     python scalediff_probe/attn_variants.py --selftest
 """

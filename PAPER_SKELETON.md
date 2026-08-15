@@ -2917,3 +2917,83 @@ FID 在 n=200 上偏得没法看，**不算**。
 
 **论文里的诚实处理（现在写死）**：Query Window Random Shifting 是他们的，
 必须作为**强基线**报出并注明出处，不得算进我们的消融收益。
+
+### 10.10 问题陈述定稿：我们到底研究什么（2026-08-15，用户追问"到底转向什么问题"）
+
+#### 一句话
+
+> **窗口/分块注意力是 >1K 生成能跑起来的唯一原因，但现有的每一种实现
+> 都是用「丢掉跨窗口上下文」换来的这份便宜，而代价全部记在局部保真度上
+> —— FID 要缩到 299px 看不见它，只有 patch 三列看得见，而报了这三列的
+> 论文自己没有讨论过它。**
+
+可执行形式：**能不能在 NPA 的开销下拿到 MultiDiffusion 的质量？**
+这条帕累托前沿的两端由 ScaleDiff 自己的 Table 3 给出（§10.2），不是我们编的。
+
+#### PixelRush 为什么能中 —— 它的问题也不新（原文核定）
+
+它的贡献结构是三步，**没有提新问题**：
+
+1. **换 regime**：把 training-free 高分辨率从 multi-step 搬到 few-step
+   （partial inversion + 蒸馏模型），10–35× 加速。任务一模一样。
+2. **承认这个 regime 生出两个新失效**（原文）：
+   - *"standard patch blending methods, which work in multi-step processes,
+     **fail in a low-step context and produce severe boundary artifacts**"*
+   - *"to counteract the **oversmoothing** typically observed in few-step
+     generation, we introduce a noise injection technique"*
+3. **各修一个并量出来**：FID 52.87 → 50.13，人工偏好 82.8%。
+
+> **中稿逻辑 = 旧任务 + 新 regime + 「该 regime 特有的失效」+ 修好并量。
+> 三条 contribution 里两条是子问题的解药。**
+
+对我们：好消息是"问题不新"从来不是这条线的死因；坏消息是它靠 regime
+转移（§9.5e 已判死：无代码 + A100）和人工偏好（我们无标注人力）。
+
+#### 一个不该忽略的巧合：两篇点名同一对失效
+
+| | PixelRush（few-step patch） | ScaleDiff（multi-step NPA 窗口） |
+|---|---|---|
+| 边界伪影 | *"severe boundary artifacts"* → feathering blending | 附录 B.1 *"minor boundary artifacts can sometimes appear"* → 写了 Query Window Random Shifting，**评测未开、代码未实现**（§10.9） |
+| 过平滑 | *"oversmoothing ... in few-step generation"* → noise injection | §3.3 *"often results in outputs that lack fine texture details and appear **overly smoothed**"* → LFM |
+
+**两支队伍、两种 regime、两种分解方式，命名出同一对失效** —— 这不是某个
+方法的 bug，是**分块/窗口范式本身的税**。而这个税是顶会认的问题类型：
+PixelRush 拿它当两条 contribution 中了 CVPR。
+
+#### 三层论点（分清哪层已证、哪层是假设 —— 不许混着写）
+
+**第一层（已证，靠已发表的表）**：patch 三列是这条线唯一还有空档的地方。
+ScaleDiff 4096² 七列赢六列，唯独 KIDp 0.0080 输给三家的 0.0079；
+而它自己消融里 MultiDiffusion 是 0.0069（缺口是它输掉那 0.0001 的 11 倍）。
+且 2048²→4096² 全线 ISp 掉 20%+，而全局 FID 反而变好。
+
+**第二层（已证，靠原文）**：这份损失是**分解范式的税**，不是实现缺陷 ——
+七家开出同一张处方（更好的结构先验，全部空间均匀，§9.5e），
+两家在不同 regime 下点名同一对失效（上表）。
+
+**第三层（假设，目前零个直接实验，必须标明）**：
+**重复与局部保真损失是同一个病的两个症状。** 分解切断长程上下文，模型用
+"局部看着合理"的东西填空 —— 区域空旷时填出**副本**（重复），
+区域有纹理时填出**糊或胡编**（patch 列变差）。
+
+现有支持只有三条**间接**证据：
+(a) 我们那条律 重复 ∝ R²×(1−主体覆盖)，ρ +0.845 / +0.686 ——
+    R² 量的正是分解被拉伸了多少，(1−覆盖) 量的正是文本条件有多不管这块；
+(b) ScaleDiff 原文 *"Since NPA processes images through patches,
+    it can introduce repetitive patterns"*；
+(c) 上面那张"两 regime 同一对失效"的表。
+
+**可证伪判据**：若真是一个病，一个只补上下文的机制应**同时**动 patch 三列
+和 Rep⁺。**动一个不动另一个 → 第三层作废**，退回第一二层
+（仍是一篇"把帕累托前沿往上推"的论文，弱一档，但不死）。
+
+#### 风险（写在前面，不许事后才提）
+
+- 这是**"把权衡做得更好"**的论文，不是"提出新问题"的论文。这类中 CVPR
+  是常态（ScaleDiff 本身就是一篇），但要求收益干净、机制不显然。
+- **数字小**：FIDp 缺口 0.81，单看不叫大胜。**叫大胜的是"七列全扫且保住
+  113s"**，加上重复那一半作定性证据（红框图，§9.5f 的外部授权）。
+- **最实的风险仍是 §10.9**：若打开他们那个没用的开关就补上大半缺口，
+  天花板就低 —— 故 P0 必须三臂，判据二写在跑之前。
+- PixelRush 报 FID 52.87→50.13，ScaleDiff 报 62.98/61.87 —— 又一次印证
+  §9.5c：**这条线的标准表互不可比**，基线行必须自己复现（§10.7 P1）。

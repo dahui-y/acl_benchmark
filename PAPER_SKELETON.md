@@ -2827,26 +2827,93 @@ box_figure.py 红框图、以及 s=0.7 那个点（Rep⁺ −56%、Dmg⁻ 0.000�
 **引用他们发表数字的前提**：我们复现的 ScaleDiff 行要对得上他们的行。
 所以复现实验不是可选项，是引用资格的门票。
 
-### 10.7 预注册（写在看到任何数字之前）
+### 10.7 预注册（写在看到任何数字之前）—— **三臂，不是两臂**（见 §10.9）
 
-**P0（≈20 h）：n=200，只算 KIDp + ISp，两臂 NPA vs MultiDiffusion-attn。**
+**P0（≈30 h）：n=200，只算 KIDp + ISp，三臂。**
 选这两个指标：KID 是无偏估计、小样本可用；IS 不需要参考真图。
 FID 在 n=200 上偏得没法看，**不算**。
-- MD 的 KIDp 优势 ≥0.0005 **且** ISp 优势 ≥0.2 → 缺口复现，进 P1；
-- 两项都落在噪声内 → 那 0.0011 是 A6000/种子特有的，**方向当场判死**。
+
+| 臂 | 说明 | 单张 | 200 张 |
+|---|---|---|---|
+| A. NPA | ScaleDiff 的评测配置（**未开** shifting） | 113s | 6.3 h |
+| B. NPA + Query Window Random Shifting | 他们写了但没用的开关（§10.9） | ~113s | 6.3 h |
+| C. MultiDiffusion-attn | 他们消融里全赢的那一行 | 239s | 13.3 h |
+
+**判据一（缺口是否存在）**：C 对 A 的 KIDp 优势 ≥0.0005 **且** ISp 优势 ≥0.2
+- 是 → 缺口在我们这台机器上复现，进 P1；
+- 否 → 那 0.0011 是 A6000/种子特有的，**方向当场判死**，不烧后面的 5 天。
+
+**判据二（缺口住在哪，决定方法长什么样）**：令 g = C−A 的缺口，b = B−A。
+- **b ≥ 0.6 g** → 缺口主要是**边界伪影**，他们那个没开的开关就吃掉大半。
+  这时"打开开关"只是强基线不是贡献，**天花板低**，要重估是否值得做；
+- **b ≤ 0.3 g** → 缺口主要是**上下文不足**（每个 query 只看到 2× 窗口，
+  而 MultiDiffusion 是重叠平均、覆盖更广），这是真机制，可攻，
+  **这才是我们想要的那一格**；
+- 中间 → 两者都有，按比例分别处理，先攻大的那一半。
 
 **P1（≈31 h，P0 过了才做）：n=1000 全协议复现 ScaleDiff 4096² SDXL 行**，
 对标 (61.87, .0025, 19.56, 38.89, .0080, 20.41, 33.04)。
 - 各列在容差内 → 拿到引用整张表的资格；
 - 对不上 → 自己跑全部对手，或退回 2048²（那里 patch 缺口更大）。
 
-**评测协议（照抄 ScaleDiff §4.1，不许自选）**：LAION-5B 随机采 1000 组
-图文对，每 prompt 一张；FID/KID/IS 对真图算；FIDp/KIDp/ISp 按 DemoFusion
-的裁块方式算；CLIP Score 测对齐。
+**评测协议（照抄 ScaleDiff §4.1，不许自选）**：LAION 随机 1000 组图文对，
+每 prompt 一张；FID/KID/IS 对真图算；FIDp/KIDp/ISp 按 DemoFusion 的裁块
+方式算；CLIP Score 测对齐。**参考集用我们已审计的那 3424 张**（§10.8）。
 
-### 10.8 硬前置（比任何代码都优先）
+### 10.8 参考图不是阻塞 —— 那件事 2026-08-11 就做完了（本节订正我自己）
 
-FID/KID/FIDp/KIDp 四列都需要 **1000 张真实参考图**。国内服务器能否拿到
-LAION 子集、`SD_OUT` 下有无现成的 —— **先查这个**。
-拿不到真图则四列全废，只剩 ISp + CLIP，整条路线要重估。
-（§7.1.5 / §7.1.7 里关于 LAION 变体不可比、链接腐烂的结论仍然适用。）
+我在本节初稿里把"1000 张真实参考图"写成硬前置。**查了 §7.1.5–§7.1.7，
+它早已解决**，写错会让人白跑一趟，这里改正：
+
+- 来源 `laion2B-en-aesthetic`，元数据阶段按短边 ≥299 预筛；
+- 全量 4919 候选，两轮存活 3421（69.5%）；
+- `real_audit.py` 体检过：占位图 0 组、纯色 0 张、解码失败 0、
+  真重复仅 2 对（0.12%）、短边 <299 已归零；
+- 留 **3424 张：eval 2864（2.9×）/ tune 560（2.8×）**，`table.json` 指纹守门。
+
+**真正缺的不是数据，是打分代码**：仓库里 `grep FID` 只命中
+`fetch_eval_prompts.py`（那是选 prompt 用的元数据字段），
+**FID / KID / IS / FIDp / KIDp / ISp / CLIP 一行都没有**。
+这才是 P0 之前要写的东西。
+
+另：`help_code/DemoFusion` 里**没有评测代码**（只有 pipeline 和 demo），
+而 ScaleDiff 的 FIDp 是 "following [8]"。所以 patch 裁法只能按 DemoFusion
+**论文正文**定，且必须在我们论文里写死裁法参数 —— 这是绝对值不可比的
+第二个来源（第一个是参考集，§7.1.7 末）。**因此基线行必须自己复现**，
+这条与 §7.2 的判据一致。
+
+### 10.9 **ScaleDiff 写了一个修边界伪影的开关，然后没用它**（2026-08-15，读附录 B.1）
+
+附录 B.1 原文（Query Window Random Shifting）：
+
+> *"While Neighborhood Patch Attention utilizes overlapping key/value
+> patches to ensure a smooth transition at patch boundaries, **minor
+> boundary artifacts can sometimes appear in the generated output.**
+> Query Window Random Shifting is an optional technique designed to
+> further alleviate such artifacts ... Since offsets are independently
+> resampled at each layer, explicit patch boundaries are avoided, which
+> reduces border artifacts **with minimal computational overhead**.
+> **Note that this technique was not used during the evaluation in this
+> paper.**"*
+
+即他们自己：① 承认 NPA 有边界伪影；② 给出一个几乎免费的补救；
+③ **评测里没开**；④ 另一边（Table 3）又印出 MultiDiffusion 在七列上全赢。
+
+**核实过的两件事**：
+- 开源代码 `help_code/ScaleDiff/SDXL/attn_scalediff_sdxl.py`（205 行）里
+  `grep shift` **零命中** —— 这个开关只存在于论文文字，没有实现。
+- 该文件的 `get_kv_view` 用 `clamp(r-p4, 0, h-p1)` 把 K/V 窗口套在
+  query patch 外围，query 由 `patchify_q` 按 `p2 = window//2` **不重叠**切分。
+  要加 shifting，就是给 query 网格加随机 top/left 偏移并同步重算 `kv_views`，
+  偏移量有限可缓存，**开销确实接近零**。
+
+**对我们的意义（两面）**：
+- 机会：这是一个已被作者承认、已被作者放弃、且从未被任何人量过的缺口，
+  而它正落在我们选中的 patch 三列上。
+- 风险：**如果打开开关就补上大半缺口，那"打开开关"不是贡献。**
+  所以 P0 必须是三臂（§10.7 判据二）—— 先量清楚缺口住在边界还是上下文，
+  **再**决定方法长什么样。这是 §3.14e 之后立的规矩：不在没有数字的地方
+  提方向。
+
+**论文里的诚实处理（现在写死）**：Query Window Random Shifting 是他们的，
+必须作为**强基线**报出并注明出处，不得算进我们的消融收益。

@@ -60,15 +60,26 @@ torch-fidelity / torchmetrics 共用的那一个，也是全线发表数字的�
 **判据只在差值 > 2×bootstrap 标准差时才算数。** 这一条写死在这里，
 免得看到数字再商量。
 
-────────────────────────────────────────────────────────────────────────
-四、KID 的一个陷阱
-────────────────────────────────────────────────────────────────────────
-KID 的数值依赖 `subset_size`（无偏 MMD² 在子集上求平均）。n=200 与
-n=1000 算出来的 KID **不是一个数**。所以：
+臂与臂的比较**一律用配对 bootstrap**（同一组图下标同时喂两个臂）——
+各臂单独抽再假设独立会把共享的 prompt 抽样方差算两遍，地板虚高，
+代价是要么白烧几十 GPU 小时凑样本，要么把真差异判成噪声。
+判据是**三结局**：赢 / **不定（不是判死，另报所需 n）** / 反。
 
-  · P0（n=200）的 KIDp **不可与发表值比**，只用 A/B 差值（§10.7 判据一）；
-  · P1（n=1000）复现 ScaleDiff 行时才谈绝对值可比性。
-`subset_size` 一律写进输出 json，两个臂必须相同。
+────────────────────────────────────────────────────────────────────────
+四、KID 与 subset_size —— **订正一处我自己写错的话**（2026-08-15）
+────────────────────────────────────────────────────────────────────────
+初稿写的是"n=200 与 n=1000 算出来的 KID 不是一个数"。**这句是错的。**
+KID 用的是**无偏 U 统计量**，其期望对任意 m>=2 都等于总体 MMD²，
+`subset_size` 只影响**方差**，不影响期望。
+
+所以：
+  · 不同 subset 之间 KID 数值**可比**（只是小 subset 更抖）；
+  · 绝对值的不可比性只剩"数据池不同"这一条 —— 不同的 LAION 子集、
+    不同的真图参考集（§7.1.7 末），与 subset 大小无关。
+
+实证支持：n=120、subset=560 的 tune 集上我们读到 **KIDp 0.0078**，
+ScaleDiff 发表的 4096² SDXL 值是 **0.0080** —— 差 2.5%。
+`subset_size` 仍一律写进输出 json，且各臂必须相同（控方差）。
 
 ────────────────────────────────────────────────────────────────────────
 用法
@@ -241,8 +252,20 @@ def kid(f1, f2, subset_size, n_subsets, rng):
     return float(np.mean(vals))
 
 
-def inception_score(logits, splits=10):
-    """标准 IS：logits -> softmax -> 每份算 KL(p(y|x) || p(y))，取 exp 均值。"""
+def inception_score(logits, splits=10, seed=0):
+    """标准 IS：logits -> softmax -> 每份算 KL(p(y|x) || p(y))，取 exp 均值。
+
+    **切 split 之前必须打乱**（torch-fidelity 官方 ISC 的 `samples_shuffle`
+    默认就是 True）。不打乱的后果实测过一次，值得记下来：
+
+        特征数组按图顺序排（第 0 张的 10 个裁块、第 1 张的 10 个 ...），
+        n=120 张图 × 10 裁块 = 1200 行切成 10 份，**每份只含 12 张不同的图**。
+        分母 p(y) 由这 12 个场景估出，多样性被压死 ——
+        实测 ISp 读成 11.04，而 ScaleDiff 发表值是 20.41，差 1.85 倍。
+
+    种子固定，所以 bootstrap 各次重抽之间这一层是共模的，不会污染地板。
+    """
+    logits = logits[np.random.default_rng(seed).permutation(len(logits))]
     x = logits - logits.max(1, keepdims=True)
     p = np.exp(x) / np.exp(x).sum(1, keepdims=True)
     n = len(p)
@@ -407,6 +430,30 @@ def extract(tower, paths, want_crops, cache, tag, px_budget, ncrop=CROPS,
 
 
 # ══════════════════════════════════════════════════════════════════════
+def rows_by_image(groups, n):
+    """第 p 张图对应的特征行号。整图特征就是它自己一行。"""
+    g = np.asarray(groups)
+    return [np.where(g == p)[0] for p in range(n)]
+
+
+def paired_boot(a_rows, b_rows, common, pa, pb, fn_a, fn_b, B, rng):
+    """**配对** bootstrap：同一组图下标同时喂给两个臂，算差值的标准差。
+
+    为什么必须配对（这一条是这个脚本里最容易被忽略、代价也最大的一条）：
+    两个臂跑的是**同一批 prompt、同一批种子**。各臂单独 bootstrap 再假设
+    独立，等于把"抽到哪些 prompt"这一层共享方差算了两遍 —— 地板被虚高，
+    于是要么白白多烧几十个 GPU 小时去凑样本，要么把真实的差异判成噪声。
+    配对重抽让这一层在差值里自然抵消，剩下的才是两个臂**真正的**分歧。
+    """
+    out = []
+    for _ in range(B):
+        pick = rng.choice(common, len(common), replace=True)
+        sa = np.concatenate([a_rows[pa[i]] for i in pick])
+        sb = np.concatenate([b_rows[pb[i]] for i in pick])
+        out.append(fn_b(sb) - fn_a(sa))
+    return float(np.std(out))
+
+
 def boot_std(fn, groups, B, rng):
     """按**图**（不是按裁块）有放回重抽 B 次，返回指标的标准差。
 
@@ -613,6 +660,82 @@ def main():
             bits = [f"{k[:-3]} ±{m[k]:.4f}" for k in m if k.endswith("_sd")]
             print(f"  {name:<20}" + "   ".join(bits))
         print("  **判据只在差值 > 2× 这里的标准差时才算数**（文件头第三节）。")
+        print("  ↑ 这是**各臂单独**的地板，只用来看单个数稳不稳；"
+              "臂与臂的比较看下面的配对表。")
+
+    # ────────── 配对比较：判据真正问的那个量 ──────────
+    if a.boot and len(res) >= 2:
+        names = list(res)
+        base = names[0]
+        A = res[base]
+        Arows = rows_by_image(A["pg"], A["n"])
+        pa = {ix: i for i, ix in enumerate(A["idxs"])}
+        print(f"\n配对比较（基准 = {base}，同一组图下标同时喂两个臂）")
+        print(f"{'臂':<20}{'ΔKIDp':>11}{'2σ_d':>10}{'判':>6}"
+              f"{'ΔISp':>11}{'2σ_d':>10}{'判':>6}   备注")
+        print("-" * 92)
+        out["paired_baseline"] = base
+        out["paired"] = {}
+        for nm in names[1:]:
+            Bm = res[nm]
+            Brows = rows_by_image(Bm["pg"], Bm["n"])
+            pb = {ix: i for i, ix in enumerate(Bm["idxs"])}
+            common = sorted(set(A["idxs"]) & set(Bm["idxs"]))
+            if len(common) < 10:
+                print(f"{nm:<20}  两臂共同 idx 只有 {len(common)} 个，不比")
+                continue
+            sa = np.concatenate([Arows[pa[i]] for i in common])
+            sb = np.concatenate([Brows[pb[i]] for i in common])
+
+            def _k(rows, arm):
+                return kid(arm["pf"][rows], rf, sub_patch, 10,
+                           np.random.default_rng(7))
+
+            def _i(rows, arm):
+                return inception_score(arm["pl"][rows])
+
+            g_k = _k(sb, Bm) - _k(sa, A)
+            g_i = _i(sb, Bm) - _i(sa, A)
+            rg = np.random.default_rng(999)
+            sd_k = paired_boot(Arows, Brows, common, pa, pb,
+                               lambda s: _k(s, A), lambda s: _k(s, Bm),
+                               a.boot, rg)
+            sd_i = paired_boot(Arows, Brows, common, pa, pb,
+                               lambda s: _i(s, A), lambda s: _i(s, Bm),
+                               a.boot, np.random.default_rng(999))
+
+            def verdict(g, sd, lower_is_better):
+                """三结局。**"看不见"不等于"不存在"** —— 这一条是 2026-08-15
+                被实测打回来的：原判据把欠功效直接写成"方向判死"。"""
+                good = -g if lower_is_better else g      # >0 表示该臂更好
+                if good > 2 * sd:
+                    return "✅赢", None
+                if good < -2 * sd:
+                    return "❌反", None
+                need = int(np.ceil(len(common) * (2 * sd / abs(good)) ** 2)) \
+                    if abs(good) > 1e-12 else None
+                return "…不定", need
+
+            vk, nk = verdict(g_k, sd_k, True)
+            vi, ni = verdict(g_i, sd_i, False)
+            note = []
+            if nk:
+                note.append(f"KIDp 要 n≈{nk}")
+            if ni:
+                note.append(f"ISp 要 n≈{ni}")
+            print(f"{nm:<20}{g_k:>+11.4f}{2*sd_k:>10.4f}{vk:>6}"
+                  f"{g_i:>+11.2f}{2*sd_i:>10.2f}{vi:>6}   "
+                  + "；".join(note))
+            out["paired"][nm] = {
+                "n_common": len(common), "dKIDp": g_k, "KIDp_2sd": 2 * sd_k,
+                "dISp": g_i, "ISp_2sd": 2 * sd_i,
+                "KIDp_verdict": vk, "ISp_verdict": vi,
+                "KIDp_need_n": nk, "ISp_need_n": ni}
+        print("\n三结局（§10.7 修订版，写死）：")
+        print("  ✅赢   —— 差值方向对且 > 2σ_d，缺口为真；")
+        print("  …不定 —— 落在 ±2σ_d 内。**这不是判死**，是样本不够看见；"
+              "备注给出所需 n；")
+        print("  ❌反   —— 差值反向且 > 2σ_d，该机制比基准更差。")
 
     Path(a.out).write_text(json.dumps(
         {k: v for k, v in out.items()}, ensure_ascii=False, indent=2,
@@ -623,10 +746,12 @@ def main():
         print("\n⚠️⚠️ 特征塔是 torchvision 版：上面这些数**只能自比**，"
               "不可与任何发表值比较（P1 复现判据作废）。")
     if a.patch_only:
-        print("\n§10.7 判据一：C(MultiDiffusion) 对 A(NPA) 的 KIDp 优势 "
-              "≥0.0005 **且** ISp 优势 ≥0.2 -> 缺口复现，进 P1；否则方向判死。")
-        print("§10.7 判据二：令 g=C−A、b=B−A。b≥0.6g -> 缺口住在边界"
-              "（天花板低，重估）；b≤0.3g -> 住在上下文（可攻，要的就是这格）。")
+        print("\n§10.7 判据一（修订版）：看上面配对表 C(MultiDiffusion) 那一行。"
+              "\n  ✅赢 -> 缺口为真，进 P1；…不定 -> 补样本到备注给的 n；"
+              "❌反 -> 方向判死。")
+        print("§10.7 判据二：令 g=C−A、b=B−A（都取配对差值）。"
+              "\n  b≥0.6g -> 缺口住在边界（他们那个没开的开关就吃掉大半，"
+              "天花板低，重估）；\n  b≤0.3g -> 住在上下文（可攻，要的就是这格）。")
     return 0
 
 

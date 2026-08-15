@@ -146,6 +146,34 @@ def kv_view_plain(H, W, ws, device):
     return idx.reshape(-1, p1 * p1)
 
 
+def kv_view_ctx(H, W, ws, kv, device):
+    """**只把 K/V 窗口放大**，query 切法与基线完全一致。
+
+    这是唯一干净的"上下文"探针。`shift` 只动窗口位置（测边界伪影），
+    `ovl-attn` 的上下文反而更少（1x vs 4x，与重叠平均混淆）——
+    两个都回答不了"上下文够不够"这个问题。
+
+    窗口以 query 块中心为心：query 块 i 覆盖 [i*p2, i*p2+p2)，中心
+    i*p2 + p2/2，故 K/V 起点 = 中心 − kv/2，再 clamp 到边界内。
+    **kv = ws 时与基线 `get_kv_view` 逐元素相同**（基线的
+    `clamp(i*p2 − p4, ...)` 正是这个式子在 kv=ws=2*p2 时的特例），
+    由 selftest ⑦⑧ 核对。
+    """
+    p2 = int(ws) // 2
+    kv = int(kv)
+    if kv > H or kv > W:
+        kv = min(H, W)                      # 放不下就退到整幅（全局注意力）
+    r0 = torch.arange(0, H, p2, device=device) + p2 // 2 - kv // 2
+    c0 = torch.arange(0, W, p2, device=device) + p2 // 2 - kv // 2
+    r_win = r0.clamp(0, H - kv)
+    c_win = c0.clamp(0, W - kv)
+    ar = torch.arange(kv, device=device)
+    rows = r_win[:, None] + ar
+    cols = c_win[:, None] + ar
+    idx = rows[:, None, :, None] * W + cols[None, :, None, :]
+    return idx.reshape(-1, kv * kv)
+
+
 def md_view(H, W, ws, device):
     """MultiDiffusion 的重叠窗口起点，步长 p1/2；返回索引与 (nr, nc)。"""
     p1, st = int(ws), int(ws) // 2
@@ -224,6 +252,40 @@ class ShiftProcessor(AttnProcessor2_0_local):
                       nh=nh, nw=nw, p=p2, w=p2)
         x = x[:, :, top:top + H, left:left + W, :]   # 丢掉 pad 出来的部分
         return x.reshape(x.shape[0], x.shape[1], H * W, x.shape[-1])
+
+
+class CtxAttnControl(ShiftAttnControl):
+    """NPA，但 K/V 窗口边长 = `units` × p2（p2 = ws//2 = query 块边长）。
+
+    以 p2 为单位而不是以 ws 为单位，是为了留出细粒度退档：
+        units=2 -> kv = ws      = 基线（面积 1.0x，selftest ⑧ 守逐字节相同）
+        units=3 -> kv = 1.5*ws  （面积 2.25x）  <- 显存吃紧时的退档
+        units=4 -> kv = 2*ws    （面积 4.0x）   <- 默认
+    """
+
+    def __init__(self, units=4):
+        super().__init__(None)
+        self.units = units
+
+
+class CtxProcessor(AttnProcessor2_0_local):
+    """query 与基线逐块相同，只有 K/V 窗口变大 —— 单变量。"""
+
+    def patch(self, q, k, v):
+        c, ws = self.controller, self.window_size
+        H, W = c.hw(ws)
+        p2 = int(ws) // 2
+        self._last = (H, W)
+        q = rearrange(q, "B nH (nh p nw w) C -> (B nh nw) nH (p w) C",
+                      nh=H // p2, nw=W // p2, p=p2, w=p2)
+        view = kv_view_ctx(H, W, ws, p2 * c.units, k.device)
+        return q, ShiftProcessor._gather(k, view), ShiftProcessor._gather(v, view)
+
+    def unpatch(self, x):
+        H, W = self._last
+        p2 = int(self.window_size) // 2
+        return rearrange(x, "(B nh nw) nH (p w) C -> B nH (nh p nw w) C",
+                         nh=H // p2, nw=W // p2, p=p2, w=p2)
 
 
 class MDProcessor(AttnProcessor2_0_local):
@@ -311,19 +373,29 @@ def _forward(self, attn, hidden_states, temb):
 
 _make_call(ShiftProcessor)
 _make_call(MDProcessor)
+_make_call(CtxProcessor)
 
 _WS = {"down_blocks.1": 64, "down_blocks.2": 32, "mid_block": 32,
        "up_blocks.0": 32, "up_blocks.1": 64}
 
 
 def register(pipe, mode="npa", generator=None):
-    """mode: npa（基线，原样调用上游）/ shift / md。返回 controller。"""
+    """mode: npa（基线，原样调用上游）/ shift / md / ctx<N>。返回 controller。
+
+    ctx<N>：K/V 窗口边长 = N × (window_size//2)。N 默认 4，即 2×ws、面积 4 倍。
+    **ctx2 必须与 npa 逐字节相同** —— selftest ⑧ 守这条。
+    """
     if mode == "npa":
         from attn_scalediff_sdxl import register_attention_control
         return register_attention_control(pipe)
 
-    ctrl = ShiftAttnControl(generator)
-    cls = {"shift": ShiftProcessor, "md": MDProcessor}[mode]
+    if mode.startswith("ctx"):
+        # ctx / ctx2 / ctx3 ...，数字是 K/V 窗口的**边长**倍数
+        ctrl = CtxAttnControl(int(mode[3:] or 4))
+        cls = CtxProcessor
+    else:
+        ctrl = ShiftAttnControl(generator)
+        cls = {"shift": ShiftProcessor, "md": MDProcessor}[mode]
     procs, sizes = {}, []
     for name in pipe.unet.attn_processors:
         ws = next((v for k, v in _WS.items() if name.startswith(k)), None)
@@ -413,6 +485,30 @@ def selftest():
           f"{(out-1).abs().max():.2e}  -> {'对' if same else '**错**'}")
     ok &= same
 
+    # ⑦ ctx 的索引在 kv=ws 时必须退化成基线索引
+    for ws_, hs, wsx in ((64, 4, 4), (32, 4, 4), (64, 2, 3)):
+        Hh, Ww = int(hs * ws_), int(wsx * ws_)
+        a_ = kv_view_ctx(Hh, Ww, ws_, ws_, "cpu")
+        b_ = kv_view_plain(Hh, Ww, ws_, "cpu")
+        same = a_.shape == b_.shape and torch.equal(a_, b_)
+        print(f"⑦ ctx(kv=ws) 索引 == 基线   ws={ws_} s=({hs},{wsx})  "
+              f"-> {'一致' if same else '不一致'}")
+        ok &= same
+
+    # ⑧ ctx1 的**输出**必须与基线 NPA 逐字节相同（守整个前向）
+    same = _equiv_check(H, W, ws, ctx_units=2)
+    print(f"⑧ ctx2 (kv=ws) 输出 == 基线 NPA 输出   "
+          f"-> {'逐字节相同' if same else '**不同，别跑 GPU**'}")
+    ok &= same
+
+    # ⑨ 放大后每个 query 看到的 token 数确实变了（防止 mult 被忽略）
+    for u_ in (2, 3, 4, 6):
+        kv_ = 32 * u_
+        v = kv_view_ctx(256, 256, 64, kv_, "cpu")
+        print(f"⑨ ctx{u_}  K/V 窗口 {kv_}²  每 query 可见 {v.shape[1]:>6} token"
+              f"（基线 4096，面积 {kv_**2/4096:.2f}x）  块数 {v.shape[0]}")
+        ok &= v.shape[1] == kv_ ** 2 and v.shape[0] == 64
+
     # ⑥ **最要紧的一条**：top=left=0 时 shift 臂必须与基线**逐字节相同**。
     #    此时 pad 全在下/右，裁掉后 query 块与 K/V 窗口与基线逐个对齐。
     #    这条覆盖的不只是索引，还有我重写的整个 _forward —— 少写一行
@@ -445,7 +541,7 @@ def _fake_attn(dim, heads):
     return a.eval()
 
 
-def _equiv_check(H, W, ws, dim=16, heads=2):
+def _equiv_check(H, W, ws, dim=16, heads=2, ctx_units=None):
     torch.manual_seed(1)
     attn = _fake_attn(dim, heads)
     x = torch.randn(1, H * W, dim)
@@ -457,15 +553,20 @@ def _equiv_check(H, W, ws, dim=16, heads=2):
     with torch.no_grad():
         y0 = AttnProcessor2_0_local(base_c, ws)(attn, x)
 
-    class _Zero(ShiftAttnControl):
-        def draw(self, ws_, device):
-            return 0, 0
-    sc = _Zero()
+    if ctx_units is not None:
+        sc = CtxAttnControl(ctx_units)
+        proc = CtxProcessor(sc, ws)
+    else:
+        class _Zero(ShiftAttnControl):
+            def draw(self, ws_, device):
+                return 0, 0
+        sc = _Zero()
+        proc = ShiftProcessor(sc, ws)
     sc.set_window_sizes([ws])
     sc.initialize(H // ws, W // ws)
     sc.enable()
     with torch.no_grad():
-        y1 = ShiftProcessor(sc, ws)(attn, x)
+        y1 = proc(attn, x)
 
     if y0.shape != y1.shape:
         print(f"   形状就不同：{tuple(y0.shape)} vs {tuple(y1.shape)}")

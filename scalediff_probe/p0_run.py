@@ -25,6 +25,21 @@
   B vs A（配对 ΔKIDp）
     独立读：他们那个没启用的随机平移本身有没有效。不受上述错误影响。
 
+    D  ctx      **只把 K/V 窗口放大**（64²->128²），query 切法与基线
+                完全一致 —— 唯一的单变量"上下文"探针。加这一臂的理由：
+                A/B/C 三个臂**没有一个在测我们真正的论点**。论点是
+                "每个 query 看不见足够的上下文"，而 shift 只动窗口位置
+                （测边界）、ovl-attn 的上下文反而更少（1x vs 4x，与重叠
+                平均混淆）。自注意力只占总时长约 6.5%，放大 4 倍也只到
+                ~95s/张。
+
+  **D vs A 的判据（写在 ctx 跑出任何数字之前，2026-08-15）**
+    配对 ΔKIDp < −2σ_d          -> **上下文缺失是真病因**，方法沿这条设计；
+    n>=300 仍落在噪声内          -> **上下文假设被正面否掉**，退回"分解的
+        代价小到测不出"，§10 整条方向按判死处理，转 B 计划（评测方向）。
+    配对 ΔKIDp > +2σ_d          -> 上下文更多反而更差，同样判死，但那是个
+        本身值得报告的反直觉结果。
+
 闸门只看 KIDp；ISp 是佐证列（功效不足，§10.12/§10.14）。
 
 **另记**：主表（P1）**不需要** MultiDiffusion —— 它是他们消融表 Table 3
@@ -66,7 +81,7 @@ from prompts import NEGATIVE                                    # noqa: E402
 from std_table import prompt_items                              # noqa: E402
 
 CKPT = "stabilityai/stable-diffusion-xl-base-1.0"
-ARMS = ("npa", "shift", "md")
+ARMS = ("npa", "shift", "md", "ctx")
 
 
 def needs_fp16_variant():
@@ -115,6 +130,9 @@ def main():
     ap.add_argument("--split", default="tune")
     ap.add_argument("--n", type=int, default=300)
     ap.add_argument("--arms", nargs="+", default=list(ARMS), choices=ARMS)
+    ap.add_argument("--ctx-units", type=int, default=4,
+                    help="ctx 臂的 K/V 边长 = N × (window//2)。"
+                         "4 = 2×ws（面积 4x，默认）；显存吃紧退到 3（2.25x）")
     ap.add_argument("--seed", type=int, default=77)
     ap.add_argument("--sample-seed", type=int, default=0)
     ap.add_argument("--steps", type=int, default=50)
@@ -136,7 +154,7 @@ def main():
     res = 1024 * (2 ** a.stage)
     # 我们卡上的实测中位数（论文 A6000 上 npa 是 113s）。md 只有 1.13x
     # 而不是论文的 2.11x —— 因为它不是真 MultiDiffusion，见文件头。
-    est = {"npa": 75, "shift": 78, "md": 85}
+    est = {"npa": 75, "shift": 78, "md": 85, "ctx": 95}
     hrs = sum(est[m] for _, m in todo) / 3600
     print(f"\n目标 {res}²   臂 {a.arms}   名单 {len(idxs)} 条")
     for m in a.arms:
@@ -179,7 +197,9 @@ def main():
     shift_gen = {"g": None}
 
     def _reg(p):
-        return attn_variants.register(p, mode["m"], shift_gen["g"])
+        m = mode["m"]
+        return attn_variants.register(
+            p, f"ctx{a.ctx_units}" if m == "ctx" else m, shift_gen["g"])
     PS.register_attention_control = _reg
 
     mf = {m: (dirs[m] / "manifest.jsonl").open("a") for m in a.arms}

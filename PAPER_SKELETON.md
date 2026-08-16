@@ -3741,3 +3741,108 @@ n=60，配对差（负 = 更好），判据 ① 要求 ΔKIDp < 0 **且** |Δ| >
 
 **这句话是一篇论文的一个消融段落，不是一篇论文。**
 按预注册：转 DiT 现在是**有依据的转**。
+
+---
+
+### 10.24 关键词扫描：「training-free / text-to-image / high resolution」这条轴上谁占了什么（2026-08-16）
+
+用户要求：不换方向，先把「过平滑 / 细节」这个子槽的占位情况查清楚。
+两个已有 curated list（`littlewhitesea/training-free-methods`、
+`GuoLanqing/Awesome-High-Resolution-Diffusion`）都停在 2024、且 venue 标注过期，
+下表是逐篇核过 venue 与 code 后的结果。**过基础过滤器（有代码 + 有会议）的才进表。**
+
+#### A. 通过基础过滤器的（venue ✅ + code ✅）
+
+| 论文 | venue | backbone | 核心机制 | 是否踩「过平滑/细节」 |
+|---|---|---|---|---|
+| MultiDiffusion | ICML'23 | SD | patch 融合 | ✗ |
+| ScaleCrafter | ICLR'24 | SD/SDXL | 膨胀卷积改感受野 | ✗（重复/结构） |
+| DemoFusion | CVPR'24 | SDXL | 渐进上采 + skip residual + 膨胀采样 | ✗（结构） |
+| FreeU | CVPR'24 | SD | **skip / backbone 特征谱重加权** | 半个（1024²，非 HR） |
+| FouriScale | ECCV'24 | SDXL | 频域滤卷积核 | ✗（结构） |
+| HiDiffusion | ECCV'24 | SD/SDXL | RAU-Net + MSW-MSA | ✗（效率/结构） |
+| AccDiffusion | ECCV'24 | SDXL | patch-content-aware prompt | ✗（重复） |
+| **DiffuseHigh** | **AAAI'25** | SDXL | **DWT 结构引导（LL 带来自低分图）** | 半个 |
+| **ResMaster** | **AAAI'25** | SDXL | LR 结构引导 + **细粒度引导（频域 + patch prompt）** | **✅ 明写 over-smoothed** |
+| **FreeScale** | **ICCV'25** | SDXL | 自级联上采 + **region-aware detail control** + **scale fusion** | **✅** |
+| **HiFlow** | **NeurIPS'25** | FLUX | flow-aligned guidance（低频对齐 + **高频方向**） | **✅（flow backbone）** |
+| **HiWave** | **SIGGRAPH Asia'25** | SDXL | patch DDIM inversion + **wavelet detail enhancer** | **✅ 正中** |
+| ScaleDiff | NeurIPS'25 | SDXL/FLUX | NPA + LFM + SG | 半个（我们的基座） |
+| FAM | CVPR'25 | SDXL | frequency-aware | 半个 |
+
+#### B. 不过滤器的（无代码 和/或 无 venue，只能当背景读）
+
+PixelRush（arXiv 2602，无码）、AP-LDM（有码，OpenReview 未见接收）、
+PBC/position-encoding（arXiv 2503.09830，comments 写「Submitted to ICML 2025」，无码）、
+**InfoScale**（arXiv 2509.01421，无码：渐进频率补偿 + 自适应信息聚合 + 噪声适配）、
+**RectifiedHR**（arXiv 2503.02537，v4 到 2026-04，无 venue：**平均隐能量分析 + energy decay 导致模糊 + noise refresh + CFG 调**）、
+MegaFusion、HiPrompt、HiCache、FreCaS、CutDiffusion、ElasticDiffusion。
+
+#### 结论一：这是全场**最拥挤**的一个子槽
+
+「把高频加回去」的每一种可实现方式都已经有人认领，而且都是 2025 的会议论文：
+
+| 加高频的方式 | 谁占了 |
+|---|---|
+| 小波域高频注入 | HiWave（SIGGRAPH Asia'25） |
+| DWT 低频保结构 | DiffuseHigh（AAAI'25）、ScaleDiff LFM |
+| 频域滤波 | FouriScale（ECCV'24） |
+| 低分参考图的细粒度引导 | ResMaster（AAAI'25） |
+| 区域自适应的细节控制 | FreeScale（ICCV'25） |
+| 全局/局部注意力的频带融合 | FreeScale（ICCV'25） |
+| flow 模型的高频方向引导 | HiFlow（NeurIPS'25） |
+| 能量衰减 + CFG | RectifiedHR（arXiv） |
+| 上采样丢失的频率补偿 | InfoScale（arXiv） |
+
+#### 结论二：FreeScale 的 scale fusion **反过来解释了我们 P0 的 `ctx` 臂**
+
+FreeScale 的 self-attention 层：**用高斯模糊把 global attention 的高频**和
+**local attention 的低频**拼起来。也就是说 —— 全局注意力**只有高频那一半可用**，
+低频那一半是有害的。
+
+这与我们 §10.16 / §10.18 的实测**完全一致**：`ctx` 臂（整块地扩大 K/V 上下文）
+ΔKIDp **+0.0006**（变差）、ΔISp **−0.67**（变差）；ScaleDiff 自己 Table 3 的
+Base 行（全局注意力 = 上下文最大）在三列 patch 指标上全是最差。
+
+我们当时把 `ctx` 判为「反向」，判对了；现在知道**为什么**反向，
+也知道**正确的用法已经被 ICCV'25 拿走了**。
+
+#### 结论三：五个认领者没有一个做了「病因定位」——但这不构成我们的机会
+
+ResMaster / FreeScale / HiWave / HiFlow / DiffuseHigh 的共同形状是：
+**断言 HR 输出缺高频 → 从外部（小波 / 傅里叶 / 低分图 / 全局注意力）把高频搬进来。**
+没有一篇指出高频**在哪一步被销毁**。最接近的是 RectifiedHR 的 average latent
+energy 分析，而它至今无 venue。
+
+诱人的推论是「那我们去定位病因」。**但这条推论要在 §10 的总账面前作废**：
+我们已经在这个 backbone 上试了六个旋钮，零个改善（§10.23）。
+其中注意力那三个只覆盖 SDXL UNet 的 **6.5% 计算量**，调度那三个不改网络。
+如果病因在剩下的 93.5%（卷积栈 / VAE 解码），那么：
+
+* 它与我们跑过的所有阴性结果**一致**；
+* 但**能改它的训练无关旋钮，正是 ScaleCrafter（ICLR'24）和 FouriScale（ECCV'24）
+  已经占掉的那两个**（膨胀卷积、频域滤核）；
+* 剩下唯一没人碰的是 **VAE 解码路径**（tiled decode 的重叠混合本身是一个低通）
+  和 **FreeU 式谱重加权的分辨率自适应版本**。
+
+这是**一个消融段落的体量**，不是一篇 CVPR。
+
+#### 判决
+
+**SDXL + 过平滑/细节 = 关闭。** 两个独立理由，各自单独就足够：
+
+1. **机制空间已被瓜分**：四篇 2025 会议论文（AAAI / ICCV / NeurIPS / SIGGRAPH Asia）
+   带开源代码，全部明写这个问题。要成为新 SOTA，标准表上要同时压过
+   FreeScale、ScaleDiff、AccDiffusion 三家。
+2. **我们自己的读数说这个 backbone 上没有空间**：六个旋钮零个改善，
+   最好的一个负值 −0.0001 对阈值 0.00074。
+
+另记一条**证据可行性**约束：HiWave 的主要证据是 user study（>80% 偏好）。
+我们没有标注池（硬约束），这条证据形式对我们关闭。
+也就是说即使找到一个真的改善，我们只能靠标准表 + patch 三列去证明它 ——
+而标准表恰恰是 §10.1 里那个「3% 患病率推不动」的表。
+
+**方向仍然指向 §10.23 结尾那句：转 DiT 现在是有依据的转。**
+若坚持留在过平滑轴上，唯一还没被认领的落点是 **flow/DiT 上的病因定位**
+（HiFlow 只做了引导，没做定位；DyPE / UltraImage / Scale-DiT 走的是位置外推，
+不是频率），代价是 FLUX 在 24GB 上必须 fp8，需要先做可行性验证。

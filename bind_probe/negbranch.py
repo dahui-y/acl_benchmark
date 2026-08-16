@@ -450,7 +450,30 @@ def cmd_sheet(args):
     sheet.save(p)
     m2, m0 = np.mean(drift["attnswap"]), np.mean(drift["textswap"])
     print(f"{p}   ({len(rows)} prompts × 3 臂)")
-    print(f"\n布局漂移均值（越小 = 越保布局）：C2 {m2:.3f}   C0 {m0:.3f}")
+
+    # ── 尺子有没有分辨力？两个免费的锚点，全用已有的图算 ──────────────
+    # 2026-08-16：首轮读数 C2 0.682 / C0 0.669，两者几乎一样。
+    # 有两种解释，必须分开：
+    #   (甲) C2 真的不保布局 → 结构性主张被推翻
+    #   (乙) 三臂共享 seed，粗布局本来就被初始噪声钉住，**尺子饱和了**
+    # 锚点：不同 prompt 的 base 图之间的漂移 = 「无关」那一端。
+    #       如果 0.68 已经贴着无关端 → 甲；如果无关端远高于 0.68 → 尺子有分辨力，
+    #       两臂都保了一部分布局，而 C2 并不比 C0 强。
+    bases = {k: struct(OUT / f"{k:02d}_base.png") for k in rows}
+    unrel = [float(np.sqrt(((bases[a] - bases[b]) ** 2).mean()))
+             for ii, a in enumerate(rows) for b in rows[ii + 1:]]
+    m_un = float(np.mean(unrel)) if unrel else float("nan")
+    print(f"\n布局漂移（0 = 完全相同）")
+    print(f"  同图                 0.000   ← 下界")
+    print(f"  base ─ C2 (attnswap) {m2:.3f}")
+    print(f"  base ─ C0 (textswap) {m0:.3f}")
+    print(f"  base ─ 无关 prompt   {m_un:.3f}   ← 上界锚点（不同 prompt 的 base 之间）")
+    span = m_un
+    if span > 0:
+        print(f"  → C2 走了到无关端的 {m2/span:.0%}，C0 走了 {m0/span:.0%}")
+    if m_un < 1.25 * max(m2, m0):
+        print(f"  ⚠️ 上界锚点没有明显高于两臂 —— **这把尺子在这里没有分辨力**，"
+              f"\n     它的读数（含上面那句 C2 vs C0）不能用来判 C2 死活。只能看图。")
     print(f"\n**先看图，数字只是佐证。** 要判断的是：")
     print(f"  · C2 那一列是不是「同一个场景、同一个布局、只有颜色贴错」")
     print(f"  · C0 那一列是不是明显换了场景")

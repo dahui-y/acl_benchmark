@@ -60,16 +60,17 @@ Q2 的十分钟证伪实验：那个「故意贴错」的负分支，到底选�
 ────────────────────────────────────────────────────────────────────────
 
   ① **算子必须真的被接进前向。** 靠调用计数器，不靠任何数值阈值。
-     —— 2026-08-16 第一次上机就死在这里：`install()` 走 `unet.attn_processors`
-     拿到空 dict，`set_attn_processor({})` 静默 no-op，算子从头到尾没装上，
-     而当时只 print 了「挂上 0 个」没有断言。**差一点把 fp16 的非确定性
-     读成「选择性成立」。** 现在 0 条直接 sys.exit。
-  ① **三路量差，把三件事拆开**（上一版只比两个量，分不清伪影和没装上）：
-       d_noise  管线自己的非确定性 —— fp16 SDPA 有原子加，同 seed 也不重现。
-                实测这一项就有 1e-1 量级，比我原先假设的大得多，
-                所以原来那个「≥100×」的阈值从一开始就不可能达到。
-       d_hook   换成显式 softmax 路径引入了多少（要求 ≤3× d_noise）
-       d_swap   置换真正的效果（要求 ≥5× d_noise）
+     —— 第一次上机时 `install()` 打印「挂上 0 个」，我据此判定算子没装上。
+     **那个判定是错的**：`set_attn_processor(dict)` 会就地 pop 掏空传入的 dict，
+     140 个其实全装上了，错的只是那行打印。详见 install() 的 docstring。
+     现在不传 dict 给任何人，计数在自己的循环里累加，0 条直接 sys.exit。
+  ① **三路量差**：
+       d_noise  管线自己的非确定性。**实测 = 0，SDXL 在固定 seed 下逐位重现。**
+                （这是好消息：--run 里臂间的一切差异都能归因于干预。）
+       d_hook   显式 softmax 路径 vs SDPA 的数值差，实测 8.0e-02。
+                **在 --run 里是共模的** —— base 臂同样走 hook —— 所以不进判据。
+       d_swap   置换真正的效果，实测 1.44 = 17.9× d_hook。
+                判据：**d_swap ≥ 10× d_hook**，挡「看到的其实是数值伪影」。
   ② **多重集不变**：置换前后，各列的和排序后必须逐元素相等。
      这是那个「结构性保证」的数值断言，不是信仰。
 
@@ -207,15 +208,20 @@ class SwapCrossAttn:
 def install(pipe):
     """给所有 cross-attention 挂上可控 processor；**self-attn 一个字都不碰**。
 
-    2026-08-16 订正：上一版走 `unet.attn_processors` + `set_attn_processor(dict)`。
-    那条路在服务器上返回**空 dict** —— `set_attn_processor({})` 不报错、
-    静默 no-op，于是算子从头到尾没装上，而 selftest 只是「打印了 0」没有断言，
-    整个测试测的是空气。**几乎把 fp16 的非确定性读成「选择性成立」。**
+    2026-08-16 的坑，**两次诊断，第一次是错的**：
 
-    改成直接遍历 named_modules 设 `.processor`：不依赖那个集合属性、
-    不依赖 diffusers 版本，只依赖 Attention 模块有 `processor` 这个属性
-    （这一点跨版本一直成立）。self-attn 直接跳过，连 AttnProcessor2_0 都不 import
-    —— 少一个版本依赖就少一个静默失败点。
+      现象：上一版走 `attn_processors` + `set_attn_processor(dict)`，打印「挂上 0 个」。
+      我的第一次诊断（**错**）：算子没装上，后面的数是空气。
+      真因：**`set_attn_processor(dict)` 会 `processor.pop(...)` 把你传进去的
+             dict 就地掏空。** 我在它之后才 `len(procs)` —— 那时已经空了。
+             **140 个 processor 其实全装上了，只有那行打印是错的。**
+      证据：后来实测 d_noise = 0（管线完全确定），而当时 ref vs hooked
+             差 8.03e-02 —— 确定性管线上不可能有这个差，除非 hook 真的生效了。
+
+    教训不是「API 不能用」，是**诊断打印读的是被调用方就地改过的对象**。
+    现在遍历 named_modules 直接设 `.processor`：不传 dict 给任何人，
+    没有东西能在我背后被掏空；计数在我自己的循环里累加。
+    self-attn 直接跳过，连 AttnProcessor2_0 都不 import。
     """
     st = {"swap": None, "cond_only": True, "calls": 0, "swapped_calls": 0}
     n_cross = n_self = 0
@@ -335,10 +341,25 @@ def cmd_selftest(args):
     chk("① 形容词下标定位成功", True, f"adj 位置 = ({i}, {j})")
 
     print(f"      d_noise (管线非确定性) {d_noise:.3e}")
-    print(f"      d_hook  (显式 softmax) {d_hook:.3e}   = {d_hook/max(d_noise,1e-12):.1f}× noise")
-    print(f"      d_swap  (置换效果)     {d_swap:.3e}   = {d_swap/max(d_noise,1e-12):.1f}× noise")
-    chk("① hook 伪影没有显著超过噪声底（≤3× d_noise）", d_hook <= 3 * max(d_noise, 1e-12))
-    chk("① 置换效果显著高出噪声底（≥5× d_noise）", d_swap >= 5 * max(d_noise, 1e-12))
+    print(f"      d_hook  (显式 softmax) {d_hook:.3e}")
+    print(f"      d_swap  (置换效果)     {d_swap:.3e}"
+          f"   = {d_swap/max(d_hook,1e-12):.1f}× d_hook")
+
+    # 2026-08-16 订正 ②：上一版判据是 d_hook ≤ 3×d_noise。管线实测**完全确定**
+    # （d_noise = 0），那个判据在除以零，打出 8e10× 这种荒唐数字。
+    #
+    # 而且它测错了对象：--run 里 install() 在循环前调用一次，**base 臂走的也是
+    # 挂了 hook、swap 关掉的路径**，三个臂共用显式 softmax —— hook 伪影是
+    # **共模的，自动抵消**。所以 d_hook 大不大根本不影响真实验，它只是信息。
+    #
+    # 真正要挡的是「看到的效果其实是数值伪影」，判据因此是 d_swap ≫ d_hook。
+    chk("① 管线是确定的（同 seed 逐位重现）", d_noise == 0.0,
+        f"d_noise={d_noise:.3e}" + ("" if d_noise == 0 else
+        "   ← 非零则臂间差异不能全归因于干预，--run 的对照会被污染"))
+    chk("① 置换效果远大于 hook 伪影（≥10×）", d_swap >= 10 * max(d_hook, 1e-12),
+        f"{d_swap/max(d_hook,1e-12):.1f}×")
+    print(f"      （d_hook 在 --run 里是共模的：base 臂同样走 hook，"
+          f"所以它不进对照）")
 
     print("\n" + ("全部通过" if not fails else f"!! 失败：{fails}"))
     return 0 if not fails else 1

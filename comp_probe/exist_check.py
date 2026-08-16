@@ -108,14 +108,36 @@ B_BOOT = 2000
 BOOT_SEED = 0
 
 # ── 参考数字 ────────────────────────────────────────────────────────
-# ！！这些是**二手来源**（综述页面转述），开跑前必须逐个对回论文原文。
-# 余量读数直接建立在它们上面，错一个数就是错一个判据。
-# --plan 会把这条告警打出来。
+# 来源：ELDiff (arXiv 2606.20924) Table 2「Comparison results with training-free
+# methods on T2I-CompBench」，SDXL 分组。这是一手表格（从 PDF 里逐行抠出来的），
+# 不是综述转述。上一版这里填的 0.6369/0.5408/0.5637 是二手数字，**是错的**，
+# 已替换。
+#
+#   Method   Color   Shape   Texture  Spatial  NonSpat  Complex  Latency
+#   SDXL     0.6734  0.5064  0.6243   0.2073   0.3166   0.3575   8.07s
+#   SynGen   0.7267  0.5249  0.6476   0.2387   0.3172   0.3944   11.62s
+#   InitNO   0.6823  0.5229  0.6547   0.2553   0.3147   0.4077   19.42s
+#   R2F      0.7135  0.5194  0.6625   0.2447   0.3170   0.4031   10.14s
+#   ELDiff   0.7768  0.5663  0.6941   0.2496   0.3261   0.4252   8.07s  ← 要训练，不算
+#
+# 'sota' 取**训练无关**里的最好值（ELDiff 是 finetune 的，不进这一栏，
+# 但它会出现在审稿人看到的表里，见 'trained_bar'）。
 REF = {
-    "color":   {"sdxl": 0.6369, "sota": None, "src": "二手：需对回 T2I-CompBench++ / 各方法原文"},
-    "shape":   {"sdxl": 0.5408, "sota": None, "src": "二手：同上"},
-    "texture": {"sdxl": 0.5637, "sota": None, "src": "二手：同上"},
+    "color":   {"sdxl": 0.6734, "sota": 0.7267, "sota_by": "SynGen",
+                "trained_bar": 0.7768, "src": "ELDiff arXiv 2606.20924 Table 2"},
+    "shape":   {"sdxl": 0.5064, "sota": 0.5249, "sota_by": "SynGen",
+                "trained_bar": 0.5663, "src": "同上"},
+    "texture": {"sdxl": 0.6243, "sota": 0.6547, "sota_by": "InitNO",
+                "trained_bar": 0.6941, "src": "同上"},
 }
+
+# 延迟帕累托。我们的机制是「多一次前向、不做优化」→ 3 次前向 vs 基线 2 次
+# = 约 1.5×，落在 ~12s。与 SynGen 同档。
+#   ⚠️ 这意味着**「比优化法快」这个卖点不成立** —— SynGen 只慢 44% 而且
+#   color 最好；真正慢的 InitNO(+141%) 反而 color 更差。
+#   所以我们必须**在分数上真的赢 SynGen 的 0.7267**，快不是理由。
+LATENCY = {"sdxl": 8.07, "SynGen": 11.62, "R2F": 10.14, "InitNO": 19.42,
+           "ours_est": 12.1}
 
 OUT_ROOT = Path(os.environ.get("SD_OUT", "/tmp")) / "comp"
 CB_ROOT = Path(os.environ.get("COMPBENCH_ROOT", "")) if os.environ.get("COMPBENCH_ROOT") else None
@@ -180,22 +202,32 @@ def cmd_plan(args):
     print(f"  中间带：{KILL_HEADROOM_SIGMA:g}σ–{PASS_HEADROOM_SIGMA:g}σ 记「边缘」，"
           f"不自动放行")
 
-    print(f"\n参考数字（读数②的被减数）：")
+    print(f"\n参考数字（ELDiff 2606.20924 Table 2，SDXL 组）：")
+    print(f"  {'子集':8s} {'SDXL':>7s} {'训练无关SOTA':>13s} {'余量':>8s}  {'(要训练的门槛)':>14s}")
     for k, v in REF.items():
-        mark = "" if k != subset else "  ← 本次"
-        print(f"  {k:8s} SDXL {v['sdxl']}  SOTA {v['sota']}   [{v['src']}]{mark}")
+        mark = "  ← 本次" if k == subset else ""
+        print(f"  {k:8s} {v['sdxl']:7.4f} {v['sota']:8.4f}({v['sota_by']:6s}) "
+              f"{v['sota']-v['sdxl']:+8.4f}  {v['trained_bar']:14.4f}{mark}")
+    print(f"\n  color 余量最大（+{REF['color']['sota']-REF['color']['sdxl']:.4f}），"
+          f"所以主子集选 color 是对的。")
 
-    print(f"\n!! 三条开跑前的阻塞项：")
-    print(f"   1. REF 里的数字是二手转述，必须对回论文原文。余量判据"
-          f"直接建立在它上面。")
-    print(f"   2. REF[*]['sota'] 还是 None —— 判据 B 现在算不出来，"
-          f"必须先填。")
-    print(f"   3. N_SEEDS={N_SEEDS} 而官方协议是 10。我们的均值会与发表值"
+    print(f"\n延迟帕累托（我们的机制 = 多一次前向，无优化）：")
+    for k in ("sdxl", "R2F", "SynGen", "ours_est", "InitNO"):
+        tag = "  ← 我们的估计" if k == "ours_est" else ""
+        print(f"  {k:10s} {LATENCY[k]:6.2f}s{tag}")
+    print(f"  ⚠️ 「比优化法快」这个卖点不成立：SynGen 只慢 44% 且 color 最好；"
+          f"\n     真正慢的 InitNO(+141%) color 反而更差。"
+          f"**必须在分数上真赢 SynGen 0.7267。**")
+
+    print(f"\n!! 两条开跑前的阻塞项：")
+    print(f"   1. N_SEEDS={N_SEEDS} 而官方协议是 10。我们的均值会与发表值"
           f"有小偏差；\n"
           f"      读数②做减法时两边不同协议 → **只能当量级参考，不能当"
           f"精确余量**。\n"
-          f"      如果余量落在边缘带，必须补跑到 10 seeds 再判。")
-    print(f"\n   1 和 2 用 --preflight 检查不出来，是人的活。")
+          f"      若余量落在边缘带，必须补跑到 10 seeds 再判。")
+    print(f"   2. 我们复现的 SDXL 基线必须落在 {REF[subset]['sdxl']} 附近；"
+          f"差太远说明协议没对上，\n"
+          f"      此时余量读数无效（--score 会自动查这一条）。")
     print()
 
 

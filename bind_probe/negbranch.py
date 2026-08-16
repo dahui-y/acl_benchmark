@@ -59,15 +59,23 @@ Q2 的十分钟证伪实验：那个「故意贴错」的负分支，到底选�
 两个自测（守静默错误，零 GPU 之外）
 ────────────────────────────────────────────────────────────────────────
 
-  ① **恒等置换必须是逐字节 no-op。** 挂上 hook 但不换任何列，输出必须与
-     base 完全相同。否则说明 hook 本身在扰动（比如我把 SDPA 换成显式 softmax
-     引入了数值差），那后面看到的一切都不可信。
-     —— 这条是 attn_variants.py selftest ⑥ 的同一条纪律。
+  ① **算子必须真的被接进前向。** 靠调用计数器，不靠任何数值阈值。
+     —— 2026-08-16 第一次上机就死在这里：`install()` 走 `unet.attn_processors`
+     拿到空 dict，`set_attn_processor({})` 静默 no-op，算子从头到尾没装上，
+     而当时只 print 了「挂上 0 个」没有断言。**差一点把 fp16 的非确定性
+     读成「选择性成立」。** 现在 0 条直接 sys.exit。
+  ① **三路量差，把三件事拆开**（上一版只比两个量，分不清伪影和没装上）：
+       d_noise  管线自己的非确定性 —— fp16 SDPA 有原子加，同 seed 也不重现。
+                实测这一项就有 1e-1 量级，比我原先假设的大得多，
+                所以原来那个「≥100×」的阈值从一开始就不可能达到。
+       d_hook   换成显式 softmax 路径引入了多少（要求 ≤3× d_noise）
+       d_swap   置换真正的效果（要求 ≥5× d_noise）
   ② **多重集不变**：置换前后，各列的和排序后必须逐元素相等。
      这是那个「结构性保证」的数值断言，不是信仰。
 
 用法：
     source scalediff_probe/env.sh
+    python bind_probe/negbranch.py --env            # 环境诊断
     python bind_probe/negbranch.py --selftest       # ①②，需要 GPU 但只跑 2 步
     python bind_probe/negbranch.py --run            # 三臂 × 8 prompt，约 10 min
     python bind_probe/negbranch.py --sheet          # 三列对照图 → 看
@@ -168,7 +176,10 @@ class SwapCrossAttn:
         probs = attn.get_attention_scores(q, k, attention_mask)   # [b*h, q_len, kv_len]
 
         sw = self.st.get("swap")
+        if is_cross:
+            self.st["calls"] += 1
         if is_cross and sw is not None:
+            self.st["swapped_calls"] += 1
             i, j = sw
             heads = probs.shape[0] // b
             if self.st.get("cond_only", True) and b % 2 == 0:
@@ -178,10 +189,11 @@ class SwapCrossAttn:
                 sel = slice((b // 2) * heads, b * heads)
             else:
                 sel = slice(0, probs.shape[0])
-            part = probs[sel]
-            part[:, :, [i, j]] = part[:, :, [j, i]]
+            # 先 clone 再改，不在 get_attention_scores 的返回值上就地动。
+            # RHS 是 advanced indexing，本身就产生副本，所以两列互换是安全的
+            # （不会出现「先写坏 i 再从 i 读」的别名问题）。
             probs = probs.clone()
-            probs[sel] = part
+            probs[sel, :, [i, j]] = probs[sel, :, [j, i]]
 
         hidden_states = attn.batch_to_head_dim(torch.bmm(probs, v))
         hidden_states = attn.to_out[1](attn.to_out[0](hidden_states))
@@ -193,18 +205,52 @@ class SwapCrossAttn:
 
 
 def install(pipe):
-    """给所有 cross-attention 挂上可控 processor；self-attn 保持原样。
-    返回共享 state —— 把 state['swap'] 设成 None 就等于关掉算子。"""
-    from diffusers.models.attention_processor import AttnProcessor2_0
-    st = {"swap": None, "cond_only": True}
-    procs = {}
-    for name in pipe.unet.attn_processors:
-        # diffusers 的命名约定：attn2 是 cross-attention，attn1 是 self-attention
-        procs[name] = SwapCrossAttn(st) if "attn2" in name else AttnProcessor2_0()
-    pipe.unet.set_attn_processor(procs)
-    n_cross = sum(1 for n in procs if "attn2" in n)
-    print(f"  挂上 {n_cross} 个 cross-attn processor（self-attn {len(procs)-n_cross} 个保持 SDPA）")
+    """给所有 cross-attention 挂上可控 processor；**self-attn 一个字都不碰**。
+
+    2026-08-16 订正：上一版走 `unet.attn_processors` + `set_attn_processor(dict)`。
+    那条路在服务器上返回**空 dict** —— `set_attn_processor({})` 不报错、
+    静默 no-op，于是算子从头到尾没装上，而 selftest 只是「打印了 0」没有断言，
+    整个测试测的是空气。**几乎把 fp16 的非确定性读成「选择性成立」。**
+
+    改成直接遍历 named_modules 设 `.processor`：不依赖那个集合属性、
+    不依赖 diffusers 版本，只依赖 Attention 模块有 `processor` 这个属性
+    （这一点跨版本一直成立）。self-attn 直接跳过，连 AttnProcessor2_0 都不 import
+    —— 少一个版本依赖就少一个静默失败点。
+    """
+    st = {"swap": None, "cond_only": True, "calls": 0, "swapped_calls": 0}
+    n_cross = n_self = 0
+    for name, mod in pipe.unet.named_modules():
+        if not hasattr(mod, "processor"):
+            continue
+        if name.endswith("attn2"):
+            mod.processor = SwapCrossAttn(st); n_cross += 1
+        elif name.endswith("attn1"):
+            n_self += 1                       # 不动
+    # ★ 0 条必须是硬错误。上一版这里只 print，代价见 docstring。
+    if n_cross == 0:
+        sys.exit("!! 一个 cross-attn 都没挂上 —— 算子是惰性的，"
+                 "任何后续读数都无意义。跑 --env 看环境。")
+    print(f"  挂上 {n_cross} 个 cross-attn processor（self-attn {n_self} 个原样不动）")
     return st
+
+
+def cmd_env(args):
+    """环境诊断：上一版就是死在这几个事实上，单独做成一个模式。"""
+    import diffusers, torch
+    print("diffusers", diffusers.__version__, "| torch", torch.__version__)
+    pipe = load()
+    try:
+        n_prop = len(pipe.unet.attn_processors)
+    except Exception as e:
+        n_prop = f"抛异常 {e!r}"
+    mods = [n for n, m in pipe.unet.named_modules() if hasattr(m, "processor")]
+    print(f"unet.attn_processors 条数       : {n_prop}   ← 服务器上这个是 0")
+    print(f"有 .processor 属性的模块数      : {len(mods)}")
+    print(f"  其中 attn2 (cross)            : {sum(1 for n in mods if n.endswith('attn2'))}")
+    print(f"  其中 attn1 (self)             : {sum(1 for n in mods if n.endswith('attn1'))}")
+    for n in mods[:3]:
+        print(f"    e.g. {n}")
+    print(f"\n install() 现在走 named_modules 这条路，不再依赖 attn_processors。")
 
 
 def load(device="cuda"):
@@ -244,32 +290,55 @@ def cmd_selftest(args):
     chk("② 置换确实改变了配对（否则①是空测试）",
         not np.allclose(A, B))
 
-    # ① 恒等置换必须是逐字节 no-op
-    print("  ·· 载入 SDXL（① 需要 GPU，只跑 2 步）")
+    # ①  三路对比。上一版只比了两个量，分不清「hook 有伪影」和「hook 没装上」。
+    #     现在把三件事拆开量：
+    #       d_noise  管线自己的非确定性（fp16 SDPA 有原子加，同 seed 也不重现）
+    #       d_hook   换成显式 softmax 路径引入了多少
+    #       d_swap   置换真正的效果
+    #     服务器上实测 d_noise 就有 1e-1 量级 —— 比我原先假设的大得多，
+    #     所以「≥100×」那个阈值从一开始就不可能达到，这里改成对 d_noise 比。
+    print("  ·· 载入 SDXL（① 需要 GPU，4 次 2 步 512² 生成）")
     pipe = load()
     p = make_prompt(*PAIRS[0])
     kw = dict(prompt=p, num_inference_steps=2, guidance_scale=7.5,
               height=512, width=512, output_type="latent")
 
-    g = torch.Generator("cuda").manual_seed(7)
-    ref = pipe(generator=g, **kw).images        # 原生 SDPA processor
+    def gen():
+        g = torch.Generator("cuda").manual_seed(7)
+        return pipe(generator=g, **kw).images.float()
 
-    st = install(pipe)
-    st["swap"] = None                            # 挂了 hook 但不换列
-    g = torch.Generator("cuda").manual_seed(7)
-    hooked = pipe(generator=g, **kw).images
-    d = (ref.float() - hooked.float()).abs().max().item()
-    # 显式 softmax vs SDPA 在 fp16 下有极小数值差，不可能逐位相同。
-    # 但必须小到与「换了列」的差距差好几个数量级 —— 下面直接比。
+    def dmax(a, b):
+        return (a - b).abs().max().item()
+
+    r1, r2 = gen(), gen()                       # 都没挂 hook
+    d_noise = dmax(r1, r2)
+
+    st = install(pipe)                          # 0 条会在这里直接退出
+    st["swap"] = None
+    r3 = gen()
+    d_hook = dmax(r1, r3)
+
+    # ★ 最硬的一条：算子到底有没有被调用。不依赖任何数值阈值。
+    chk("① 算子被接进前向（cross-attn 调用数 > 0）", st["calls"] > 0,
+        f"calls={st['calls']}")
+    chk("① swap=None 时没有发生置换", st["swapped_calls"] == 0,
+        f"swapped_calls={st['swapped_calls']}")
+
     i, j = find_adj_positions([pipe.tokenizer, pipe.tokenizer_2], p,
                               PAIRS[0][0], PAIRS[0][2])
     st["swap"] = (i, j)
-    g = torch.Generator("cuda").manual_seed(7)
-    swapped = pipe(generator=g, **kw).images
-    d_swap = (ref.float() - swapped.float()).abs().max().item()
-    chk("① 恒等置换 ≈ no-op（与真置换差 ≥100×）", d_swap > 100 * max(d, 1e-9),
-        f"hook 噪声 {d:.2e}  vs  置换效果 {d_swap:.2e}  比值 {d_swap/max(d,1e-12):.0f}×")
+    before = st["swapped_calls"]
+    r4 = gen()
+    d_swap = dmax(r3, r4)
+    chk("① swap 打开后确实发生了置换", st["swapped_calls"] > before,
+        f"本次置换 {st['swapped_calls']-before} 次")
     chk("① 形容词下标定位成功", True, f"adj 位置 = ({i}, {j})")
+
+    print(f"      d_noise (管线非确定性) {d_noise:.3e}")
+    print(f"      d_hook  (显式 softmax) {d_hook:.3e}   = {d_hook/max(d_noise,1e-12):.1f}× noise")
+    print(f"      d_swap  (置换效果)     {d_swap:.3e}   = {d_swap/max(d_noise,1e-12):.1f}× noise")
+    chk("① hook 伪影没有显著超过噪声底（≤3× d_noise）", d_hook <= 3 * max(d_noise, 1e-12))
+    chk("① 置换效果显著高出噪声底（≥5× d_noise）", d_swap >= 5 * max(d_noise, 1e-12))
 
     print("\n" + ("全部通过" if not fails else f"!! 失败：{fails}"))
     return 0 if not fails else 1
@@ -379,10 +448,13 @@ def main():
     ap.add_argument("--steps", type=int, default=30)
     ap.add_argument("--cell", type=int, default=420)
     g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--env", action="store_true", help="环境诊断")
     g.add_argument("--selftest", action="store_true")
     g.add_argument("--run", action="store_true")
     g.add_argument("--sheet", action="store_true")
     a = ap.parse_args()
+    if a.env:
+        cmd_env(a); return
     if a.selftest:
         sys.exit(cmd_selftest(a))
     (cmd_run if a.run else cmd_sheet)(a)

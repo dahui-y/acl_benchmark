@@ -4096,3 +4096,56 @@ ScaleDiff（§10 全程）、DemoFusion、AccDiffusion、StyleSSP、make-it-coun
 **⚠️ 记死：本节「检索没打到」这句话是最弱的证据。**
 前四次教训全是「搜一轮觉得空、深查才发现有人」。
 这里不主张任何空位；只主张这是**目前进入第 2、3 步最便宜的入口**。
+
+### 11.10 AR/VAR 深查：我上一轮的三条主张全部被推翻（2026-08-16）
+
+用户要求对「自回归视觉生成的推理期方法」做深度占位核查。四个角度扫描，
+每一个都打到已占领地。
+
+#### 打到的东西
+
+| 角度 | 工作 | 干什么 |
+|---|---|---|
+| 引导 / 尺度轴 | **SWG**（Spectrum Weakening Guidance, arXiv 2511.22991） | training-free，**保留部分频谱分量构造弱模型再引导** —— 就是 PAG 移植到 VAR |
+| 引导 / 尺度轴 | **Scale-Wise VAR is Secretly Discrete Diffusion**（2509.22636） | 证明 VAR **就是**离散扩散，「enables principled use of diffusion techniques such as CFG, token resampling, and scale distillation」 |
+| 引导 | VPG（Visual Prefix Guidance, 2605.30317） | AR 图像与视频的前缀引导 |
+| 加速 | **SparVAR**（2602.04361） | training-free，利用 VAR 注意力的 sink / 跨尺度相似 / 局部性 |
+| 加速 | LiteVAR | 高效注意力 + 量化 |
+| **高分辨率** | **ExtraVAR**（2605.10045） | **training-free 分辨率外推**，Stage-Aware RoPE Remapping + 熵驱动注意力校准 |
+| 编辑 | AREdit（2503.23897） | training-free 文本引导编辑，缓存源 token 索引与概率分布 |
+| 编辑 | **BitResEdit**（2606.13558） | training-free 编辑 **Infinity 的 bitwise residual** |
+
+#### 三条主张，逐条推翻
+
+**① 「129 条里只有 2 条 training-free」——计数本身是坏仪器。**
+那个 repo 只是不追踪这类工作。三轮检索就打到 ≥8 篇。
+**我不该再产出这种一轮计数，它系统性地制造假的空。**
+
+**② 「扩散那套杠杆在 AR 上大部分不存在」——直接被 2509.22636 反驳。**
+我列的那张"✗ 没有连续轨迹 / ✗ 没有时间轴 / ✗ 没有可分解的连续场"表，
+在「VAR 就是离散扩散」这个结果面前整张作废。SWG 就是 PAG 移植过去的实例。
+
+**③ 「VAR 的尺度轴没人像挖时间轴那样挖过」——ExtraVAR 就在挖，SWG 也在挖。**
+
+#### 最要命的一条：ExtraVAR 的失效清单 = §10 判死的那三个
+
+ExtraVAR 原文列出把现有方法直接用到 VAR 上的三种失效：
+
+> **global repetition**（整体布局重复）、**local repetition**（中等结构变小变多）、
+> **detail degradation**（细纹理模糊）
+
+**这就是 §10 那条轴上的三个失效，原样搬到 AR。**
+也就是说即使进了 AR，我们落地的地方仍然是那三个我们已经证明推不动的失效。
+
+#### 判决
+
+**AR / VAR 这条：死。** 不是"拥挤"，是"已占 + 且占的是我们已知推不动的同一组失效"。
+
+#### 元教训（第十次，写下来）
+
+这次我在提出时就预言了会这样（「前四次教训全是搜一轮觉得空、深查才发现有人」），
+然后**照样提了，而且给了一张编造出的机理表当支撑**。
+那张表不是从代码或论文读出来的，是我从"离散 vs 连续"这个直觉推的。
+**推出来的机理表读起来像证据，实际上是猜测。以后不写这种表。**
+
+十次方向调研，十次判死。这个仪器在我手上的失败率是 100%。

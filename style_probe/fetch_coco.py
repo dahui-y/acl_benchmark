@@ -36,6 +36,34 @@ CANDIDATES = [
 ]
 
 
+def _files(rid):
+    """先列仓库文件，**不要猜路径**。
+    2026-08-16：第一版给 rafaelpadilla/coco2017 和 HuggingFaceM4/COCO 传了
+    `data/val*`，两个都 "Fetching 0 files" —— 模式一个都没匹配上。
+    那不是网络问题，是我猜的目录结构不对。"""
+    from huggingface_hub import list_repo_files
+    return list_repo_files(rid, repo_type="dataset")
+
+
+def cmd_ls(args):
+    os.environ["HF_HUB_OFFLINE"] = "0"
+    os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+    rid = args.repo or "rafaelpadilla/coco2017"
+    try:
+        fs = _files(rid)
+    except Exception as e:
+        sys.exit(f"!! 列不出 {rid}: {type(e).__name__}: {str(e)[:200]}")
+    print(f"{rid}  共 {len(fs)} 个文件")
+    import collections
+    ext = collections.Counter(Path(f).suffix.lower() for f in fs)
+    print(f"  后缀分布：{dict(ext.most_common(8))}")
+    top = collections.Counter(f.split("/")[0] for f in fs)
+    print(f"  顶层目录：{dict(top.most_common(8))}")
+    print(f"  前 25 个：")
+    for f in fs[:25]:
+        print(f"    {f}")
+
+
 def cmd_hf(args):
     os.environ["HF_HUB_OFFLINE"] = "0"
     os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
@@ -44,13 +72,33 @@ def cmd_hf(args):
     from huggingface_hub import snapshot_download
 
     cands = [(args.repo, None)] if args.repo else CANDIDATES
-    for rid, pats in cands:
-        print(f"── 试 {rid}" + (f"  patterns={pats}" if pats else ""))
+    for rid, _ in cands:
+        print(f"── 试 {rid}")
+        # ① 先列文件，按实际内容选模式；不再用写死的猜测
+        try:
+            fs = _files(rid)
+        except Exception as e:
+            print(f"   ✗ 列文件失败 {type(e).__name__}: {str(e)[:140]}\n")
+            continue
+        imgs = [f for f in fs if Path(f).suffix.lower() in {".jpg", ".jpeg", ".png"}]
+        pqs = [f for f in fs if Path(f).suffix.lower() in {".parquet", ".arrow"}]
+        if imgs:
+            pats = imgs[:args.n]                    # 散图：只取需要的那几张
+            print(f"   {len(fs)} 文件，散图 {len(imgs)} 张 → 只下前 {len(pats)} 张")
+        elif pqs:
+            pats = pqs[:1]                          # parquet：只下第一个分片
+            print(f"   {len(fs)} 文件，parquet {len(pqs)} 个 → 只下 {pats[0]}")
+        else:
+            print(f"   !! 既没有散图也没有 parquet。后缀：",
+                  {Path(f).suffix for f in fs[:40]}, "\n")
+            continue
         try:
             p = snapshot_download(rid, repo_type="dataset",
                                   allow_patterns=pats, max_workers=4)
         except Exception as e:
-            print(f"   ✗ {type(e).__name__}: {str(e)[:160]}\n")
+            print(f"   ✗ 下载失败 {type(e).__name__}: {str(e)[:200]}")
+            print(f"      → 可能是 gated（`hf auth login` 后重试）"
+                  f"或 hf-mirror 的 LFS 转发不稳\n")
             continue
         print(f"   ✓ 下到 {p}")
         n = _extract(Path(p), args.n)
@@ -161,10 +209,11 @@ def main():
     ap.add_argument("--n", type=int, default=50, help="取几张")
     ap.add_argument("--repo", default=None, help="指定 HF dataset repo id")
     g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--ls", action="store_true", help="只列仓库文件，不下载")
     g.add_argument("--hf", action="store_true")
     g.add_argument("--teaser", action="store_true")
     a = ap.parse_args()
-    (cmd_hf if a.hf else cmd_teaser)(a)
+    (cmd_ls if a.ls else cmd_hf if a.hf else cmd_teaser)(a)
 
 
 if __name__ == "__main__":

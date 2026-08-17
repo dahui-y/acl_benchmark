@@ -190,7 +190,11 @@ def cmd_draw(args):
 
     man = {"seed": args.seed, "res": RES, "n_style": len(styles),
            "n_content": len(contents), "style_pool": str(sd),
-           "content_pool": str(cd), "content_is_coco": cd == scan_pool(POOLS["coco"])[0],
+           "content_pool": str(cd),
+           # 来源靠目录里的 SOURCE.txt，**不靠路径猜** —— 用户可以把 COCO=
+           # 指向任何目录（比如 teaser 那 5 张），靠路径判断会误报成 MS-COCO。
+           "content_source": (cd / "SOURCE.txt").read_text().strip()
+                             if (cd / "SOURCE.txt").exists() else "未标注（来源不明）",
            "style": [], "content": []}
     for i, f in enumerate(styles):
         up = prep(f, d / "sty" / f"{i:02d}_{f.parent.name}.png")
@@ -204,7 +208,7 @@ def cmd_draw(args):
     print(f"seed={args.seed}  {len(styles)} style × {len(contents)} content → {d}")
     print(f"  上采过的图：{n_up}/{len(styles)+len(contents)}"
           + ("   ⚠️ 绝对值与发表数不可比" if n_up else ""))
-    print(f"  content 是 MS-COCO：{man['content_is_coco']}")
+    print(f"  content 来源：{man['content_source'].splitlines()[0]}")
     print(f"  manifest: {d/'manifest.json'}")
 
 
@@ -254,9 +258,15 @@ def cmd_gen(args):
     print(f"  # eval_artfid.py 要求 content/style 张数与 stylized 一致，先复制对齐")
     print(f"  cd {ev}")
     print(f"  python eval_artfid.py --sty {d/'sty'} --cnt {d/'cnt'} --tar {tar}")
-    print(f"\n⚠️ 报数时必须写明：**自抽样（seed={args.seed}）"
-          f"{'，且源图经上采' if any(x['upscaled'] for x in man['style']) else ''}，"
-          f"与发表值不可直接比。**")
+    src = man.get("content_source", "").splitlines()[0] if man.get("content_source") else "?"
+    print(f"\n⚠️ 报数时必须写明：**自抽样 seed={args.seed}"
+          f"{'；style 源图经上采' if any(x['upscaled'] for x in man['style']) else ''}"
+          f"；content 来源 = {src}"
+          f"；与发表值不可直接比。**")
+    if len(man["content"]) < 20:
+        print(f"⚠️ content 只有 {len(man['content'])} 张（协议是 20）→ "
+              f"stylized 只有 {len(man['style'])*len(man['content'])} 张，"
+              f"**FID 偏差与方差更大，eval 必须加 --mode art_fid_inf**")
 
 
 def main():

@@ -82,9 +82,14 @@ def cmd_hf(args):
             continue
         imgs = [f for f in fs if Path(f).suffix.lower() in {".jpg", ".jpeg", ".png"}]
         pqs = [f for f in fs if Path(f).suffix.lower() in {".parquet", ".arrow"}]
+        # zip 也要认 —— nlphuji 那个就是 .zip 装图，第一版把它跳过了
+        zips = [f for f in fs if Path(f).suffix.lower() == ".zip"]
         if imgs:
             pats = imgs[:args.n]                    # 散图：只取需要的那几张
             print(f"   {len(fs)} 文件，散图 {len(imgs)} 张 → 只下前 {len(pats)} 张")
+        elif zips:
+            pats = zips[:1]
+            print(f"   {len(fs)} 文件，zip {len(zips)} 个 → 只下 {pats[0]}")
         elif pqs:
             pats = pqs[:1]                          # parquet：只下第一个分片
             print(f"   {len(fs)} 文件，parquet {len(pqs)} 个 → 只下 {pats[0]}")
@@ -123,6 +128,23 @@ def _extract(root, want):
             Image.open(f).convert("RGB").save(OUT / f"content_{i:03d}.png")
         (OUT / "SOURCE.txt").write_text(f"MS-COCO\nfrom {root}\n")
         return len(imgs)
+    # zip：解出里面的图（只解需要的那几张，不全解）
+    import zipfile
+    for z in sorted(root.rglob("*.zip")):
+        try:
+            with zipfile.ZipFile(z) as zf:
+                names = [n for n in zf.namelist()
+                         if Path(n).suffix.lower() in exts and not n.startswith("__")]
+                print(f"   zip {z.name} 里有 {len(names)} 张图")
+                for i, n in enumerate(sorted(names)[:want]):
+                    with zf.open(n) as fh:
+                        Image.open(io.BytesIO(fh.read())).convert("RGB").save(
+                            OUT / f"content_{i:03d}.png")
+                if names:
+                    (OUT / "SOURCE.txt").write_text(f"MS-COCO\nfrom {z}\n")
+                    return min(len(names), want)
+        except Exception as e:
+            print(f"   !! 解 {z.name} 失败：{type(e).__name__}: {str(e)[:120]}")
     pqs = sorted(root.rglob("*.parquet"))
     if not pqs:
         return 0

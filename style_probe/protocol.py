@@ -73,7 +73,12 @@ POOLS = {
     ],
     # 退路：之前 fetch_real_images.py 下的 LAION 真图。**不是 COCO**，
     # 用它就必须在表注里写明「content 用的是 LAION 而非 MS-COCO」。
+    # 退路：scalediff_probe/fetch_real_images.py 下的 LAION 真图。
+    # **不是 COCO**，用它必须在表注写明。默认输出目录名是 laion_real ——
+    # 第一版只写了 real / real_images，漏了这个（那个脚本才是为这个
+    # 网络环境写的，链接腐烂、境内可达都考虑过了）。
     "laion_fallback": [
+        str(Path(os.environ.get("SD_OUT", "/tmp")) / "laion_real"),
         str(Path(os.environ.get("SD_OUT", "/tmp")) / "real"),
         str(Path(os.environ.get("SD_OUT", "/tmp")) / "real_images"),
     ],

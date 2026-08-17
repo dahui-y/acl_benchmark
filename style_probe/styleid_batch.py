@@ -155,6 +155,25 @@ def main():
                                                        "tau": a.T,
                                                        "injection_layers": a.layers})
 
+    # ★ 把它们缺的全局补回去，**仍然不改他们一行代码**。
+    #
+    # run_styleid_diffusers.py 的类方法里用的是裸名 `tokenizer` / `text_encoder`
+    # / `device` / `vae` / `guidance_scale`，甚至 invert_process 里直接引用
+    # `unet_wrapper.unet` —— 那些是 __main__ 里的全局变量。原样跑没问题，
+    # 一旦 import 成模块就全是 NameError。这是他们代码的隐性耦合，不是我们的错，
+    # 但修法应该是**注入全局**而不是改他们的源码：改了源码，
+    # 「你们是不是动了在位者的实现」就说不清了。
+    R.tokenizer = tok
+    R.text_encoder = te
+    R.vae = vae
+    R.unet = unet
+    R.scheduler = sch
+    R.device = "cuda"
+    R.dtype = dtype
+    R.guidance_scale = 0.          # 原脚本就是 0（no text）
+    R.unet_wrapper = W
+    R.ddim_steps = a.ddim_steps
+
     def invert(img_path, text=None):
         im = cv2.imread(str(img_path))[:, :, ::-1]
         lat = encode_latent(normalize(im).to(device=vae.device, dtype=dtype), vae)

@@ -105,6 +105,52 @@ def _pick_parquet(rid, pqs):
     return best, sz.get(best, 0)
 
 
+def _pick_diverse(rid, pqs, cap_mb, probe=8):
+    """按**标签多样性**挑分片，而不是按大小。
+
+    2026-08-17：「挑最小的」这条规则对 COCO 是对的（随便哪片都是自然图），
+    对 WikiArt 是错的 —— huggan/wikiart 的 72 个分片里，最小的 shard 59
+    只有 5 个 artist 取值，而 shard 18/27/36/45 有 ~100 个 artist、27 个
+    画派全覆盖。差别是实测的，不是猜的。
+
+    关键是**标签列可以单独远程读**：parquet 按列存，artist/style 是 int64，
+    几百 KB 就能读完一个分片的全部标签，而图片列有 300-500 MB 不碰。
+    所以先花几十秒探，再决定下哪一个。
+
+    返回 (路径, 字节数)。探测失败就退回 _pick_parquet。
+    """
+    sz = _sizes(rid)
+    cands = [f for f in pqs if 0 < sz.get(f, 0) <= cap_mb * 1e6] or pqs
+    step = max(1, len(cands) // probe)
+    trial = cands[::step][:probe]
+    try:
+        import pyarrow.parquet as pq
+        from huggingface_hub import HfFileSystem
+        fs = HfFileSystem()
+    except ImportError as e:
+        print(f"   (探多样性要 pyarrow + HfFileSystem：{e}) 退回按大小挑")
+        return _pick_parquet(rid, pqs)
+    print(f"   探 {len(trial)}/{len(cands)} 个分片的标签列（只读标签，不读图）")
+    best, best_score = None, (-1, -1)
+    for f in trial:
+        try:
+            t = pq.read_table(fs.open(f"datasets/{rid}/{f}", "rb"),
+                              columns=["style", "artist"])
+        except Exception as e:
+            print(f"      {Path(f).name}: 探不了 {type(e).__name__}")
+            continue
+        ns = len(set(t.column("style").to_pylist()))
+        na = len(set(t.column("artist").to_pylist()))
+        print(f"      {Path(f).name}: {ns} 画派 / {na} 画家"
+              f"  {sz.get(f,0)/1e6:.0f} MB")
+        if (ns, na) > best_score:
+            best, best_score = f, (ns, na)
+    if best is None:
+        return _pick_parquet(rid, pqs)
+    print(f"   → 选 {Path(best).name}（{best_score[0]} 画派 / {best_score[1]} 画家）")
+    return best, sz.get(best, 0)
+
+
 def cmd_ls(args):
     _endpoint(args)
     rid = args.repo or "rafaelpadilla/coco2017"
@@ -177,7 +223,10 @@ def cmd_hf(args):
             pats = zips[:1]
             print(f"   {len(fs)} 文件，zip {len(zips)} 个 → 只下 {pats[0]}")
         elif pqs:
-            one, nb = _pick_parquet(rid, pqs)       # parquet：挑**最小**的那个分片
+            cap0 = args.max_mb if args.max_mb is not None else (600 if args.wikiart else 200)
+            # WikiArt 按多样性挑，COCO 按大小挑 —— 见 _pick_diverse 的说明
+            one, nb = (_pick_diverse(rid, pqs, cap0) if args.wikiart
+                       else _pick_parquet(rid, pqs))
             pats = [one]
             mb = f"{nb/1e6:.0f} MB" if nb else "大小未知"
             print(f"   {len(fs)} 文件，parquet {len(pqs)} 个 → 挑最小的 {one}（{mb}）")
@@ -299,8 +348,11 @@ def _extract(root, want, tag="MS-COCO", min_side=0):
         # 2026-08-17：第一版把它扔了，于是解出来是个**扁平目录**，
         # 而 protocol.py 靠父目录名做「每位艺术家最多一张」的去重 ——
         # 分组数塌成 1，40 张 style 静默变成 1 张。标签是现成的，不能扔。
+        # 轴的顺序有讲究：对风格迁移，正确的分组是**画派**（27 类）而不是
+        # 画家。而且 huggan/wikiart 的 artist 有 58% 是标签 0「Unknown」，
+        # 按它分组会得到一个巨大的杂桶 + 一堆小桶。
         lab = next((c for c in t.column_names
-                    if c.lower() in ("artist", "style", "label", "genre")), None)
+                    if c.lower() in ("style", "artist", "label", "genre")), None)
         n = t.num_rows
         idx = list(range(n))
         # 一个分片可能有上万行，等间隔取，别只取开头 —— WikiArt 的分片

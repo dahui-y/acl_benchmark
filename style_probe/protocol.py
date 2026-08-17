@@ -171,24 +171,40 @@ def cmd_draw(args):
         sys.exit("!! WikiArt 池缺失")
 
     rng = np.random.default_rng(args.seed)
-    # style 每位艺术家最多取一张，避免 40 张全来自同一人（--scan 那次的教训）。
+    # style 侧要按组均衡，避免 40 张全来自同一人 / 同一画派（--scan 的教训）。
     #
-    # 2026-08-17：这条保护在**扁平目录**上会静默退化 —— 新下的 wikiart_full
-    # 200 张全在一个目录里，分组数 = 1，于是 40 张变成 1 张，而脚本照跑不误。
-    # 静默退化比报错危险得多，所以这里改成：分组不够就明说，然后按文件抽。
-    by_artist = {}
+    # 2026-08-17 两次订正：
+    #   ① 原来是「每组最多一张」，在扁平目录上静默退化成 1 张 style，
+    #      脚本照跑不误 —— 静默退化比报错危险。
+    #   ② 分组轴改成**画派**（WikiArt 27 类）而不是画家：huggan/wikiart 的
+    #      artist 有 58% 是「Unknown」，按画家分组会得到一个巨桶加一堆碎桶。
+    # 27 < 40，所以「每组一张」凑不满，改成**轮转**：按组轮流取，
+    # 取满 N_STYLE 为止。组多时等价于每组一张；组少时均摊，不会全压一组。
+    groups = {}
     for f in sf:
-        by_artist.setdefault(f.parent.name, []).append(f)
-    artists = sorted(by_artist)
-    if len(artists) >= N_STYLE:
-        pick_a = rng.permutation(len(artists))[:N_STYLE]
-        styles = [sorted(by_artist[artists[i]])[0] for i in sorted(pick_a)]
-    else:
-        print(f"!! style 池只有 {len(artists)} 个子目录（< {N_STYLE}）——"
-              f"按艺术家去重不可用，改为直接从 {len(sf)} 个文件里抽。")
-        if len(sf) < N_STYLE:
+        groups.setdefault(f.parent.name, []).append(f)
+    keys = sorted(groups)
+    if len(keys) == 1:
+        print(f"!! style 池是扁平目录（只有 1 个分组）—— 无法保证画派多样性，"
+              f"直接从 {len(sf)} 个文件里抽。**这一点必须写进表注。**")
+    order = [keys[i] for i in rng.permutation(len(keys))]
+    pools = {k: [groups[k][i] for i in rng.permutation(len(groups[k]))] for k in keys}
+    styles, r = [], 0
+    while len(styles) < N_STYLE:
+        took = 0
+        for k in order:
+            if r < len(pools[k]):
+                styles.append(pools[k][r]); took += 1
+                if len(styles) >= N_STYLE:
+                    break
+        if took == 0:
             sys.exit(f"!! style 池只有 {len(sf)} 张，不够 {N_STYLE} 张。")
-        styles = [sf[i] for i in sorted(rng.permutation(len(sf))[:N_STYLE])]
+        r += 1
+    per = {}
+    for f in styles:
+        per[f.parent.name] = per.get(f.parent.name, 0) + 1
+    print(f"  style 分组：{len(per)} 组覆盖 {len(styles)} 张，"
+          f"每组最多 {max(per.values())} 张")
     contents = [cf[i] for i in sorted(rng.permutation(len(cf))[:N_CONTENT])]
 
     d = OUT / f"seed{args.seed}"

@@ -500,17 +500,48 @@ def cmd_run(args):
 
 
 def _load(args):
-    """SD1.5 + DDIM。DDIM 是因为下面要手写 add_noise / step 的循环，
-    PNDM 那种带内部缓冲的调度器从时刻表中间切入会出错。"""
+    """SD1.5 + DDIM。
+
+    DDIM 是因为下面要手写 add_noise / step 的循环，PNDM 那种带内部缓冲的
+    调度器从时刻表中间切入会出错。
+
+    2026-08-16：首次上机报
+      `no file named pytorch_model.bin, model.safetensors ... in .../text_encoder`
+    —— 缓存里多半只有 fp16 variant（`model.fp16.safetensors`），
+    而不传 variant 时 diffusers 只找 `model.safetensors`。
+    **所以这里按 variant 逐个试，全失败就把目录内容打出来，一轮定位。**
+    """
     import torch
     from diffusers import StableDiffusionPipeline, DDIMScheduler
-    pipe = StableDiffusionPipeline.from_pretrained(
-        args.model, torch_dtype=torch.float16, safety_checker=None,
-        requires_safety_checker=False).to("cuda")
-    pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
-    pipe.set_progress_bar_config(disable=True)
-    print(f"  backbone {args.model}  @{RES}²  scheduler=DDIM")
-    return pipe
+    errs = []
+    for variant in ("fp16", None):
+        try:
+            pipe = StableDiffusionPipeline.from_pretrained(
+                args.model, torch_dtype=torch.float16, variant=variant,
+                safety_checker=None, requires_safety_checker=False).to("cuda")
+            print(f"  backbone {args.model}  variant={variant}  @{RES}²  scheduler=DDIM")
+            pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
+            pipe.set_progress_bar_config(disable=True)
+            return pipe
+        except Exception as e:
+            errs.append((variant, f"{type(e).__name__}: {str(e)[:200]}"))
+    # 全失败 → 把缓存里到底有什么打出来，别让人去猜
+    print("!! 三种 variant 都载入失败：")
+    for v, e in errs:
+        print(f"   variant={v}: {e}")
+    root = Path(os.environ.get("HF_HOME", "")) / "hub"
+    cand = list(root.glob("models--*stable-diffusion-v1-5*")) if root.exists() else []
+    for c in cand:
+        snaps = list((c / "snapshots").glob("*")) if (c / "snapshots").exists() else []
+        for sn in snaps:
+            print(f"\n   {sn}")
+            for sub in sorted(sn.iterdir()):
+                if sub.is_dir():
+                    fs = [f.name for f in sorted(sub.iterdir())]
+                    print(f"     {sub.name}/: {fs}")
+                else:
+                    print(f"     {sub.name}")
+    sys.exit("\n   → 把上面这段贴出来，就能定位缺哪个文件")
 
 
 def _encode(pipe, img):

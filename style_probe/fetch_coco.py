@@ -198,16 +198,26 @@ def _extract(root, want):
     for z in sorted(root.rglob("*.zip")):
         try:
             with zipfile.ZipFile(z) as zf:
-                names = [n for n in zf.namelist()
-                         if Path(n).suffix.lower() in exts and not n.startswith("__")]
+                names = sorted(n for n in zf.namelist()
+                               if Path(n).suffix.lower() in exts
+                               and not n.startswith("__"))
                 print(f"   zip {z.name} 里有 {len(names)} 张图")
-                for i, n in enumerate(sorted(names)[:want]):
+                # 等间隔取，不取字典序开头 —— 池子要覆盖整个 split，
+                # 否则 protocol.py 的 seed 抽样是在一个偏斜的角落里抽。
+                if len(names) > want:
+                    step = len(names) / want
+                    names = [names[int(i * step)] for i in range(want)]
+                for i, n in enumerate(names):
                     with zf.open(n) as fh:
                         Image.open(io.BytesIO(fh.read())).convert("RGB").save(
                             OUT / f"content_{i:03d}.png")
                 if names:
-                    (OUT / "SOURCE.txt").write_text(f"MS-COCO\nfrom {z}\n")
-                    return min(len(names), want)
+                    (OUT / "SOURCE.txt").write_text(
+                        f"MS-COCO ({len(names)} images)\n"
+                        f"from {z.name} (COCO 2014 5k test split)\n"
+                        f"{z}\n"
+                        f"等间隔取样覆盖整个 split；protocol.py 再按 seed 从中抽 20。\n")
+                    return len(names)
         except Exception as e:
             print(f"   !! 解 {z.name} 失败：{type(e).__name__}: {str(e)[:120]}")
     pqs = sorted(root.rglob("*.parquet"))

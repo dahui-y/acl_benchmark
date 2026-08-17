@@ -157,10 +157,15 @@ def cmd_draw(args):
     from PIL import Image
     sd, sf = scan_pool(POOLS["wikiart"])
     cd, cf = scan_pool(POOLS["coco"])
+    forced_src = None
     if cd is None:
         cd, cf = scan_pool(POOLS["laion_fallback"])
         if cd is None:
             sys.exit("!! content 池缺失，先跑 --check 看怎么办")
+        # laion_real 目录里没有 SOURCE.txt，落成「未标注」等于把来源丢了 ——
+        # 而这一行是要写进论文表注的，显式补上。
+        forced_src = ("NOT-COCO: LAION real images "
+                      "(scalediff_probe/fetch_real_images.py, MIN_SIDE=299)")
         print("!! 用 LAION 退路当 content —— **不是 MS-COCO**，表注必须写明")
     if sd is None:
         sys.exit("!! WikiArt 池缺失")
@@ -198,8 +203,8 @@ def cmd_draw(args):
            "content_pool": str(cd),
            # 来源靠目录里的 SOURCE.txt，**不靠路径猜** —— 用户可以把 COCO=
            # 指向任何目录（比如 teaser 那 5 张），靠路径判断会误报成 MS-COCO。
-           "content_source": (cd / "SOURCE.txt").read_text().strip()
-                             if (cd / "SOURCE.txt").exists() else "未标注（来源不明）",
+           "content_source": forced_src or ((cd / "SOURCE.txt").read_text().strip()
+                             if (cd / "SOURCE.txt").exists() else "未标注（来源不明）"),
            "style": [], "content": []}
     for i, f in enumerate(styles):
         up = prep(f, d / "sty" / f"{i:02d}_{f.parent.name}.png")
@@ -209,11 +214,21 @@ def cmd_draw(args):
         man["content"].append({"i": i, "src": str(f), "upscaled": up})
     (d / "manifest.json").write_text(json.dumps(man, ensure_ascii=False, indent=2))
 
+    # LAION 是网图（不是策展过的 COCO），可能混进文字图/logo/拼贴。
+    # 拼一张接触图，**开跑前先看一眼**，别让不合适的 content 混进 800 张里。
+    sh = Image.new("RGB", (200 * min(10, len(contents)),
+                           200 * ((len(contents) + 9) // 10)), "white")
+    for i in range(len(contents)):
+        im = Image.open(d / "cnt" / f"{i:02d}.png"); im.thumbnail((200, 200))
+        sh.paste(im, (200 * (i % 10), 200 * (i // 10)))
+    sh.save(d / "content_check.png")
+
     n_up = sum(x["upscaled"] for x in man["style"] + man["content"])
     print(f"seed={args.seed}  {len(styles)} style × {len(contents)} content → {d}")
     print(f"  上采过的图：{n_up}/{len(styles)+len(contents)}"
           + ("   ⚠️ 绝对值与发表数不可比" if n_up else ""))
     print(f"  content 来源：{man['content_source'].splitlines()[0]}")
+    print(f"  content 接触图: {d/'content_check.png'}   ← **开跑前先看一眼**")
     print(f"  manifest: {d/'manifest.json'}")
 
 

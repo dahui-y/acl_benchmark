@@ -67,6 +67,10 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent
 OUT = Path(os.environ.get("SD_OUT", "/tmp")) / "style" / "subspace"
 TEASER = REPO / "help_code" / "StyleSSP" / "assets" / "ours.jpg"
+# 用户已下载的真实 WikiArt 参考图（StyleSSP 协议就是 MS-COCO content × WikiArt style，
+# 所以用它比从 teaser 上裁更接近后面要做的正表）。可用 WIKIART 环境变量覆盖。
+WIKIART = Path(os.environ.get(
+    "WIKIART", "/openbayes/input/input0/Sim2Struct-1000/temp/jdb/wikiart_ref"))
 SDXL = "stabilityai/stable-diffusion-xl-base-1.0"
 ARMS = ("full", "proj", "comp")
 
@@ -164,6 +168,64 @@ def cmd_crop(args):
         tile(0, r).save(d / f"content_{key}.png")
         print(f"  content {key:14s} row={r}")
     print(f"\n→ {d}\n**裁完先自己看一眼**：格子有没有错位、有没有把表头切进来。")
+
+
+# ─────────────────────────────────────────────────────────────────────
+# --scan：把 WikiArt 目录清点出来 + 拼一张带编号的接触图
+# ─────────────────────────────────────────────────────────────────────
+
+def cmd_scan(args):
+    """我看不到服务器的文件系统，而**难/易分组是这个实验的核心设计**，
+    必须先看到图才能分。所以这一步的产出是一张带编号的接触图，
+    人看完把编号告诉我，再填进 PICKS。
+
+    分组判据（写在这里，免得看图时临时编）：
+      hard = 笔触/渲染方式**逐区域明显不同**（留白天空 vs 干笔山石；平涂 vs 细线）
+      easy = 全图渲染方式**基本一致**（均匀花纹、单一线条、通幅平涂）
+    """
+    from PIL import Image, ImageDraw
+    if not WIKIART.exists():
+        sys.exit(f"!! 找不到 {WIKIART}\n   用 WIKIART=<路径> 覆盖")
+    exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+    files = sorted(f for f in WIKIART.rglob("*") if f.suffix.lower() in exts)
+    if not files:
+        sys.exit(f"!! {WIKIART} 下没有图片")
+    print(f"{WIKIART}\n  {len(files)} 张")
+    subs = sorted({f.parent.relative_to(WIKIART).as_posix() for f in files})
+    print(f"  子目录 {len(subs)} 个：{subs[:8]}{' …' if len(subs) > 8 else ''}")
+    im0 = Image.open(files[0])
+    print(f"  首张 {files[0].name}  {im0.size}  {im0.mode}")
+
+    files = files[:args.scan_max]
+    cell, pad, hdr = 200, 4, 16
+    ncol = 8
+    nrow = (len(files) + ncol - 1) // ncol
+    sh = Image.new("RGB", (ncol * (cell + pad) + pad,
+                           nrow * (cell + hdr + pad) + pad), "white")
+    dr = ImageDraw.Draw(sh)
+    for i, f in enumerate(files):
+        r, c = divmod(i, ncol)
+        x, y = pad + c * (cell + pad), pad + r * (cell + hdr + pad)
+        dr.text((x + 2, y + 2), f"[{i}] {f.stem[:26]}", fill="black")
+        im = Image.open(f).convert("RGB"); im.thumbnail((cell, cell), Image.LANCZOS)
+        sh.paste(im, (x, y + hdr))
+    OUT.mkdir(parents=True, exist_ok=True)
+    p = OUT / "wikiart_scan.png"
+    sh.save(p)
+    (OUT / "wikiart_files.json").write_text(json.dumps(
+        [str(f) for f in files], ensure_ascii=False, indent=2))
+    print(f"\n→ {p}   ({len(files)} 张，编号 0..{len(files)-1})")
+    print(f"→ {OUT/'wikiart_files.json'}（编号到路径的映射）")
+    print(f"\n把接触图贴出来，我按下面的判据挑 5–6 张 hard + 2 张 easy：")
+    print(f"  hard = 笔触/渲染**逐区域明显不同**（留白天空 vs 干笔山石；平涂 vs 细线）")
+    print(f"  easy = 全图渲染**基本一致**（均匀花纹、单一线条、通幅平涂）")
+    print(f"  ⚠️ 只挑 hard 的话，失败了分不清「假设错」还是「实现错」；"
+          f"\n     只挑 easy 的话，等于回避了核心技术反对。**两组都要。**")
+
+
+# 由 --scan 的接触图挑出来后填这里；空 = 仍用 teaser 裁的那批
+# 形如 {"ink_xxx": ("hard", "为什么选它"), ...}，key 是 wikiart_files.json 里的文件 stem
+PICKS = {}
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -515,15 +577,21 @@ def main():
     ap.add_argument("--strength", type=float, default=0.7, help="SDEdit 加噪强度")
     ap.add_argument("--content", default="horse")
     ap.add_argument("--cell", type=int, default=380)
+    ap.add_argument("--scan-max", type=int, default=64,
+                    help="接触图最多放几张")
     ap.add_argument("--inset", type=float, default=0.03,
                     help="每格再往内缩的比例，吃掉拟合残差与边框")
     g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--scan", action="store_true",
+                   help="清点 WikiArt 目录并拼接触图（挑图用）")
     g.add_argument("--crop", action="store_true")
     g.add_argument("--selftest", action="store_true")
     g.add_argument("--run", action="store_true")
     g.add_argument("--sheet", action="store_true")
     a = ap.parse_args()
-    if a.crop:
+    if a.scan:
+        cmd_scan(a)
+    elif a.crop:
         cmd_crop(a)
     elif a.selftest:
         sys.exit(cmd_selftest(a))

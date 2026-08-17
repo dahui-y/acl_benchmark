@@ -95,8 +95,13 @@ def _lpips(paths_a, paths_b, device, bs=20):
     return out
 
 
-def decompose(M, name):
-    """二因素方差分解。M[i,j]：i = style，j = content。"""
+def decompose(M, name, higher_is_worse=True):
+    """二因素方差分解。M[i,j]：i = style，j = content。
+
+    higher_is_worse：距离类指标（S、C）越大越差；**增益类指标（ΔS）反过来**。
+    2026-08-17：第一版对所有矩阵都按「越大越差」打标签，于是 ΔS 那一段
+    把增益最高的三个画风印成了「最差」。读反了会把结论整个颠倒。
+    """
     g = M.mean()
     ri = M.mean(1) - g                     # 画风效应
     cj = M.mean(0) - g                     # 内容效应
@@ -107,11 +112,15 @@ def decompose(M, name):
     print(f"\n── {name}  均值 {g:.4f}  标准差 {M.std():.4f}")
     print(f"   方差分解：画风 {vs/tot*100:5.1f}%   内容 {vc/tot*100:5.1f}%"
           f"   残差 {vr/tot*100:5.1f}%     (总方差 {v:.2e})")
+    def _fmt(v, o):
+        return [(int(k), round(float(v[k]), 4)) for k in o]
     o = np.argsort(ri)
-    print(f"   最差 3 个画风(行)：{[(int(i), round(float(ri[i]),4)) for i in o[-3:][::-1]]}")
-    print(f"   最好 3 个画风(行)：{[(int(i), round(float(ri[i]),4)) for i in o[:3]]}")
+    bad, good = (o[-3:][::-1], o[:3]) if higher_is_worse else (o[:3], o[-3:][::-1])
+    print(f"   最差 3 个画风(行)：{_fmt(ri, bad)}")
+    print(f"   最好 3 个画风(行)：{_fmt(ri, good)}")
     o = np.argsort(cj)
-    print(f"   最差 3 个 content：{[(int(j), round(float(cj[j]),4)) for j in o[-3:][::-1]]}")
+    badc = o[-3:][::-1] if higher_is_worse else o[:3]
+    print(f"   最差 3 个 content：{_fmt(cj, badc)}")
     return dict(grand=float(g), style_eff=ri.tolist(), cnt_eff=cj.tolist(),
                 frac=dict(style=float(vs/tot), content=float(vc/tot),
                           resid=float(vr/tot)))
@@ -186,10 +195,19 @@ def run(seed, args):
     sheet(Cn, d / "matrix_cnorm.png", f"seed{seed} content LPIPS / full-replacement")
     r = {"style": decompose(S, "风格距离 1-cos（未去固有偏置）"),
          "content": decompose(C, "内容 LPIPS（未归一）"),
-         "style_gain": decompose(dS, "★ 风格增益 ΔS（已去 style 图固有位置）"),
+         "style_gain": decompose(dS, "★ 风格增益 ΔS（已去 style 图固有位置）",
+                                 higher_is_worse=False),
          "content_norm": decompose(Cn, "★ 内容 LPIPS / 满量程（已归一）")}
+    neg = np.argwhere(dS < 0)
     print(f"\n   注：ΔS 均值 {dS.mean():.4f}（>0 才说明迁移真的在靠近风格）；"
-          f"负值格数 {int((dS<0).sum())}/{dS.size}")
+          f"**负增益格数 {len(neg)}/{dS.size}** —— 这些格子里，"
+          f"「风格化」后的图比原 content 图**离目标风格更远**")
+    if len(neg):
+        import collections
+        rc = collections.Counter(int(i) for i, _ in neg)
+        print(f"   负增益集中在哪些画风(行)：{rc.most_common(6)}")
+        cc = collections.Counter(int(j) for _, j in neg)
+        print(f"   集中在哪些 content(列)：{cc.most_common(6)}")
     (d / "matrix.json").write_text(json.dumps(r, ensure_ascii=False, indent=2))
     print(f"\n→ {d/'matrix.npz'} / matrix_style.png / matrix_content.png")
     return S, C

@@ -98,9 +98,15 @@ def main():
     ap.add_argument("--sty", default=str(REPO / "help_code/StyleID/data/sty"))
     ap.add_argument("--out", required=True)
     ap.add_argument("--model", default=os.environ.get(
-        "SD15_PATH", "stable-diffusion-v1-5/stable-diffusion-v1-5"))
-    ap.add_argument("--sd_version", default="1.5")
-    ap.add_argument("--ddim_steps", type=int, default=20)
+        "SD14_PATH", "CompVis/stable-diffusion-v1-4"))
+    # ★ 默认 = 论文配置。【一手】CVPR'24 正文第 6 页：
+    #   "Stable Diffusion 1.4" / "DDIM sampling with a total 50 timesteps"
+    #   "All input images are center-cropped to 512 × 512" / γ = 0.75
+    # 发表值（论文 Table，γ=0.75 默认档）：ArtFID 28.801 / FID 18.131 / LPIPS 0.5055
+    # 协议：20 content (MS-COCO) × 40 style (WikiArt)，与仓库 README:75 一致。
+    # diffusers 版的默认是 2.1-base / 20 步，那是 demo 配置，**不是发表配置**。
+    ap.add_argument("--sd_version", default="1.4")
+    ap.add_argument("--ddim_steps", type=int, default=50)
     ap.add_argument("--gamma", type=float, default=0.75)
     ap.add_argument("--T", type=float, default=1.5)
     ap.add_argument("--layers", nargs="+", type=int, default=[7, 8, 9, 10, 11])

@@ -157,12 +157,39 @@ def run(seed, args):
 
     C = _lpips(flat, [c for _ in sty for c in cnt], dev).reshape(ns, nc)
 
+    # ★ 零假设对照。**没有它，上面两个数不可信。**
+    #
+    # 行效应有一个平凡解释：某张 style 图在 art_inception 空间里本来就
+    # 离所有东西都远，于是它那一行整体偏高 —— 这测的是图片的固有位置，
+    # 不是「这个画风难迁移」。列效应同理：复杂的 content 做任何改动
+    # LPIPS 都大。绑定检测器就是死在这类「仪器在测自己」上。
+    #
+    #   ΔS = d(content, style) − d(stylized, style)   风格**靠近了多少**
+    #        每张 style 图的固有位置在相减中抵消
+    #   Cn = LPIPS(stylized, content) / LPIPS(style, content)
+    #        用「完全变成 style 图」当满量程，归掉 content 自身复杂度
+    f_c = _feats(_load_incep(dev), cnt, dev)
+    c_n = f_c / np.linalg.norm(f_c, axis=1, keepdims=True)
+    S0 = 1.0 - c_n @ b.T                      # [nc, ns]
+    S0 = S0.T                                 # [ns, nc]
+    dS = S0 - S                               # 正 = 迁移让它更接近该风格
+    Cmax = _lpips([s for s in sty for _ in cnt],
+                  [c for _ in sty for c in cnt], dev).reshape(ns, nc)
+    Cn = C / np.maximum(Cmax, 1e-6)
+
     np.savez(d / "matrix.npz", style_dist=S, content_lpips=C,
+             style_gain=dS, style_null=S0, content_norm=Cn, content_max=Cmax,
              sty=[str(p) for p in sty], cnt=[str(p) for p in cnt])
     sheet(S, d / "matrix_style.png", f"seed{seed} style distance (1-cos, art_inception)")
     sheet(C, d / "matrix_content.png", f"seed{seed} content LPIPS")
-    r = {"style": decompose(S, "风格距离 1-cos"),
-         "content": decompose(C, "内容 LPIPS")}
+    sheet(dS, d / "matrix_gain.png", f"seed{seed} style GAIN (null-corrected)")
+    sheet(Cn, d / "matrix_cnorm.png", f"seed{seed} content LPIPS / full-replacement")
+    r = {"style": decompose(S, "风格距离 1-cos（未去固有偏置）"),
+         "content": decompose(C, "内容 LPIPS（未归一）"),
+         "style_gain": decompose(dS, "★ 风格增益 ΔS（已去 style 图固有位置）"),
+         "content_norm": decompose(Cn, "★ 内容 LPIPS / 满量程（已归一）")}
+    print(f"\n   注：ΔS 均值 {dS.mean():.4f}（>0 才说明迁移真的在靠近风格）；"
+          f"负值格数 {int((dS<0).sum())}/{dS.size}")
     (d / "matrix.json").write_text(json.dumps(r, ensure_ascii=False, indent=2))
     print(f"\n→ {d/'matrix.npz'} / matrix_style.png / matrix_content.png")
     return S, C

@@ -36,10 +36,26 @@ import numpy as np
 OUT = Path(os.environ.get("SD_OUT", "/tmp")) / "style" / "protocol"
 
 
-def feats(path):
+# ★ 判据尺度事先钉死，不扫。
+#
+# 2026-08-17：第一版全在 512² 像素尺度上算，row 19（橙子静物）成了反例 ——
+# 它 grad 0.041 / hf 0.867 全表最高，却在最差组里。回看原图：那张画有明显的
+# **画布织纹**。像素尺度的 grad/hf 被织纹主导，而织纹不是画风。
+#
+# 正确尺度由方法本身给定，不由我挑：StyleID 注入在 decoder 第 7-11 层，
+# SD@512 的 latent 是 64×64，那几层跑在 64×64 / 32×32 上。织纹在 64×64
+# 上会消失，平色块结构会留下。
+#
+# 所以 DECIDE_AT = 64。其他尺度只作透明报告，**不参与判定** —— 否则就是
+# 在多个尺度里挑一个过线的，那是 p-hacking。
+DECIDE_AT = 64
+SCALES = (512, 64, 32)
+
+
+def feats(path, size=DECIDE_AT):
     """几个互相独立的「有多少笔触」的量。全部在灰度图上算，与颜色无关。"""
     from PIL import Image
-    im = Image.open(path).convert("L").resize((512, 512), Image.LANCZOS)
+    im = Image.open(path).convert("L").resize((size, size), Image.LANCZOS)
     g = np.asarray(im, np.float64) / 255.0
 
     # ① 梯度能量：最直接的「边多不多」
@@ -73,16 +89,22 @@ def main():
     dS = z["style_gain"].mean(1)          # 每行的风格增益
     C = z["content_norm"].mean(1)         # 每行的归一化内容破坏
 
-    rows = [feats(d / "sty" / x["file"]) for x in man["style"]]
     keys = ["grad", "hf", "flat", "lap"]
-    X = {k: np.array([r[k] for r in rows]) for k in keys}
-
-    print(f"seed {a.seed}: {len(rows)} 张 style 图\n")
-    print(f"{'指标':<6} {'与 ΔS 的 r':>12} {'与内容破坏的 r':>16}")
-    for k in keys:
-        rs = np.corrcoef(X[k], dS)[0, 1]
-        rc = np.corrcoef(X[k], C)[0, 1]
-        print(f"{k:<6} {rs:>12.3f} {rc:>16.3f}")
+    print(f"seed {a.seed}: {len(man['style'])} 张 style 图")
+    print(f"判据尺度 = {DECIDE_AT}²（StyleID 注入层的 latent 分辨率，事先钉死）\n")
+    allX = {}
+    for sz in SCALES:
+        rows = [feats(d / "sty" / x["file"], sz) for x in man["style"]]
+        X = {k: np.array([r[k] for r in rows]) for k in keys}
+        allX[sz] = X
+        mark = " ★判据" if sz == DECIDE_AT else " (仅参考)"
+        print(f"── 尺度 {sz}²{mark}")
+        print(f"   {'指标':<6} {'与 ΔS 的 r':>12} {'与内容破坏的 r':>16}")
+        for k in keys:
+            print(f"   {k:<6} {np.corrcoef(X[k], dS)[0,1]:>12.3f}"
+                  f" {np.corrcoef(X[k], C)[0,1]:>16.3f}")
+    X = allX[DECIDE_AT]
+    print()
 
     print(f"\n按 ΔS 排序的两端（看指标是否跟着单调走）：")
     o = np.argsort(dS)
@@ -104,8 +126,10 @@ def main():
         print("→ 有倾向但不够硬。需要更多 style 图（换 seed 扩样本）或更好的属性。")
     else:
         print("→ **看图得到的假设没有被数据支持。** 别硬套，回去重新看图。")
-    json.dump({k: X[k].tolist() for k in keys} | {"dS": dS.tolist(),
-              "content": C.tolist()},
+    json.dump({"decide_at": DECIDE_AT,
+               "scales": {str(sz): {k: allX[sz][k].tolist() for k in keys}
+                          for sz in SCALES},
+               "dS": dS.tolist(), "content": C.tolist()},
               open(d / "why.json", "w"), ensure_ascii=False, indent=2)
 
 

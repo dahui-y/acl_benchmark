@@ -280,10 +280,10 @@ def _extract(root, want, tag="MS-COCO", min_side=0):
     stem = "style" if tag == "WikiArt" else "content"
     drop = [0]
 
-    def _save(im, i, sub=None):
+    def _save(im, i, sub=None, suf=""):
         d = OUT / sub if sub else OUT
         d.mkdir(parents=True, exist_ok=True)
-        im.convert("RGB").save(d / f"{stem}_{i:03d}.png")
+        im.convert("RGB").save(d / f"{stem}_{i:03d}{suf}.png")
 
     imgs = [f for f in root.rglob("*") if f.suffix.lower() in exts]
     if imgs:
@@ -348,11 +348,18 @@ def _extract(root, want, tag="MS-COCO", min_side=0):
         # 2026-08-17：第一版把它扔了，于是解出来是个**扁平目录**，
         # 而 protocol.py 靠父目录名做「每位艺术家最多一张」的去重 ——
         # 分组数塌成 1，40 张 style 静默变成 1 张。标签是现成的，不能扔。
-        # 轴的顺序有讲究：对风格迁移，正确的分组是**画派**（27 类）而不是
-        # 画家。而且 huggan/wikiart 的 artist 有 58% 是标签 0「Unknown」，
-        # 按它分组会得到一个巨大的杂桶 + 一堆小桶。
-        lab = next((c for c in t.column_names
-                    if c.lower() in ("style", "artist", "label", "genre")), None)
+        # 轴的顺序有讲究：对风格迁移，正确的分组是**画派**而不是画家。
+        #
+        # 2026-08-17 二次订正：上一版写成
+        #     next(c for c in t.column_names if c.lower() in ("style","artist",...))
+        # —— 遍历的是**表的列顺序**（image, artist, genre, style），
+        # 所以谁在表里靠前谁赢，偏好列表根本没生效，实跑选中的是 artist。
+        # 现在遍历偏好列表本身。
+        low = {c.lower(): c for c in t.column_names}
+        lab = next((low[k] for k in ("style", "artist", "label", "genre")
+                    if k in low), None)
+        # 画家单独留一份：分组用画派，文件名带画家，两个轴都能事后查。
+        art = low.get("artist") if lab and lab.lower() != "artist" else None
         n = t.num_rows
         idx = list(range(n))
         # 一个分片可能有上万行，等间隔取，别只取开头 —— WikiArt 的分片
@@ -362,12 +369,15 @@ def _extract(root, want, tag="MS-COCO", min_side=0):
             idx = [int(i * step) for i in range(want * 4)]
         # take() 之后再 to_pylist：整表 to_pylist 会把 304MB 的图全解进内存，
         # 而我们只要其中 want*4 行。
-        sel = t.select([col] + ([lab] if lab else [])).take(idx)
+        cols = [col] + ([lab] if lab else []) + ([art] if art else [])
+        sel = t.select(cols).take(idx)
         imcol = sel.column(col).to_pylist()
         labcol = sel.column(lab).to_pylist() if lab else None
+        artcol = sel.column(art).to_pylist() if art else None
         idx = range(len(imcol))
         if lab:
-            print(f"   标签列 = {lab}（{len(set(labcol))} 个取值）→ 按它分子目录")
+            print(f"   分组轴 = {lab}（{len(set(labcol))} 个取值）→ 子目录"
+                  + (f"；画家 {len(set(artcol))} 个取值 → 写进文件名" if artcol else ""))
         else:
             print(f"   !! 没有 artist/style 标签列：{t.column_names[:8]}"
                   f" —— 解出来会是扁平目录，protocol.py 的去重会失效")
@@ -381,7 +391,8 @@ def _extract(root, want, tag="MS-COCO", min_side=0):
                 drop[0] += 1
                 continue
             sub = f"g{labcol[i]}" if labcol is not None else None
-            _save(im, got, sub); got += 1
+            suf = f"_a{artcol[i]}" if artcol is not None else ""
+            _save(im, got, sub, suf); got += 1
             if got >= want:
                 _src(tag, f"parquet {f.name} under {root}"
                           + (f"，按 {lab} 分子目录" if lab else ""),

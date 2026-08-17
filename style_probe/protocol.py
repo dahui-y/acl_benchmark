@@ -47,6 +47,7 @@
 
 import argparse
 import json
+import re
 import os
 import shutil
 import sys
@@ -170,7 +171,15 @@ def cmd_draw(args):
     if sd is None:
         sys.exit("!! WikiArt 池缺失")
 
-    rng = np.random.default_rng(args.seed)
+    # ★ style 与 content 用**独立的**随机流。
+    #
+    # 2026-08-17：原来共用一个 rng，style 抽样先消耗它，于是分组结构一变，
+    # 流的位置就变，content 跟着换 —— 同一个 --seed 0，扁平目录时 content
+    # 上采 19/20，分子目录后变成 20/20，因为抽到的 20 张根本不是同一批。
+    # 这会把「换 style 池」和「换 content」绑死，而 option C 的全部目的
+    # 就是把这两种方差分开量。
+    rng = np.random.default_rng([args.seed, 0])       # style 侧
+    rng_c = np.random.default_rng([args.seed, 1])     # content 侧
     # style 侧要按组均衡，避免 40 张全来自同一人 / 同一画派（--scan 的教训）。
     #
     # 2026-08-17 两次订正：
@@ -205,7 +214,7 @@ def cmd_draw(args):
         per[f.parent.name] = per.get(f.parent.name, 0) + 1
     print(f"  style 分组：{len(per)} 组覆盖 {len(styles)} 张，"
           f"每组最多 {max(per.values())} 张")
-    contents = [cf[i] for i in sorted(rng.permutation(len(cf))[:N_CONTENT])]
+    contents = [cf[i] for i in sorted(rng_c.permutation(len(cf))[:N_CONTENT])]
 
     d = OUT / f"seed{args.seed}"
     (d / "sty").mkdir(parents=True, exist_ok=True)
@@ -240,7 +249,12 @@ def cmd_draw(args):
            "style": [], "content": []}
     for i, f in enumerate(styles):
         up = prep(f, d / "sty" / f"{i:02d}_{f.parent.name}.png")
-        man["style"].append({"i": i, "src": str(f), "artist": f.parent.name, "upscaled": up})
+        # 分组轴现在是画派（子目录 g<style>），画家写在文件名 _a<artist> 里。
+        # 两个都记 —— 逐 (style, content) 找失效时要能问「是这个画派难还是
+        # 这个画家难」，而这个问题只有两个标签都在 manifest 里才答得了。
+        m = re.search(r"_a(\d+)$", f.stem)
+        man["style"].append({"i": i, "src": str(f), "group": f.parent.name,
+                             "artist": m.group(1) if m else None, "upscaled": up})
     for i, f in enumerate(contents):
         up = prep(f, d / "cnt" / f"{i:02d}.png")
         man["content"].append({"i": i, "src": str(f), "upscaled": up})

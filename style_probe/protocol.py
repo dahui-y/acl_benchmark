@@ -217,8 +217,15 @@ def cmd_draw(args):
     contents = [cf[i] for i in sorted(rng_c.permutation(len(cf))[:N_CONTENT])]
 
     d = OUT / f"seed{args.seed}"
-    (d / "sty").mkdir(parents=True, exist_ok=True)
-    (d / "cnt").mkdir(parents=True, exist_ok=True)
+    # ★ 先清空再写。
+    # 2026-08-17：--draw 只覆盖同名文件、不清目录，六次抽样的 style 图
+    # 全堆在 sty/ 里（191 张，含 256px wikiart_ref 那批和扁平目录那批），
+    # 而 --gen 是 glob 整个目录 —— 于是跑出 3820 张，把已经判死的版本
+    # 全部重新生成了一遍。目录必须与 manifest 一一对应。
+    for sub in ("sty", "cnt"):
+        if (d / sub).exists():
+            shutil.rmtree(d / sub)
+        (d / sub).mkdir(parents=True, exist_ok=True)
 
     def prep(src, dst):
         """协议是 center-crop 到 512²。源图小于 512 时只能先上采再裁 ——
@@ -248,16 +255,20 @@ def cmd_draw(args):
                             if (sd / "SOURCE.txt").exists() else "未标注（来源不明）"),
            "style": [], "content": []}
     for i, f in enumerate(styles):
-        up = prep(f, d / "sty" / f"{i:02d}_{f.parent.name}.png")
+        name = f"{i:02d}_{f.parent.name}.png"
+        up = prep(f, d / "sty" / name)
         # 分组轴现在是画派（子目录 g<style>），画家写在文件名 _a<artist> 里。
         # 两个都记 —— 逐 (style, content) 找失效时要能问「是这个画派难还是
         # 这个画家难」，而这个问题只有两个标签都在 manifest 里才答得了。
         m = re.search(r"_a(\d+)$", f.stem)
-        man["style"].append({"i": i, "src": str(f), "group": f.parent.name,
+        # file 是**准备好的**文件名。--gen 必须按它取，不能 glob 目录。
+        man["style"].append({"i": i, "src": str(f), "file": name,
+                             "group": f.parent.name,
                              "artist": m.group(1) if m else None, "upscaled": up})
     for i, f in enumerate(contents):
         up = prep(f, d / "cnt" / f"{i:02d}.png")
-        man["content"].append({"i": i, "src": str(f), "upscaled": up})
+        man["content"].append({"i": i, "src": str(f), "file": f"{i:02d}.png",
+                               "upscaled": up})
     (d / "manifest.json").write_text(json.dumps(man, ensure_ascii=False, indent=2))
 
     # LAION 是网图（不是策展过的 COCO），可能混进文字图/logo/拼贴。
@@ -301,8 +312,26 @@ def cmd_gen(args):
           "P": {}, "arm": "full", "calls": 0, "applied": 0}
     S.install(pipe, st, args.where)
 
-    styles = sorted((d / "sty").glob("*.png"))
-    conts = sorted((d / "cnt").glob("*.png"))
+    # ★ 按 manifest 取，**不 glob 目录**（见 --draw 里那条注释）。
+    styles = [d / "sty" / x["file"] for x in man["style"]] \
+        if all("file" in x for x in man["style"]) \
+        else sorted((d / "sty").glob("*.png"))
+    conts = [d / "cnt" / x["file"] for x in man["content"]] \
+        if all("file" in x for x in man["content"]) \
+        else sorted((d / "cnt").glob("*.png"))
+    miss = [p for p in styles + conts if not p.exists()]
+    if miss:
+        sys.exit(f"!! manifest 里有 {len(miss)} 个文件不在盘上，"
+                 f"例：{miss[0].name} —— 重跑 --draw --seed {args.seed}")
+    # 陈旧输出：上一版 --gen 会 glob 到历次抽样残留的 style 图，跑出 3820 张。
+    # 这里把不属于本次抽样的 tar 文件挪走（不删，留着可查），只留 n_s*n_c 张。
+    want = {f"{sp.stem}__{cp.stem}.png" for sp in styles for cp in conts}
+    stale = [f for f in tar.glob("*.png") if f.name not in want]
+    if stale:
+        old = d / "tar_stale"; old.mkdir(exist_ok=True)
+        for f in stale:
+            f.rename(old / f.name)
+        print(f"  挪走 {len(stale)} 张不属于本次抽样的旧输出 → {old}")
     import time
     t0 = time.time(); done = 0
     for si, sp in enumerate(styles):

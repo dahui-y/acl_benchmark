@@ -45,6 +45,41 @@ def _files(rid):
     return list_repo_files(rid, repo_type="dataset")
 
 
+def _sizes(rid):
+    """{路径: 字节数}。没有 metadata 的返回 0。
+
+    2026-08-17：上一轮 parquet 分支写的是 `pqs[:1]` —— 「下第一个分片」。
+    detection-datasets/coco 排序后第一个是 `data/train-00000-of-00040-*.parquet`，
+    **485 MB**，而我们只要 20 张图。进度条不动的直接原因就是它太大。
+    分片大小差异是**可查的**（siblings 带 lfs.size），不该靠排序碰运气。
+    """
+    from huggingface_hub import HfApi
+    try:
+        info = HfApi().dataset_info(rid, files_metadata=True)
+    except Exception as e:
+        print(f"   (取不到文件大小 {type(e).__name__}，退化为按名字选) ")
+        return {}
+    out = {}
+    for s in info.siblings or []:
+        sz = getattr(s, "size", None)
+        lfs = getattr(s, "lfs", None)
+        if sz is None and lfs is not None:
+            sz = lfs.get("size") if isinstance(lfs, dict) else getattr(lfs, "size", None)
+        out[s.rfilename] = sz or 0
+    return out
+
+
+def _pick_parquet(rid, pqs):
+    """挑**最小的**分片，同分优先 val/test（协议要的就是 COCO val）。
+    返回 (路径, 字节数)。"""
+    sz = _sizes(rid)
+    def key(f):
+        n = f.lower()
+        return (0 if ("val" in n or "test" in n) else 1, sz.get(f, 1 << 62), f)
+    best = min(pqs, key=key)
+    return best, sz.get(best, 0)
+
+
 def cmd_ls(args):
     _endpoint(args)
     rid = args.repo or "rafaelpadilla/coco2017"
@@ -76,6 +111,8 @@ def _endpoint(args):
     所以：`--official` 显式清掉 HF_ENDPOINT 走官方站。
     """
     os.environ["HF_HUB_OFFLINE"] = "0"
+    # 卡住要能自己死掉。默认 10s 太短会误杀慢代理，30s 足够区分「慢」和「不动」。
+    os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "30")
     if args.official:
         os.environ.pop("HF_ENDPOINT", None)
         print("HF_ENDPOINT = (清掉，走官方 huggingface.co)")
@@ -113,8 +150,14 @@ def cmd_hf(args):
             pats = zips[:1]
             print(f"   {len(fs)} 文件，zip {len(zips)} 个 → 只下 {pats[0]}")
         elif pqs:
-            pats = pqs[:1]                          # parquet：只下第一个分片
-            print(f"   {len(fs)} 文件，parquet {len(pqs)} 个 → 只下 {pats[0]}")
+            one, nb = _pick_parquet(rid, pqs)       # parquet：挑**最小**的那个分片
+            pats = [one]
+            mb = f"{nb/1e6:.0f} MB" if nb else "大小未知"
+            print(f"   {len(fs)} 文件，parquet {len(pqs)} 个 → 挑最小的 {one}（{mb}）")
+            if nb > args.max_mb * 1e6:
+                print(f"   ✗ 最小的分片也有 {mb} > --max-mb {args.max_mb}，跳过。"
+                      f"为 20 张图下这么大不值。\n")
+                continue
         else:
             print(f"   !! 既没有散图也没有 parquet。后缀：",
                   {Path(f).suffix for f in fs[:40]}, "\n")
@@ -252,6 +295,8 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--n", type=int, default=50, help="取几张")
     ap.add_argument("--repo", default=None, help="指定 HF dataset repo id")
+    ap.add_argument("--max-mb", type=int, default=200,
+                    help="单个分片超过这个大小就跳过（默认 200MB）")
     ap.add_argument("--official", action="store_true",
                     help="清掉 HF_ENDPOINT，走官方 huggingface.co 而非镜像")
     g = ap.add_mutually_exclusive_group(required=True)

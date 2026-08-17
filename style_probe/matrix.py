@@ -1,0 +1,200 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+逐 (style, content) 的失效矩阵 —— playbook 第 3 步的仪器。
+
+    ArtFID 是**集合级**的一个数：800 张算一个 FID。它能告诉我们「整体好不好」，
+    答不了「在哪坏」。而第 3 步要的恰恰是后者：一个**具体、可命名**的失效。
+
+    所以这里把 40×20 的每一格单独量：
+
+      · 内容项 = LPIPS(stylized, content)      —— ArtFID 的内容项本来就是它
+      · 风格项 = 1 - cos(f(stylized), f(style)) —— f 是 **art_inception**，
+        也就是 ArtFID 的 FID 项所用的同一组特征，只是从集合级降到逐对级
+
+    两项都不是新造的尺子，都是在位者自己评测代码里的组件。这一点重要：
+    如果失效只在我们自己发明的度量下才出现，那它多半是度量的性质而不是
+    方法的性质 —— 前面已经因此死过一次（GroundingDINO 那个）。
+
+    ⚠️ 没有用 StyleSSP 的 image_metrics.GramLoss。它的 gram_matrix 把
+    (C,H,W) 压成一维再做 bmm，返回标量，等于只比较特征图总能量，丢掉全部
+    通道间相关 —— 而通道相关就是风格的定义。不改别人的评测代码，绕开它。
+
+关键读数是**方差分解**：把矩阵 M[i,j] 拆成
+
+    M = 总均值 + 画风效应(i) + 内容效应(j) + 残差(i,j)
+
+三项各占多少方差，直接回答止损问题：
+
+  · 画风效应大  → 「某类画风系统性地坏」，是可命名的失效，进第 4 步
+  · 内容效应大  → 「某类 content 系统性地坏」，同样可命名
+  · 残差独大    → 失效是散的，**没有可写进 problem statement 的东西**，方向停
+
+用法：
+    python style_probe/matrix.py --seed 0
+    python style_probe/matrix.py --seed 0 --seeds 0 1 2   # 加噪声地板
+"""
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+
+import numpy as np
+
+REPO = Path(__file__).resolve().parent.parent
+OUT = Path(os.environ.get("SD_OUT", "/tmp")) / "style" / "protocol"
+EVAL = REPO / "help_code" / "StyleSSP" / "evaluation"
+
+
+def _load_incep(device):
+    """art_inception —— ArtFID 的 FID 项用的那一个，不是 ImageNet inception。"""
+    sys.path.insert(0, str(EVAL))
+    import torch
+    import inception as I
+    import utils as U
+    ck = U.download("https://huggingface.co/matthias-wright/art_inception/"
+                    "resolve/main/art_inception.pth")
+    m = I.Inception3().to(device)
+    m.load_state_dict(torch.load(ck, map_location=device), strict=False)
+    m.eval()
+    return m
+
+
+def _feats(model, paths, device, bs=25):
+    """[N, 2048]。变换与 eval_artfid.get_activations 一致：Resize(512) + ToTensor。"""
+    import torch
+    from PIL import Image
+    from torchvision.transforms import Compose, Resize, ToTensor
+    tf = Compose([Resize(512), ToTensor()])
+    out = np.empty((len(paths), 2048), np.float64)
+    for s in range(0, len(paths), bs):
+        b = torch.stack([tf(Image.open(p).convert("RGB")) for p in paths[s:s + bs]])
+        with torch.no_grad():
+            f = model(b.to(device), return_features=True)
+        out[s:s + len(b)] = f.cpu().numpy()
+    return out
+
+
+def _lpips(paths_a, paths_b, device, bs=20):
+    import torch
+    from PIL import Image
+    from torchvision.transforms import Compose, Resize, ToTensor
+    sys.path.insert(0, str(EVAL))
+    import image_metrics as M
+    met = M.LPIPS().to(device)
+    tf = Compose([Resize(512), ToTensor()])
+    out = np.empty(len(paths_a), np.float64)
+    for s in range(0, len(paths_a), bs):
+        a = torch.stack([tf(Image.open(p).convert("RGB")) for p in paths_a[s:s + bs]])
+        b = torch.stack([tf(Image.open(p).convert("RGB")) for p in paths_b[s:s + bs]])
+        with torch.no_grad():
+            d = met(a.to(device), b.to(device))
+        out[s:s + len(a)] = d.flatten().cpu().numpy()
+    return out
+
+
+def decompose(M, name):
+    """二因素方差分解。M[i,j]：i = style，j = content。"""
+    g = M.mean()
+    ri = M.mean(1) - g                     # 画风效应
+    cj = M.mean(0) - g                     # 内容效应
+    res = M - g - ri[:, None] - cj[None, :]
+    v = M.var()
+    vs, vc, vr = ri.var(), cj.var(), res.var()
+    tot = vs + vc + vr
+    print(f"\n── {name}  均值 {g:.4f}  标准差 {M.std():.4f}")
+    print(f"   方差分解：画风 {vs/tot*100:5.1f}%   内容 {vc/tot*100:5.1f}%"
+          f"   残差 {vr/tot*100:5.1f}%     (总方差 {v:.2e})")
+    o = np.argsort(ri)
+    print(f"   最差 3 个画风(行)：{[(int(i), round(float(ri[i]),4)) for i in o[-3:][::-1]]}")
+    print(f"   最好 3 个画风(行)：{[(int(i), round(float(ri[i]),4)) for i in o[:3]]}")
+    o = np.argsort(cj)
+    print(f"   最差 3 个 content：{[(int(j), round(float(cj[j]),4)) for j in o[-3:][::-1]]}")
+    return dict(grand=float(g), style_eff=ri.tolist(), cnt_eff=cj.tolist(),
+                frac=dict(style=float(vs/tot), content=float(vc/tot),
+                          resid=float(vr/tot)))
+
+
+def sheet(M, path, title):
+    """把矩阵画成热图。看图比看数快 —— 结构是不是块状，一眼就知道。"""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(8, 12))
+    im = ax.imshow(M, aspect="auto", cmap="magma")
+    ax.set_xlabel("content j"); ax.set_ylabel("style i"); ax.set_title(title)
+    fig.colorbar(im); fig.tight_layout(); fig.savefig(path, dpi=110)
+    plt.close(fig)
+
+
+def run(seed, args):
+    import torch
+    d = OUT / f"seed{seed}"
+    man = json.loads((d / "manifest.json").read_text())
+    sty = [d / "sty" / x["file"] for x in man["style"]]
+    cnt = [d / "cnt" / x["file"] for x in man["content"]]
+    ns, nc = len(sty), len(cnt)
+    tar = [[d / "tar" / f"{s.stem}__{c.stem}.png" for c in cnt] for s in sty]
+    miss = [p for row in tar for p in row if not p.exists()]
+    if miss:
+        sys.exit(f"!! 缺 {len(miss)} 张 stylized，例：{miss[0].name}"
+                 f" —— 先跑 --gen --seed {seed}")
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    flat = [p for row in tar for p in row]
+
+    print(f"seed {seed}: {ns}×{nc} = {len(flat)} 格，device={dev}")
+    m = _load_incep(dev)
+    f_t = _feats(m, flat, dev).reshape(ns, nc, -1)
+    f_s = _feats(m, sty, dev)
+    del m
+    torch.cuda.empty_cache()
+    # 逐对风格距离：与 style 参考图的 art_inception 特征的余弦距离
+    a = f_t / np.linalg.norm(f_t, axis=2, keepdims=True)
+    b = f_s / np.linalg.norm(f_s, axis=1, keepdims=True)
+    S = 1.0 - np.einsum("ijk,ik->ij", a, b)
+
+    C = _lpips(flat, [c for _ in sty for c in cnt], dev).reshape(ns, nc)
+
+    np.savez(d / "matrix.npz", style_dist=S, content_lpips=C,
+             sty=[str(p) for p in sty], cnt=[str(p) for p in cnt])
+    sheet(S, d / "matrix_style.png", f"seed{seed} style distance (1-cos, art_inception)")
+    sheet(C, d / "matrix_content.png", f"seed{seed} content LPIPS")
+    r = {"style": decompose(S, "风格距离 1-cos"),
+         "content": decompose(C, "内容 LPIPS")}
+    (d / "matrix.json").write_text(json.dumps(r, ensure_ascii=False, indent=2))
+    print(f"\n→ {d/'matrix.npz'} / matrix_style.png / matrix_content.png")
+    return S, C
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--seeds", type=int, nargs="*", default=None,
+                    help="给多个 seed 时，额外报**噪声地板**：同一格在不同抽样"
+                         "下的差。任何小于地板的结构都不是结构。")
+    a = ap.parse_args()
+    if a.seeds:
+        Ss, Cs = [], []
+        for s in a.seeds:
+            S, C = run(s, a)
+            Ss.append(S); Cs.append(C)
+        # 不同 seed 抽到的是不同的 (style, content)，格子对不上 ——
+        # 所以地板只能比**效应量的分布**，不能逐格相减。这一点必须说清楚，
+        # 否则会把「换了一批画」误当成「同一批画的噪声」。
+        print("\n── 跨 seed（注意：不同 seed 是不同的画，格子不可逐一对应）")
+        for nm, arr in (("风格距离", Ss), ("内容 LPIPS", Cs)):
+            gm = [float(x.mean()) for x in arr]
+            sd = [float(x.std()) for x in arr]
+            print(f"   {nm}：均值 {['%.4f'%g for g in gm]}  "
+                  f"标准差 {['%.4f'%s for s in sd]}")
+            print(f"     → 抽样引起的均值波动 = {np.std(gm):.4f}"
+                  f"（任何小于它的「改进」都读不出来）")
+    else:
+        run(a.seed, a)
+
+
+if __name__ == "__main__":
+    main()

@@ -294,6 +294,37 @@ def cmd_draw(args):
     print(f"  manifest: {d/'manifest.json'}")
 
 
+def cmd_align(args):
+    """eval_artfid.py 是**按排序后逐一配对**的，且断言三边张数相等
+    （compute_content_distance 里的 assert）。我们的 tar 有 800 张而
+    cnt/sty 各只有 20/40 张，直接跑会断言失败。
+
+    这里造两个对齐目录：cnt_x / sty_x，各 800 个软链，命名与 tar 完全相同，
+    于是三边 sorted() 之后逐位对应。软链不占空间，也不复制像素。
+    """
+    d = OUT / f"seed{args.seed}"
+    man = json.loads((d / "manifest.json").read_text())
+    sty = [d / "sty" / x["file"] for x in man["style"]]
+    cnt = [d / "cnt" / x["file"] for x in man["content"]]
+    for nm in ("sty_x", "cnt_x"):
+        if (d / nm).exists():
+            shutil.rmtree(d / nm)
+        (d / nm).mkdir(parents=True)
+    n = 0
+    for sp in sty:
+        for cp in cnt:
+            name = f"{sp.stem}__{cp.stem}.png"
+            if not (d / "tar" / name).exists():
+                sys.exit(f"!! tar 里缺 {name} —— 先跑 --gen --seed {args.seed}")
+            (d / "sty_x" / name).symlink_to(sp.resolve())
+            (d / "cnt_x" / name).symlink_to(cp.resolve())
+            n += 1
+    print(f"对齐 {n} 组 → {d/'sty_x'} / {d/'cnt_x'}")
+    print(f"\n跑 ArtFID：")
+    print(f"  cd {REPO/'help_code'/'StyleSSP'/'evaluation'}")
+    print(f"  python eval_artfid.py --sty {d/'sty_x'} --cnt {d/'cnt_x'} --tar {d/'tar'}")
+
+
 def cmd_gen(args):
     """跑 StyleID 式注入，800 张。直接复用 subspace_look 的 full 路径。"""
     import torch
@@ -382,9 +413,12 @@ def main():
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--check", action="store_true")
     g.add_argument("--draw", action="store_true")
+    g.add_argument("--align", action="store_true",
+                   help="造 sty_x/cnt_x 对齐目录，供 eval_artfid.py 用")
     g.add_argument("--gen", action="store_true")
     a = ap.parse_args()
-    (cmd_check if a.check else cmd_draw if a.draw else cmd_gen)(a)
+    (cmd_check if a.check else cmd_draw if a.draw else
+     cmd_align if a.align else cmd_gen)(a)
 
 
 if __name__ == "__main__":

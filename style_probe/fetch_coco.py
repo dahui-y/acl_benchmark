@@ -46,8 +46,7 @@ def _files(rid):
 
 
 def cmd_ls(args):
-    os.environ["HF_HUB_OFFLINE"] = "0"
-    os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+    _endpoint(args)
     rid = args.repo or "rafaelpadilla/coco2017"
     try:
         fs = _files(rid)
@@ -64,11 +63,34 @@ def cmd_ls(args):
         print(f"    {f}")
 
 
-def cmd_hf(args):
+def _endpoint(args):
+    """2026-08-16 订正：默认走 hf-mirror 是**上一个 session 对 models 的结论**，
+    我把它当成对 datasets 也成立的前提，那是错的。
+
+    证据：第一次 `huggingface-cli login` 失败时报的是
+      `401 ... for url: https://huggingface.co/api/whoami-v2 (Request ID: ...)`
+    —— **那是官方站返回的真实 401，带 Request ID**，说明这台机器能直连
+    huggingface.co（走 OpenBayes 的代理）。既然直连通，就不该硬塞一个
+    对 dataset LFS 不完整的镜像。
+
+    所以：`--official` 显式清掉 HF_ENDPOINT 走官方站。
+    """
     os.environ["HF_HUB_OFFLINE"] = "0"
-    os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
-    print(f"HF_ENDPOINT = {os.environ['HF_ENDPOINT']}")
-    print(f"HF_HOME     = {os.environ.get('HF_HOME','(未设)')}\n")
+    if args.official:
+        os.environ.pop("HF_ENDPOINT", None)
+        print("HF_ENDPOINT = (清掉，走官方 huggingface.co)")
+    else:
+        os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+        print(f"HF_ENDPOINT = {os.environ['HF_ENDPOINT']}")
+    print(f"HF_HOME     = {os.environ.get('HF_HOME','(未设)')}")
+    for k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+        if os.environ.get(k):
+            print(f"{k:12s}= {os.environ[k]}")
+    print()
+
+
+def cmd_hf(args):
+    _endpoint(args)
     from huggingface_hub import snapshot_download
 
     cands = [(args.repo, None)] if args.repo else CANDIDATES
@@ -230,6 +252,8 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--n", type=int, default=50, help="取几张")
     ap.add_argument("--repo", default=None, help="指定 HF dataset repo id")
+    ap.add_argument("--official", action="store_true",
+                    help="清掉 HF_ENDPOINT，走官方 huggingface.co 而非镜像")
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--ls", action="store_true", help="只列仓库文件，不下载")
     g.add_argument("--hf", action="store_true")

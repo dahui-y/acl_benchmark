@@ -374,30 +374,49 @@ def _extract(root, want, tag="MS-COCO", min_side=0):
         imcol = sel.column(col).to_pylist()
         labcol = sel.column(lab).to_pylist() if lab else None
         artcol = sel.column(art).to_pylist() if art else None
-        idx = range(len(imcol))
         if lab:
             print(f"   分组轴 = {lab}（{len(set(labcol))} 个取值）→ 子目录"
                   + (f"；画家 {len(set(artcol))} 个取值 → 写进文件名" if artcol else ""))
+            print(f"   候选 {len(imcol)}/{n} 行（等间隔），再从通过筛选的里等间隔取 {want}")
         else:
             print(f"   !! 没有 artist/style 标签列：{t.column_names[:8]}"
                   f" —— 解出来会是扁平目录，protocol.py 的去重会失效")
-        for i in idx:
-            v = imcol[i]
+        # 两趟。
+        # 2026-08-17：一趟版是「按行序存，够 want 就 return」，于是等间隔
+        # 取的 want*4 个候选里只用到**靠前的 want 个** —— 铺开被截断抵消。
+        # huggan/wikiart 按画家排序存，取前 1/4 就是只取画家序列的前 1/4：
+        # 实跑 40 张 style 只落在 15 个画家上。
+        # 第一趟只读图片头（PIL 的 .size 不解码像素，很便宜）做筛选，
+        # 第二趟从**通过筛选的**里等间隔取 want 张。
+        ok = []
+        for j in range(len(imcol)):
+            v = imcol[j]
             b = v.get("bytes") if isinstance(v, dict) else v
             if not isinstance(b, (bytes, bytearray)):
                 continue
-            im = Image.open(io.BytesIO(b))
+            try:
+                im = Image.open(io.BytesIO(b))
+            except Exception:
+                continue
             if min_side and not _keep(im, min_side):
                 drop[0] += 1
                 continue
-            sub = f"g{labcol[i]}" if labcol is not None else None
-            suf = f"_a{artcol[i]}" if artcol is not None else ""
+            ok.append(j)
+        if len(ok) > want:
+            st = len(ok) / want
+            ok = [ok[int(k * st)] for k in range(want)]
+        for j in ok:
+            v = imcol[j]
+            b = v.get("bytes") if isinstance(v, dict) else v
+            im = Image.open(io.BytesIO(b))
+            sub = f"g{labcol[j]}" if labcol is not None else None
+            suf = f"_a{artcol[j]}" if artcol is not None else ""
             _save(im, got, sub, suf); got += 1
-            if got >= want:
-                _src(tag, f"parquet {f.name} under {root}"
-                          + (f"，按 {lab} 分子目录" if lab else ""),
-                     got, drop[0], min_side)
-                return got
+        if got:
+            _src(tag, f"parquet {f.name} under {root}"
+                      + (f"，按 {lab} 分子目录" if lab else ""),
+                 got, drop[0], min_side)
+            return got
     if got:
         _src(tag, f"parquet under {root}", got, drop[0], min_side)
     return got

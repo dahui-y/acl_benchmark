@@ -175,28 +175,55 @@ def cmd_crop(args):
 # ─────────────────────────────────────────────────────────────────────
 
 def cmd_scan(args):
-    """我看不到服务器的文件系统，而**难/易分组是这个实验的核心设计**，
-    必须先看到图才能分。所以这一步的产出是一张带编号的接触图，
-    人看完把编号告诉我，再填进 PICKS。
+    """清点 WikiArt 目录 + 拼带编号的接触图，供人挑难/易两组。
 
-    分组判据（写在这里，免得看图时临时编）：
-      hard = 笔触/渲染方式**逐区域明显不同**（留白天空 vs 干笔山石；平涂 vs 细线）
-      easy = 全图渲染方式**基本一致**（均匀花纹、单一线条、通幅平涂）
+    2026-08-16 订正：第一版用 `sorted(rglob)` 取前 N 张 —— 25700 张分在
+    **257 个艺术家目录**里，前 64 张全是同一个人。**接触图里只有一个艺术家，
+    挑不出任何多样性。** 现在改成**每个艺术家抽一张**，横跨 257 人。
+
+    同时报分辨率分布：首张是 256×256，如果整库都是这个尺寸，
+    **笔触细节可能已经不在图里**，那这批图测不出核心技术反对
+    （逐区域笔触差异），阴性结果会无法归因。这一条必须先看清楚。
     """
     from PIL import Image, ImageDraw
     if not WIKIART.exists():
         sys.exit(f"!! 找不到 {WIKIART}\n   用 WIKIART=<路径> 覆盖")
     exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-    files = sorted(f for f in WIKIART.rglob("*") if f.suffix.lower() in exts)
-    if not files:
+    by_artist = {}
+    for f in WIKIART.rglob("*"):
+        if f.suffix.lower() in exts:
+            by_artist.setdefault(f.parent.name, []).append(f)
+    if not by_artist:
         sys.exit(f"!! {WIKIART} 下没有图片")
-    print(f"{WIKIART}\n  {len(files)} 张")
-    subs = sorted({f.parent.relative_to(WIKIART).as_posix() for f in files})
-    print(f"  子目录 {len(subs)} 个：{subs[:8]}{' …' if len(subs) > 8 else ''}")
-    im0 = Image.open(files[0])
-    print(f"  首张 {files[0].name}  {im0.size}  {im0.mode}")
+    total = sum(len(v) for v in by_artist.values())
+    print(f"{WIKIART}\n  {total} 张 / {len(by_artist)} 个艺术家目录")
 
-    files = files[:args.scan_max]
+    # ── 分辨率普查：随机抽样，别只看首张 ──────────────────────────
+    rng = np.random.default_rng(0)
+    artists = sorted(by_artist)
+    probe = [by_artist[a][0] for a in artists]
+    idx = rng.choice(len(probe), min(args.probe, len(probe)), replace=False)
+    sizes = {}
+    for i in idx:
+        try:
+            sizes[Image.open(probe[i]).size] = sizes.get(Image.open(probe[i]).size, 0) + 1
+        except Exception:
+            pass
+    print(f"  分辨率普查（抽 {len(idx)} 张）：")
+    for sz, n in sorted(sizes.items(), key=lambda kv: -kv[1])[:6]:
+        print(f"    {sz[0]}×{sz[1]}   {n} 张")
+    mx = max((max(sz) for sz in sizes), default=0)
+    if mx <= 320:
+        print(f"  ⚠️ **最大边只有 {mx}px。** 笔触细节可能已经损失，"
+              f"再放大到 1024 喂 SDXL，\n"
+              f"     「逐区域笔触差异」这个我们要测的东西可能根本不在图里 ——"
+              f"\n     那样阴性结果无法归因（是假设错还是分辨率不够？）。"
+              f"**跑之前先决定这一条。**")
+
+    # ── 每个艺术家抽一张，横跨全部艺术家 ─────────────────────────
+    pick = rng.permutation(len(artists))[:args.scan_max]
+    files = [by_artist[artists[i]][0] for i in sorted(pick)]
+
     cell, pad, hdr = 200, 4, 16
     ncol = 8
     nrow = (len(files) + ncol - 1) // ncol
@@ -206,21 +233,21 @@ def cmd_scan(args):
     for i, f in enumerate(files):
         r, c = divmod(i, ncol)
         x, y = pad + c * (cell + pad), pad + r * (cell + hdr + pad)
-        dr.text((x + 2, y + 2), f"[{i}] {f.stem[:26]}", fill="black")
+        dr.text((x + 2, y + 2), f"[{i}] {f.parent.name[:24]}", fill="black")
         im = Image.open(f).convert("RGB"); im.thumbnail((cell, cell), Image.LANCZOS)
         sh.paste(im, (x, y + hdr))
     OUT.mkdir(parents=True, exist_ok=True)
     p = OUT / "wikiart_scan.png"
     sh.save(p)
     (OUT / "wikiart_files.json").write_text(json.dumps(
-        [str(f) for f in files], ensure_ascii=False, indent=2))
-    print(f"\n→ {p}   ({len(files)} 张，编号 0..{len(files)-1})")
-    print(f"→ {OUT/'wikiart_files.json'}（编号到路径的映射）")
+        {str(i): str(f) for i, f in enumerate(files)}, ensure_ascii=False, indent=2))
+    print(f"\n→ {p}   ({len(files)} 位艺术家各一张，编号 0..{len(files)-1})")
+    print(f"→ {OUT/'wikiart_files.json'}")
     print(f"\n把接触图贴出来，我按下面的判据挑 5–6 张 hard + 2 张 easy：")
     print(f"  hard = 笔触/渲染**逐区域明显不同**（留白天空 vs 干笔山石；平涂 vs 细线）")
     print(f"  easy = 全图渲染**基本一致**（均匀花纹、单一线条、通幅平涂）")
-    print(f"  ⚠️ 只挑 hard 的话，失败了分不清「假设错」还是「实现错」；"
-          f"\n     只挑 easy 的话，等于回避了核心技术反对。**两组都要。**")
+    print(f"  ⚠️ 两组都要 —— 只挑 hard，失败了分不清「假设错」还是「实现错」；"
+          f"\n     只挑 easy，等于回避了核心技术反对。")
 
 
 # 由 --scan 的接触图挑出来后填这里；空 = 仍用 teaser 裁的那批
@@ -578,7 +605,9 @@ def main():
     ap.add_argument("--content", default="horse")
     ap.add_argument("--cell", type=int, default=380)
     ap.add_argument("--scan-max", type=int, default=64,
-                    help="接触图最多放几张")
+                    help="接触图放几位艺术家（每人一张）")
+    ap.add_argument("--probe", type=int, default=200,
+                    help="分辨率普查抽样张数")
     ap.add_argument("--inset", type=float, default=0.03,
                     help="每格再往内缩的比例，吃掉拟合残差与边框")
     g = ap.add_mutually_exclusive_group(required=True)

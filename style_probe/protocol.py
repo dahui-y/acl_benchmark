@@ -171,13 +171,24 @@ def cmd_draw(args):
         sys.exit("!! WikiArt 池缺失")
 
     rng = np.random.default_rng(args.seed)
-    # style 每位艺术家最多取一张，避免 40 张全来自同一人（--scan 那次的教训）
+    # style 每位艺术家最多取一张，避免 40 张全来自同一人（--scan 那次的教训）。
+    #
+    # 2026-08-17：这条保护在**扁平目录**上会静默退化 —— 新下的 wikiart_full
+    # 200 张全在一个目录里，分组数 = 1，于是 40 张变成 1 张，而脚本照跑不误。
+    # 静默退化比报错危险得多，所以这里改成：分组不够就明说，然后按文件抽。
     by_artist = {}
     for f in sf:
         by_artist.setdefault(f.parent.name, []).append(f)
     artists = sorted(by_artist)
-    pick_a = rng.permutation(len(artists))[:N_STYLE]
-    styles = [sorted(by_artist[artists[i]])[0] for i in sorted(pick_a)]
+    if len(artists) >= N_STYLE:
+        pick_a = rng.permutation(len(artists))[:N_STYLE]
+        styles = [sorted(by_artist[artists[i]])[0] for i in sorted(pick_a)]
+    else:
+        print(f"!! style 池只有 {len(artists)} 个子目录（< {N_STYLE}）——"
+              f"按艺术家去重不可用，改为直接从 {len(sf)} 个文件里抽。")
+        if len(sf) < N_STYLE:
+            sys.exit(f"!! style 池只有 {len(sf)} 张，不够 {N_STYLE} 张。")
+        styles = [sf[i] for i in sorted(rng.permutation(len(sf))[:N_STYLE])]
     contents = [cf[i] for i in sorted(rng.permutation(len(cf))[:N_CONTENT])]
 
     d = OUT / f"seed{args.seed}"

@@ -231,8 +231,10 @@ def _extract(root, want, tag="MS-COCO", min_side=0):
     stem = "style" if tag == "WikiArt" else "content"
     drop = [0]
 
-    def _save(im, i):
-        im.convert("RGB").save(OUT / f"{stem}_{i:03d}.png")
+    def _save(im, i, sub=None):
+        d = OUT / sub if sub else OUT
+        d.mkdir(parents=True, exist_ok=True)
+        im.convert("RGB").save(d / f"{stem}_{i:03d}.png")
 
     imgs = [f for f in root.rglob("*") if f.suffix.lower() in exts]
     if imgs:
@@ -293,13 +295,32 @@ def _extract(root, want, tag="MS-COCO", min_side=0):
         if col is None:
             print(f"   !! {f.name} 的列里没有 image：{t.column_names[:8]}")
             continue
-        rows = t.column(col).to_pylist()
+        # 标签列：WikiArt 的 parquet 带 artist / style（画派）。
+        # 2026-08-17：第一版把它扔了，于是解出来是个**扁平目录**，
+        # 而 protocol.py 靠父目录名做「每位艺术家最多一张」的去重 ——
+        # 分组数塌成 1，40 张 style 静默变成 1 张。标签是现成的，不能扔。
+        lab = next((c for c in t.column_names
+                    if c.lower() in ("artist", "style", "label", "genre")), None)
+        n = t.num_rows
+        idx = list(range(n))
         # 一个分片可能有上万行，等间隔取，别只取开头 —— WikiArt 的分片
         # 往往按画家/流派聚簇，取开头会得到一整片同一个人的画。
-        if len(rows) > want * 4:
-            step = len(rows) / (want * 4)
-            rows = [rows[int(i * step)] for i in range(want * 4)]
-        for v in rows:
+        if n > want * 4:
+            step = n / (want * 4)
+            idx = [int(i * step) for i in range(want * 4)]
+        # take() 之后再 to_pylist：整表 to_pylist 会把 304MB 的图全解进内存，
+        # 而我们只要其中 want*4 行。
+        sel = t.select([col] + ([lab] if lab else [])).take(idx)
+        imcol = sel.column(col).to_pylist()
+        labcol = sel.column(lab).to_pylist() if lab else None
+        idx = range(len(imcol))
+        if lab:
+            print(f"   标签列 = {lab}（{len(set(labcol))} 个取值）→ 按它分子目录")
+        else:
+            print(f"   !! 没有 artist/style 标签列：{t.column_names[:8]}"
+                  f" —— 解出来会是扁平目录，protocol.py 的去重会失效")
+        for i in idx:
+            v = imcol[i]
             b = v.get("bytes") if isinstance(v, dict) else v
             if not isinstance(b, (bytes, bytearray)):
                 continue
@@ -307,9 +328,12 @@ def _extract(root, want, tag="MS-COCO", min_side=0):
             if min_side and not _keep(im, min_side):
                 drop[0] += 1
                 continue
-            _save(im, got); got += 1
+            sub = f"g{labcol[i]}" if labcol is not None else None
+            _save(im, got, sub); got += 1
             if got >= want:
-                _src(tag, f"parquet {f.name} under {root}", got, drop[0], min_side)
+                _src(tag, f"parquet {f.name} under {root}"
+                          + (f"，按 {lab} 分子目录" if lab else ""),
+                     got, drop[0], min_side)
                 return got
     if got:
         _src(tag, f"parquet under {root}", got, drop[0], min_side)

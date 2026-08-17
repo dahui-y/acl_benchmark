@@ -240,6 +240,60 @@ def _extract(root, want):
     return got
 
 
+def cmd_direct(args):
+    """不经 HF：COCO 官方 CDN 上**逐张**取 val2017。
+
+    2026-08-17：`--hf --official` 已经证明网络通（三个 repo 都列出了文件、
+    拿到了真实 lfs.size、LFS 传输也起来了）。堵的是**打包方式**——
+    HF 上的 COCO 最小 val 分片 404 MB、最小 zip 818 MB，而我们只要 20 张。
+    官方 CDN 是按图片编号直接给 JPEG 的，一张约 150 KB。
+
+    ⚠️ 下面这串 id 是 val2017 按编号排序的开头，**我凭记忆写的，没在本机核对过**。
+    所以脚本逐个报 200 / 404，够数就停 —— 错一两个不影响，全 404 会立刻看出来
+    （那说明 CDN 不通，不是 id 错，因为 id 全错的概率远小于网络不通）。
+    """
+    import urllib.request
+    from PIL import Image
+    OUT.mkdir(parents=True, exist_ok=True)
+    ids = [139, 285, 632, 724, 776, 785, 802, 872, 885, 1000,
+           1268, 1296, 1353, 1425, 1490, 1503, 1532, 1584, 1675, 1761,
+           1818, 1993, 2006, 2149, 2153, 2157, 2261, 2299, 2431, 2473,
+           2532, 2587, 2592, 2685, 2923, 3156, 3255, 3501, 3553, 3661]
+    px = os.environ.get("https_proxy") or os.environ.get("HTTPS_PROXY")
+    if px:
+        print(f"proxy = {px}")
+        op = urllib.request.build_opener(
+            urllib.request.ProxyHandler({"http": px, "https": px}))
+        urllib.request.install_opener(op)
+    got, miss = 0, 0
+    for cid in ids:
+        if got >= args.n:
+            break
+        url = f"http://images.cocodataset.org/val2017/{cid:012d}.jpg"
+        try:
+            raw = urllib.request.urlopen(url, timeout=30).read()
+        except Exception as e:
+            miss += 1
+            print(f"   ✗ {cid:012d}  {type(e).__name__}: {str(e)[:90]}")
+            if miss >= 5 and got == 0:
+                sys.exit("\n!! 前 5 张全失败且一张没成 —— 是 CDN 不通，不是 id 错。"
+                         "\n   退路：直接用已经在盘上的 LAION content 集，"
+                         "见 protocol.py --draw。")
+            continue
+        im = Image.open(io.BytesIO(raw)).convert("RGB")
+        im.save(OUT / f"content_{got:03d}.png")
+        print(f"   ✓ {cid:012d}  {im.size[0]}×{im.size[1]}  {len(raw)/1e3:.0f} KB")
+        got += 1
+    if not got:
+        sys.exit("!! 一张都没拿到。")
+    (OUT / "SOURCE.txt").write_text(
+        f"MS-COCO val2017 ({got} images)\n"
+        f"from http://images.cocodataset.org/val2017/ (official CDN, per-image)\n"
+        f"ids: {ids[:got]}\n")
+    print(f"\n拿到 {got} 张（{miss} 张失败）→ {OUT}")
+    print(f"下一步：COCO={OUT} python style_probe/protocol.py --check")
+
+
 def cmd_teaser(args):
     """退路：StyleSSP 论文 teaser（assets/ours.jpg）的**第 0 列就是它自己用的
     content 图** —— 马、芝加哥天际线、人像、埃菲尔铁塔、金门桥，5 张。
@@ -302,9 +356,12 @@ def main():
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--ls", action="store_true", help="只列仓库文件，不下载")
     g.add_argument("--hf", action="store_true")
+    g.add_argument("--direct", action="store_true",
+                   help="不经 HF，从 COCO 官方 CDN 逐张取 val2017（每张约 150KB）")
     g.add_argument("--teaser", action="store_true")
     a = ap.parse_args()
-    (cmd_ls if a.ls else cmd_hf if a.hf else cmd_teaser)(a)
+    (cmd_ls if a.ls else cmd_hf if a.hf else
+     cmd_direct if a.direct else cmd_teaser)(a)
 
 
 if __name__ == "__main__":

@@ -71,7 +71,13 @@ TEASER = REPO / "help_code" / "StyleSSP" / "assets" / "ours.jpg"
 # 所以用它比从 teaser 上裁更接近后面要做的正表）。可用 WIKIART 环境变量覆盖。
 WIKIART = Path(os.environ.get(
     "WIKIART", "/openbayes/input/input0/Sim2Struct-1000/temp/jdb/wikiart_ref"))
-SDXL = "stabilityai/stable-diffusion-xl-base-1.0"
+# backbone：换成 SD1.5。理由（2026-08-16，读了三篇原文 + StyleSSP 评测代码后）：
+#   · StyleID / StyleGallery / DICE 全是 SD1.4/1.5 @ 512 —— 我们逐条对过公式的就是这三篇
+#   · 官方 ArtFID 评测代码 eval_artfid.py:36 把一切 resize 到 512，
+#     所以 1024 生成完还要降回去，纯浪费
+#   · DICE 的层号（down_blocks[0] / up_blocks[3]）是 SD1.x 的，SDXL 上对不上
+SD15 = os.environ.get("SD15_PATH", "stable-diffusion-v1-5/stable-diffusion-v1-5")
+RES = 512
 ARMS = ("full", "proj", "comp")
 
 # ── ours.jpg 的网格：13 列 × 6 行，(0,0) 是 Style/Content 表头格 ──────
@@ -93,9 +99,13 @@ STYLES = {
 # 内容条（第 0 列，第 1..5 行）
 CONTENTS = {1: "horse", 3: "portrait", 5: "bridge"}
 
-# 注入位置：先照 StyleID/StyleGallery 的惯例用 decoder(up_blocks) 的 self-attn。
-# 只取 q_len==1024（32×32）那一档，省显存；--qlen 可换。
-Q_LEN = 1024
+# 用哪一档 self-attention。
+#   512 输入 → latent 64×64；SD1.5 的 self-attn 分辨率是 64/32/16/8
+#   → q_len ∈ {4096, 1024, 256, 64}
+# **默认取 4096（64×64，最高档）**，依据是 DICE 的 style 子空间取 down_blocks[0]，
+# 那正是这一档。笔触是高频的，这个先验比我原来猜的 1024 硬。
+# 注入位置仍照 StyleID 的惯例放在 decoder(up_blocks)；--where 可换。
+Q_LEN = 4096
 RANK = 16           # 子空间维数 r，--rank 可扫
 EPS = 1e-4          # 广义特征问题的正则
 
@@ -433,7 +443,6 @@ def cmd_selftest(args):
 def cmd_run(args):
     import torch
     from PIL import Image
-    from diffusers import StableDiffusionXLImg2ImgPipeline, StableDiffusionXLPipeline
 
     tiles = OUT / "tiles"
     if not tiles.exists():
@@ -441,22 +450,17 @@ def cmd_run(args):
     d = OUT / f"r{args.rank}"
     d.mkdir(parents=True, exist_ok=True)
 
-    pipe = StableDiffusionXLPipeline.from_pretrained(
-        SDXL, torch_dtype=torch.float16, variant="fp16", use_safetensors=True).to("cuda")
-    pipe.set_progress_bar_config(disable=True)
+    pipe = _load(args)
     st = {"mode": "off", "cache": {}, "step": 0, "q_len": args.qlen,
           "P": {}, "arm": "full", "calls": 0, "applied": 0}
-    install(pipe, st)
+    install(pipe, st, args.where)
 
     for c, (key, tier, why) in STYLES.items():
         sp = tiles / f"style_{key}.png"
         print(f"\n[{key}] ({tier})  {why}", flush=True)
 
         # ── 1. 记录参考图的 K/V（前向加噪，不做 inversion，见 docstring 简化 ①）
-        sty = Image.open(sp).convert("RGB").resize((1024, 1024))
-        with torch.no_grad():
-            x = torch.from_numpy(np.array(sty)).permute(2, 0, 1)[None].half().cuda() / 127.5 - 1
-            lat = pipe.vae.encode(x).latent_dist.mean * pipe.vae.config.scaling_factor
+        lat = _encode(pipe, Image.open(sp).convert("RGB"))
         st.update(mode="record", cache={}, step=0, calls=0)
         _record_reference(pipe, st, lat, args)
 
@@ -478,7 +482,7 @@ def cmd_run(args):
 
         # ── 3. 三臂
         for cr, ckey in CONTENTS.items():
-            cont = Image.open(tiles / f"content_{ckey}.png").convert("RGB").resize((1024, 1024))
+            cont = Image.open(tiles / f"content_{ckey}.png").convert("RGB")
             for arm in ARMS:
                 f = d / f"{key}__{ckey}__{arm}.png"
                 if f.exists():
@@ -495,55 +499,76 @@ def cmd_run(args):
     print(f"\n→ {d}\n下一步：python style_probe/subspace_look.py --sheet --rank {args.rank}")
 
 
+def _load(args):
+    """SD1.5 + DDIM。DDIM 是因为下面要手写 add_noise / step 的循环，
+    PNDM 那种带内部缓冲的调度器从时刻表中间切入会出错。"""
+    import torch
+    from diffusers import StableDiffusionPipeline, DDIMScheduler
+    pipe = StableDiffusionPipeline.from_pretrained(
+        args.model, torch_dtype=torch.float16, safety_checker=None,
+        requires_safety_checker=False).to("cuda")
+    pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
+    pipe.set_progress_bar_config(disable=True)
+    print(f"  backbone {args.model}  @{RES}²  scheduler=DDIM")
+    return pipe
+
+
+def _encode(pipe, img):
+    import torch
+    import numpy as _np
+    x = torch.from_numpy(_np.array(img.resize((RES, RES)))).permute(2, 0, 1)[None]
+    x = x.half().cuda() / 127.5 - 1
+    with torch.no_grad():
+        return pipe.vae.encode(x).latent_dist.mean * pipe.vae.config.scaling_factor
+
+
+def _empty_emb(pipe):
+    import torch
+    with torch.no_grad():
+        ids = pipe.tokenizer([""], padding="max_length",
+                             max_length=pipe.tokenizer.model_max_length,
+                             truncation=True, return_tensors="pt").input_ids.cuda()
+        return pipe.text_encoder(ids)[0]
+
+
 def _record_reference(pipe, st, lat, args):
-    """按采样时刻表对参考 latent 前向加噪，逐步跑 UNet，收 K/V。
+    """按采样时刻表对参考 latent 前向加噪，逐步跑 UNet，收 self-attn 的 K/V。
     **不是 DDIM inversion**（简化 ①）—— 只为拿到「参考图在各时刻的自注意力特征」。"""
     import torch
     sch = pipe.scheduler
     sch.set_timesteps(args.steps, device="cuda")
-    pe, npe, pp, npp = pipe.encode_prompt(prompt="", device="cuda",
-                                          num_images_per_prompt=1,
-                                          do_classifier_free_guidance=False)
-    add = {"text_embeds": pp, "time_ids": torch.tensor(
-        [[1024, 1024, 0, 0, 1024, 1024]], device="cuda", dtype=torch.float16)}
+    emb = _empty_emb(pipe)
     with torch.no_grad():
         for i, t in enumerate(sch.timesteps):
             st["step"] = i + 1
-            noise = torch.randn(lat.shape, generator=torch.Generator("cuda").manual_seed(i),
-                                device="cuda", dtype=lat.dtype)
-            xt = sch.add_noise(lat, noise, t.unsqueeze(0))
-            pipe.unet(sch.scale_model_input(xt, t), t, encoder_hidden_states=pe,
-                      added_cond_kwargs=add)
+            noise = torch.randn(lat.shape, device="cuda", dtype=lat.dtype,
+                                generator=torch.Generator("cuda").manual_seed(i))
+            xt = sch.add_noise(lat, noise, t.reshape(1))
+            pipe.unet(xt, t, encoder_hidden_states=emb)
 
 
 def _inject_generate(pipe, st, content_img, args):
-    """SDEdit 式：把内容图加噪到 strength 对应的时刻，再去噪；
-    过程中 self-attn 的 K/V 被换成（投影过的）参考图的。"""
+    """SDEdit 式：内容图加噪到 strength 对应的时刻再去噪；
+    过程中 self-attn 的 K/V 被换成（投影过的）参考图的 —— 即 StyleID 的做法。"""
     import torch
     from PIL import Image
     sch = pipe.scheduler
     sch.set_timesteps(args.steps, device="cuda")
+    lat = _encode(pipe, content_img)
+    emb = _empty_emb(pipe)
+    start = int(args.steps * (1 - args.strength))
+    ts = sch.timesteps[start:]
     with torch.no_grad():
-        x = torch.from_numpy(np.array(content_img)).permute(2, 0, 1)[None].half().cuda() / 127.5 - 1
-        lat = pipe.vae.encode(x).latent_dist.mean * pipe.vae.config.scaling_factor
-        start = int(args.steps * (1 - args.strength))
-        ts = sch.timesteps[start:]
-        noise = torch.randn(lat.shape, generator=torch.Generator("cuda").manual_seed(42),
-                            device="cuda", dtype=lat.dtype)
+        noise = torch.randn(lat.shape, device="cuda", dtype=lat.dtype,
+                            generator=torch.Generator("cuda").manual_seed(42))
         xt = sch.add_noise(lat, noise, ts[:1])
-        pe, npe, pp, npp = pipe.encode_prompt(prompt="", device="cuda",
-                                              num_images_per_prompt=1,
-                                              do_classifier_free_guidance=False)
-        add = {"text_embeds": pp, "time_ids": torch.tensor(
-            [[1024, 1024, 0, 0, 1024, 1024]], device="cuda", dtype=torch.float16)}
         for i, t in enumerate(ts):
             st["step"] = start + i + 1        # 与 record 阶段的 step 对齐
-            eps = pipe.unet(sch.scale_model_input(xt, t), t,
-                            encoder_hidden_states=pe, added_cond_kwargs=add).sample
+            eps = pipe.unet(xt, t, encoder_hidden_states=emb).sample
             xt = sch.step(eps, t, xt).prev_sample
         img = pipe.vae.decode(xt / pipe.vae.config.scaling_factor).sample
-    img = ((img / 2 + .5).clamp(0, 1)[0].permute(1, 2, 0).float().cpu().numpy() * 255)
-    return Image.fromarray(img.astype(np.uint8))
+    a = ((img / 2 + .5).clamp(0, 1)[0].permute(1, 2, 0).float().cpu().numpy() * 255)
+    return Image.fromarray(a.astype(np.uint8))
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -601,6 +626,9 @@ def main():
     ap.add_argument("--k", type=int, default=5, help="区域数")
     ap.add_argument("--qlen", type=int, default=Q_LEN)
     ap.add_argument("--steps", type=int, default=30)
+    ap.add_argument("--model", default=SD15, help="backbone；SD15_PATH 环境变量可覆盖")
+    ap.add_argument("--where", default="up_blocks",
+                    help="在哪些 block 注入（DICE 的 style 子空间取 down_blocks[0]）")
     ap.add_argument("--strength", type=float, default=0.7, help="SDEdit 加噪强度")
     ap.add_argument("--content", default="horse")
     ap.add_argument("--cell", type=int, default=380)

@@ -24,7 +24,8 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-OUT = Path(os.environ.get("SD_OUT", "/tmp")) / "style" / "coco"
+ROOT = Path(os.environ.get("SD_OUT", "/tmp")) / "style"
+OUT = ROOT / "coco"
 
 # HF 上带 COCO 图片的候选数据集。**未经本机验证**，逐个试。
 CANDIDATES = [
@@ -34,6 +35,30 @@ CANDIDATES = [
     ("nlphuji/mscoco_2014_5k_test_image_text_retrieval", None),
     ("HuggingFaceM4/COCO", ["data/val*"]),
 ]
+
+# ── plan B：全分辨率 WikiArt ──────────────────────────────────────────
+# 2026-08-17：`--check` 显示盘上的 wikiart_ref **60/60 全是 256×256**，
+# 到 512 要 2× 上采。风格迁移评的就是笔触和颗粒，在自己造出来的模糊上
+# 找 headroom 会把整个方向做废，所以这个池不能用。
+#
+# 这里的取舍与 COCO 相反：COCO 只要 20 张，为它下 400MB 不值；
+# WikiArt 是**唯一**的 style 来源，一个分片（约千张原分辨率）就够整个池，
+# 所以 --max-mb 要放开（用 --wikiart 时默认抬到 600）。
+WIKIART = [
+    ("huggan/wikiart", None),
+    ("Artificio/WikiArt", None),
+    ("jlbaker361/wikiart", None),
+]
+
+
+def _target(args):
+    """返回 (候选列表, 数据集名)，并把全局 OUT 指到对应目录。"""
+    global OUT
+    if args.wikiart:
+        OUT = ROOT / "wikiart_full"
+        return WIKIART, "WikiArt"
+    OUT = ROOT / "coco"
+    return CANDIDATES, "MS-COCO"
 
 
 def _files(rid):
@@ -130,7 +155,9 @@ def cmd_hf(args):
     _endpoint(args)
     from huggingface_hub import snapshot_download
 
-    cands = [(args.repo, None)] if args.repo else CANDIDATES
+    pool, tag = _target(args)
+    print(f"目标：{tag} → {OUT}\n")
+    cands = [(args.repo, None)] if args.repo else pool
     for rid, _ in cands:
         print(f"── 试 {rid}")
         # ① 先列文件，按实际内容选模式；不再用写死的猜测
@@ -154,9 +181,9 @@ def cmd_hf(args):
             pats = [one]
             mb = f"{nb/1e6:.0f} MB" if nb else "大小未知"
             print(f"   {len(fs)} 文件，parquet {len(pqs)} 个 → 挑最小的 {one}（{mb}）")
-            if nb > args.max_mb * 1e6:
-                print(f"   ✗ 最小的分片也有 {mb} > --max-mb {args.max_mb}，跳过。"
-                      f"为 20 张图下这么大不值。\n")
+            cap = args.max_mb if args.max_mb is not None else (600 if args.wikiart else 200)
+            if nb > cap * 1e6:
+                print(f"   ✗ 最小的分片也有 {mb} > 上限 {cap} MB，跳过。\n")
                 continue
         else:
             print(f"   !! 既没有散图也没有 parquet。后缀：",
@@ -171,10 +198,11 @@ def cmd_hf(args):
                   f"或 hf-mirror 的 LFS 转发不稳\n")
             continue
         print(f"   ✓ 下到 {p}")
-        n = _extract(Path(p), args.n)
+        n = _extract(Path(p), args.n, tag, args.min_side)
         if n:
             print(f"\n拿到 {n} 张 → {OUT}")
-            print(f"下一步：COCO={OUT} python style_probe/protocol.py --check")
+            env = "WIKIART" if args.wikiart else "COCO"
+            print(f"下一步：{env}={OUT} python style_probe/protocol.py --check")
             return
         print(f"   !! 下下来了但没解出图片，看看 {p} 里是什么\n")
     print("\n全部失败。两条路：")
@@ -182,17 +210,44 @@ def cmd_hf(args):
     print("  · --teaser 用 StyleSSP 论文图里的 5 张真 content 图（见该模式的说明）")
 
 
-def _extract(root, want):
-    """从下载目录里刨出图片。数据集可能是散图，也可能是 parquet / arrow。"""
+def _keep(im, min_side):
+    """短边不够就**扔掉**，不上采。
+
+    2026-08-17：盘上那份 wikiart_ref 全是 256×256，到 512 要 2× 上采，
+    等于自己造模糊再去上面找 headroom。宁可少几张，不要假的分辨率。
+    """
+    return min(im.size) >= min_side
+
+
+def _extract(root, want, tag="MS-COCO", min_side=0):
+    """从下载目录里刨出图片。数据集可能是散图，也可能是 parquet / arrow。
+
+    min_side > 0 时按短边过滤，并报告扔了多少张 —— 扔的比例是个诊断：
+    扔掉大半说明这个 repo 存的本来就是缩略图，换 repo，别凑合。
+    """
     from PIL import Image
     OUT.mkdir(parents=True, exist_ok=True)
     exts = {".jpg", ".jpeg", ".png"}
-    imgs = [f for f in root.rglob("*") if f.suffix.lower() in exts][:want]
+    stem = "style" if tag == "WikiArt" else "content"
+    drop = [0]
+
+    def _save(im, i):
+        im.convert("RGB").save(OUT / f"{stem}_{i:03d}.png")
+
+    imgs = [f for f in root.rglob("*") if f.suffix.lower() in exts]
     if imgs:
-        for i, f in enumerate(sorted(imgs)):
-            Image.open(f).convert("RGB").save(OUT / f"content_{i:03d}.png")
-        (OUT / "SOURCE.txt").write_text(f"MS-COCO\nfrom {root}\n")
-        return len(imgs)
+        got = 0
+        for f in sorted(imgs):
+            if got >= want:
+                break
+            im = Image.open(f)
+            if min_side and not _keep(im, min_side):
+                drop[0] += 1
+                continue
+            _save(im, got); got += 1
+        if got:
+            _src(tag, f"loose files under {root}", got, drop[0], min_side)
+        return got
     # zip：解出里面的图（只解需要的那几张，不全解）
     import zipfile
     for z in sorted(root.rglob("*.zip")):
@@ -207,17 +262,19 @@ def _extract(root, want):
                 if len(names) > want:
                     step = len(names) / want
                     names = [names[int(i * step)] for i in range(want)]
-                for i, n in enumerate(names):
+                got = 0
+                for n in names:
                     with zf.open(n) as fh:
-                        Image.open(io.BytesIO(fh.read())).convert("RGB").save(
-                            OUT / f"content_{i:03d}.png")
-                if names:
-                    (OUT / "SOURCE.txt").write_text(
-                        f"MS-COCO ({len(names)} images)\n"
-                        f"from {z.name} (COCO 2014 5k test split)\n"
-                        f"{z}\n"
-                        f"等间隔取样覆盖整个 split；protocol.py 再按 seed 从中抽 20。\n")
-                    return len(names)
+                        im = Image.open(io.BytesIO(fh.read()))
+                    if min_side and not _keep(im, min_side):
+                        drop[0] += 1
+                        continue
+                    _save(im, got); got += 1
+                if got:
+                    _src(tag, f"{z.name} (COCO 2014 5k test split)\n{z}\n"
+                              f"等间隔取样覆盖整个 split；protocol.py 再按 seed 抽样。",
+                         got, drop[0], min_side)
+                    return got
         except Exception as e:
             print(f"   !! 解 {z.name} 失败：{type(e).__name__}: {str(e)[:120]}")
     pqs = sorted(root.rglob("*.parquet"))
@@ -236,18 +293,42 @@ def _extract(root, want):
         if col is None:
             print(f"   !! {f.name} 的列里没有 image：{t.column_names[:8]}")
             continue
-        for v in t.column(col).to_pylist():
+        rows = t.column(col).to_pylist()
+        # 一个分片可能有上万行，等间隔取，别只取开头 —— WikiArt 的分片
+        # 往往按画家/流派聚簇，取开头会得到一整片同一个人的画。
+        if len(rows) > want * 4:
+            step = len(rows) / (want * 4)
+            rows = [rows[int(i * step)] for i in range(want * 4)]
+        for v in rows:
             b = v.get("bytes") if isinstance(v, dict) else v
             if not isinstance(b, (bytes, bytearray)):
                 continue
-            Image.open(io.BytesIO(b)).convert("RGB").save(OUT / f"content_{got:03d}.png")
-            got += 1
+            im = Image.open(io.BytesIO(b))
+            if min_side and not _keep(im, min_side):
+                drop[0] += 1
+                continue
+            _save(im, got); got += 1
             if got >= want:
-                (OUT / "SOURCE.txt").write_text(f"MS-COCO\nfrom {root}\n")
+                _src(tag, f"parquet {f.name} under {root}", got, drop[0], min_side)
                 return got
     if got:
-        (OUT / "SOURCE.txt").write_text(f"MS-COCO\nfrom {root}\n")
+        _src(tag, f"parquet under {root}", got, drop[0], min_side)
     return got
+
+
+def _src(tag, where, got, dropped, min_side):
+    """来源必须写成文件，不能靠路径推断 —— protocol.py 读它进 manifest。"""
+    txt = [f"{tag} ({got} images)", f"from {where}"]
+    if min_side:
+        txt.append(f"短边 >= {min_side} 过滤：留 {got} 张，扔 {dropped} 张")
+        if dropped > got:
+            txt.append("⚠️ 扔掉的比留下的多 —— 这个 repo 存的多半是缩略图")
+    (OUT / "SOURCE.txt").write_text("\n".join(txt) + "\n")
+    print(f"   来源已写入 {OUT/'SOURCE.txt'}")
+    if min_side:
+        print(f"   短边>={min_side} 过滤：留 {got}，扔 {dropped}")
+        if dropped > got:
+            print(f"   ⚠️ 扔的比留的多 —— 这个 repo 多半存的是缩略图，考虑换一个")
 
 
 def cmd_direct(args):
@@ -359,8 +440,12 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--n", type=int, default=50, help="取几张")
     ap.add_argument("--repo", default=None, help="指定 HF dataset repo id")
-    ap.add_argument("--max-mb", type=int, default=200,
-                    help="单个分片超过这个大小就跳过（默认 200MB）")
+    ap.add_argument("--max-mb", type=int, default=None,
+                    help="单个分片超过这个大小就跳过（COCO 默认 200，WikiArt 默认 600）")
+    ap.add_argument("--wikiart", action="store_true",
+                    help="改取全分辨率 WikiArt 当 style 池（盘上那份是 256px，不能用）")
+    ap.add_argument("--min-side", type=int, default=0,
+                    help="短边小于此值的图**丢弃**（不上采）。--wikiart 时建议 512")
     ap.add_argument("--official", action="store_true",
                     help="清掉 HF_ENDPOINT，走官方 huggingface.co 而非镜像")
     g = ap.add_mutually_exclusive_group(required=True)

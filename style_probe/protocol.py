@@ -205,6 +205,11 @@ def cmd_draw(args):
            # 指向任何目录（比如 teaser 那 5 张），靠路径判断会误报成 MS-COCO。
            "content_source": forced_src or ((cd / "SOURCE.txt").read_text().strip()
                              if (cd / "SOURCE.txt").exists() else "未标注（来源不明）"),
+           # style 侧同样要记来源。2026-08-17 的教训：盘上那份 wikiart_ref
+           # 全是 256×256，到 512 要 2× 上采，而这件事在 manifest 里
+           # 只体现为 upscaled=True，看不出「整个池都是缩略图」。
+           "style_source": ((sd / "SOURCE.txt").read_text().strip()
+                            if (sd / "SOURCE.txt").exists() else "未标注（来源不明）"),
            "style": [], "content": []}
     for i, f in enumerate(styles):
         up = prep(f, d / "sty" / f"{i:02d}_{f.parent.name}.png")
@@ -223,10 +228,15 @@ def cmd_draw(args):
         sh.paste(im, (200 * (i % 10), 200 * (i // 10)))
     sh.save(d / "content_check.png")
 
-    n_up = sum(x["upscaled"] for x in man["style"] + man["content"])
+    # 分开报。1.07× 的 content 上采和 2.0× 的 style 上采不是一回事，
+    # 合并成 "60/60" 会把后者藏起来 —— 8/17 差点就这么跑了 800 张。
+    up_s = sum(x["upscaled"] for x in man["style"])
+    up_c = sum(x["upscaled"] for x in man["content"])
+    n_up = up_s + up_c
     print(f"seed={args.seed}  {len(styles)} style × {len(contents)} content → {d}")
-    print(f"  上采过的图：{n_up}/{len(styles)+len(contents)}"
+    print(f"  上采：style {up_s}/{len(styles)}、content {up_c}/{len(contents)}"
           + ("   ⚠️ 绝对值与发表数不可比" if n_up else ""))
+    print(f"  style   来源：{man['style_source'].splitlines()[0]}")
     print(f"  content 来源：{man['content_source'].splitlines()[0]}")
     print(f"  content 接触图: {d/'content_check.png'}   ← **开跑前先看一眼**")
     print(f"  manifest: {d/'manifest.json'}")

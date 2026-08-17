@@ -100,21 +100,63 @@ EPS = 1e-4          # 广义特征问题的正则
 # --crop
 # ─────────────────────────────────────────────────────────────────────
 
+def fit_grid(gray, n, L, axis):
+    """从像素里**测**出真实网格，不假设它等分且从 0 开始。
+
+    2026-08-16：朴素做法（step=L/n、origin=0）裁出来**左边缘漏进隔壁格**。
+    实测原因：真实列起点是 +15.5px 而不是 0。
+
+    做法：白分隔线是沿另一轴近似均匀的行/列（方差极低、亮度≈254）。
+    只用**真的检测到白线**的那些边界做线性拟合 x = a·i + b，
+    再用残差自证拟合可信。这张图右半边有白线、左半边没有，
+    所以必须拟合而不能逐边界就近吸附。
+    """
+    # gray.shape=(H,W)：var(0) → 每列一个数（长 W）；var(1) → 每行一个数（长 H）
+    var = gray.var(axis)
+    step = L / n
+    pts = []
+    for i in range(1, n):
+        x0 = int(round(i * step))
+        win = range(max(0, x0 - 9), min(L, x0 + 10))
+        b = min(win, key=lambda x: var[x])
+        if var[b] < 50:               # 只收真的白线
+            pts.append((i, b))
+    if len(pts) < 2:
+        print(f"  !! {axis} 轴只找到 {len(pts)} 条分隔线，退回等分")
+        return step, 0.0, 0.0
+    I = np.array([p[0] for p in pts], float)
+    X = np.array([p[1] for p in pts], float)
+    a, b = np.polyfit(I, X, 1)
+    res = float(np.abs(np.polyval([a, b], I) - X).max())
+    return float(a), float(b), res
+
+
 def cmd_crop(args):
     from PIL import Image
     if not TEASER.exists():
         sys.exit(f"!! 找不到 {TEASER}")
     im = Image.open(TEASER).convert("RGB")
     W, H = im.size
-    cw, ch = W / GRID_C, H / GRID_R
+    g = np.asarray(im.convert("L"), np.float32)
+    cw, cx, rc = fit_grid(g, GRID_C, W, 0)
+    ch, cy, rr = fit_grid(g, GRID_R, H, 1)
     d = OUT / "tiles"
     d.mkdir(parents=True, exist_ok=True)
-    print(f"{TEASER.name}  {W}×{H}  格子 {cw:.1f}×{ch:.1f}")
+    print(f"{TEASER.name}  {W}×{H}")
+    print(f"  实测网格：格宽 {cw:.2f} 起点 {cx:+.1f}（残差 {rc:.1f}px）"
+          f" / 格高 {ch:.2f} 起点 {cy:+.1f}（残差 {rr:.1f}px）")
+    print(f"  朴素等分：格宽 {W/GRID_C:.2f} 起点 0 / 格高 {H/GRID_R:.2f} 起点 0"
+          f"   ← 列起点差 {cx:.1f}px，就是它把隔壁格漏进来")
+    if max(rc, rr) > 4:
+        print(f"  !! 残差 {max(rc,rr):.1f}px 偏大，裁完务必自己看一眼")
+    inset = args.inset
 
     def tile(c, r):
-        return im.crop((round(c * cw), round(r * ch),
-                        round((c + 1) * cw), round((r + 1) * ch))).resize((512, 512),
-                                                                          Image.LANCZOS)
+        x0, y0 = cx + c * cw, cy + r * ch
+        mx, my = cw * inset, ch * inset      # 再往内缩一点，吃掉 1–2px 的拟合残差
+        box = (max(0, round(x0 + mx)), max(0, round(y0 + my)),
+               min(W, round(x0 + cw - mx)), min(H, round(y0 + ch - my)))
+        return im.crop(box).resize((512, 512), Image.LANCZOS)
     for c, (key, tier, why) in STYLES.items():
         tile(c, 0).save(d / f"style_{key}.png")
         print(f"  style {key:16s} [{tier:4s}] col={c:2d}   {why}")
@@ -473,6 +515,8 @@ def main():
     ap.add_argument("--strength", type=float, default=0.7, help="SDEdit 加噪强度")
     ap.add_argument("--content", default="horse")
     ap.add_argument("--cell", type=int, default=380)
+    ap.add_argument("--inset", type=float, default=0.03,
+                    help="每格再往内缩的比例，吃掉拟合残差与边框")
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--crop", action="store_true")
     g.add_argument("--selftest", action="store_true")

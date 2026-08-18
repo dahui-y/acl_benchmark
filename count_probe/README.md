@@ -114,7 +114,7 @@ SDXL 1024² 的注意力图被 autograd 全留住。三处改动，前两处**�
 | # | 改动 | 依据 | 数值影响 |
 |---|---|---|---|
 | ① | `update_latent` 的 `create_graph=True` → `False` | 全仓库无二阶导；拿到 grad 后下一轮立刻 `clone().detach()`。`create_graph` 只决定"梯度计算本身可不可再求导"，**grad 的值不变**，且它隐含的 `retain_graph=True` 让图算完不释放 | **无** |
-| ② | 进修正步前丢掉上一张图 | 传进去的 `loss` 只当 `while` 的比较量，`:186` 就被重算覆盖；attention store 里的引用会被本函数第一次前向重新填好（`between_steps` 在前向末尾，`loss_and_plot` 在其后） | **无** |
+| ② | `loss_and_plot` 改返回 float，把带图的张量存到 `self` 上，由 `update_latent` 取用；进修正步前清掉它和 attention store | `loss_and_plot` 的返回值在调用方**只被用于比较**（`:171/:188/:490/:497`）和传给 `update_latent`（`:189/:498`），而后者已在①里由我们接管。这样外层那张图就不会被任何变量持有。<br>（先前试过在函数入口把形参转 float——**没用**：`loss, latent = self.perform_iterative_refinement_step(loss, ...)` 里调用方的局部变量要等函数返回才重新绑定，Python 3.10 又改不到 `f_locals`。） | **无** |
 | ③ | probs 不会被任何地方读的注意力层改走 SDPA | 存的门限是 `shape[1]==attn_res²`；`aggregate_attention` 全仓库只有 `:152` 一处且 `get_cross=True`（`all_self_attention` 从不被读）；`self_step_store` 只在 `loss=False` 时写；屏蔽要求 `shape[0]==40` 而修正前向是 `latent.unsqueeze(0)` batch=1 → 屏蔽在那趟不生效 | **浮点级**（SDPA 与 baddbmm+softmax+bmm 归约顺序不同） |
 
 ③ 用 `--no-mem-attn` 可关掉验等价（`--vanilla-only` 那一档无梯度、显存够，

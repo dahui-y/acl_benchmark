@@ -108,6 +108,17 @@ def _patch_caches():
     torch.hub.load = hub_load
 
 
+MEM_LOG = False
+
+
+def _mem(tag):
+    if not MEM_LOG:
+        return
+    import torch
+    print(f"    [显存] {tag}: 已分配 {torch.cuda.memory_allocated()/2**30:5.2f} GB / "
+          f"峰值 {torch.cuda.max_memory_allocated()/2**30:5.2f} GB", flush=True)
+
+
 def _patch_mem_graph():
     """两处**数值完全等价**的改动，专治修正步的显存峰值。
 
@@ -133,22 +144,55 @@ def _patch_mem_graph():
     import pipeline.self_counting_sdxl_pipeline as SP
 
     cls = SP.SelfCountingSDXLPipeline
-
-    def update_latent(self, latents, loss, step_size):
-        grad = torch.autograd.grad(loss, latents, create_graph=False)[0]
-        return latents - step_size * grad
-
+    orig_loss_and_plot = cls.loss_and_plot
     orig_refine = cls.perform_iterative_refinement_step
 
+    def loss_and_plot(self, object_token_idx, i):
+        """返回 float，把带图的张量存到 self 上。
+
+        ② 的关键：`__call__:491` 是 `loss, latent = self.perform_iterative_...(loss, ...)`
+        —— **调用方的局部变量要等函数返回才重新绑定**，所以在函数内部把形参转成
+        float 是没用的，外层那张图仍被调用方的栈帧钉着（Python 3.10 改不到 f_locals）。
+        釜底抽薪：让 `loss_and_plot` 压根不把张量交出去。
+
+        调用方对它的返回值只做两件事：`loss > thresholds[i]`（:490）、`loss != 0`
+        （:497、:188）—— float 完全够。唯一需要计算图的是 `update_latent`，
+        而那个函数正好也在我们手里，让它去取存下来的张量即可。
+        `loss_and_plot` 的调用点只有 :156 / :186 / :216 / :487 四处，都在这条链上。
+        """
+        v = orig_loss_and_plot(self, object_token_idx, i)
+        _mem(f"step {i} 前向后")
+        if torch.is_tensor(v):
+            self._loss_tensor = v            # update_latent 要用的就是这一个对象
+            return float(v)
+        self._loss_tensor = None             # loss 可能是 int 0（步范围之外）
+        return v
+
+    def update_latent(self, latents, loss, step_size):
+        # ① create_graph=True → False：全仓库无二阶导，grad 的值不变，
+        #    但 create_graph 隐含 retain_graph=True，会让图算完不释放。
+        t = getattr(self, "_loss_tensor", None)
+        grad = torch.autograd.grad(t if t is not None else loss, latents,
+                                   create_graph=False)[0]
+        return latents - step_size * grad
+
     def perform_iterative_refinement_step(self, loss, latents, *a, **kw):
-        loss = float(loss)                       # 只当比较量用，进函数后即被覆盖
+        # 进了这里就说明外层那张图不会再被用到（返回值会覆盖调用方的 loss/latent）。
+        # 把所有还指向它的引用清掉：存下来的张量、attention store 里的中间量。
+        # 两者都会被本函数第一次前向重新填好（between_steps 在前向末尾触发，
+        # loss_and_plot 在其后才读），所以清掉是安全的。
+        self._loss_tensor = None
         self.attention_store.all_cross_attention = {}
         self.attention_store.all_self_attention = {}
         self.attention_store.cross_attention_store = {}
         self.attention_store.self_attention_store = {}
         torch.cuda.empty_cache()
-        return orig_refine(self, loss, latents, *a, **kw)
+        _mem("进修正步（已丢掉上一张图）")
+        out = orig_refine(self, float(loss), latents, *a, **kw)
+        _mem("出修正步")
+        return out
 
+    cls.loss_and_plot = loss_and_plot
     cls.update_latent = update_latent
     cls.perform_iterative_refinement_step = perform_iterative_refinement_step
 
@@ -317,6 +361,8 @@ def main():
                          "指到有空间的盘即可，或设环境变量 RELAYOUT_CKPT")
     ap.add_argument("--no-mem-attn", action="store_true",
                     help="关掉注意力改路（那一条是浮点级改动）。留着是为了验等价性")
+    ap.add_argument("--mem-log", action="store_true",
+                    help="在修正步前后打印显存占用。再 OOM 就开它，别继续猜")
     ap.add_argument("--no-mem-graph", action="store_true",
                     help="关掉两条数值完全等价的显存改动（create_graph=False、"
                          "进修正步前丢掉上一张图）。只在审计时用；关了 24G 必 OOM")
@@ -374,6 +420,8 @@ def main():
     if not a.vanilla_only:
         print(f"ReLayout 权重：{ckpt}")
 
+    global MEM_LOG
+    MEM_LOG = a.mem_log
     counter = _patch_counter_probe()
     if not a.no_mem_graph:
         _patch_mem_graph()

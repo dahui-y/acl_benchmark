@@ -108,6 +108,22 @@ python evaluation_script.py --images_dir "$SD_OUT/count/cocoount_arms/countgen" 
 
 ## 24G 卡上的三处显存改动（必须在论文里交代）
 
+改完实测（RTX 4090 23.5 GB，`--mem-log`）：
+
+| | |
+|---|---|
+| 引导前向后 | 15.28 GB |
+| 进修正步（已释放上一张图） | **6.48 GB**（改之前是 18.58，等于没释放） |
+| 峰值 | 18.73 GB，余量 4.8 GB |
+| 速度 | **38.5 s/张**，CoCoCount 200 题约 2.1 小时 |
+
+另一个副产品读数：每次进修正步都跑满 21 次前向（20 次迭代 + 最后一次），
+即 `while loss > target_loss` **从未靠达到阈值退出**，每次都是撞
+`max_refinement_steps=20` 才出来。三个触发点（step 0/10/20）都如此 ——
+说明 `thresholds {0:1.3, 10:1.2, 20:1.15}` 对这个带 `pos_weight=10` 的 BCE
+来说定得太低，实际等价于「固定跑 20 步」。
+
+
 原版在 24G 上跑不动：修正步 `perform_iterative_refinement_step` 带梯度，
 SDXL 1024² 的注意力图被 autograd 全留住。三处改动，前两处**数值完全等价**：
 

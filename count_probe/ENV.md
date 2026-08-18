@@ -13,11 +13,37 @@ conda activate countgen
 
 # ★ 先把 pip 指到国内镜像，然后**不要**加 --index-url download.pytorch.org（见下）
 pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
-pip install torch==2.1.2 torchvision==0.16.2
-python -c "import torch;print(torch.__version__, torch.version.cuda)"   # 期望 2.1.2 / 12.1
+# ★ numpy 和 Pillow 必须和 torch 一起钉住，理由见下面那节
+pip install torch==2.1.2 torchvision==0.16.2 numpy==1.23.3 Pillow==10.1.0
+python -c "import torch,numpy;print(torch.__version__, torch.version.cuda, numpy.__version__)"
+# 期望 2.1.2+cu121 12.1 1.23.3
 
 pip install -r count_probe/requirements_infer.txt
 ```
+
+### 单独装 torch 会顺手拉来 numpy 2.x，然后 torch 的 numpy 桥就废了
+
+症状：`import torch` 打出
+
+```
+A module that was compiled using NumPy 1.x cannot be run in NumPy 2.2.6 ...
+UserWarning: Failed to initialize NumPy: _ARRAY_API not found
+```
+
+torch 版本号照样正确（`2.1.2+cu121 12.1`），但 `torch.from_numpy` / `.numpy()`
+这条通路是坏的 —— 而它在整条链上到处都是。
+
+成因是**安装顺序**：torch 2.1.2 自己没声明 numpy 依赖，torchvision 声明了
+但没写上界，所以 pip 装了最新的 2.x；而 torch 2.1.2 的 C 扩展是按 NumPy 1.x
+的 ABI 编译的。所以上面那条命令把 `numpy==1.23.3` 和 torch 一起装。
+已经装坏了也不用重建环境，补一句就行：
+
+```bash
+pip install "numpy==1.23.3" "Pillow==10.1.0"
+```
+
+Pillow 一并钉住是同理：默认会装到 12.x，而 make-it-count 钉的是 10.1.0，
+torchvision 0.16.2 是同年代的东西，不值得在这上面赌。
 
 ### 装 torch 千万别加 `--index-url https://download.pytorch.org/whl/cu121`
 

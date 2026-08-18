@@ -93,6 +93,19 @@ def main():
         say(WARN, "huggingface_hub 里没有 cached_download",
             "若 transformers 报 ImportError，降到 0.19.4")
 
+    # torch↔numpy 的桥。版本号对不代表桥是通的：torch 2.1.2 的 C 扩展按 NumPy 1.x
+    # 的 ABI 编译，装上 numpy 2.x 时 import torch 照样成功、版本号照样正确，
+    # 但 from_numpy 会炸。这条要真的调一次才算数。
+    if tv:
+        try:
+            import numpy as _np
+            import torch as _t
+            _t.from_numpy(_np.zeros(2, dtype="float32")).numpy()
+            say(OK, "torch ↔ numpy 双向转换可用")
+        except Exception as e:
+            say(BAD, "torch 的 numpy 桥是坏的",
+                f"{str(e)[:70]}；多半是 numpy 2.x，装 numpy==1.23.3")
+
     print("\n── 设备 " + "─" * 48)
     if tv:
         import torch

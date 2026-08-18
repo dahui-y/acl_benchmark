@@ -142,8 +142,14 @@ def main():
     else:
         print("→ **预测不出来。** oracle 的 0.97 落不了地。")
         print("   按事先写死的判据，这条路到此为止 —— 不要再换预测量硬找。")
+    # 预测量矩阵要存下来 —— 下一步定阈值时不该再反演一次
+    np.savez(root / "adain_predict.npz",
+             benefit=ben, cost=cost,
+             mu_s=mu_s, sd_s=sd_s, mu_c=mu_c, sd_c=sd_c,
+             sty=names_s, cnt=names_c, **P)
     (root / "adain_predict.json").write_text(
         json.dumps(res, ensure_ascii=False, indent=2))
+    print(f"→ {root/'adain_predict.npz'}")
     print(f"→ {root/'adain_predict.json'}")
 
 

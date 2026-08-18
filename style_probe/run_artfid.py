@@ -101,7 +101,7 @@ def _align_dirs(tar, sty, cnt):
         (sx / name).symlink_to(_find(sty, s_))
         (cx / name).symlink_to(_find(cnt, c_))
     print(f"对齐 {len(pairs)} 组 → {sx.name} / {cx.name}")
-    return tar, sx, cx
+    return tar, sx, cx, len(pairs)
 
 
 def main():
@@ -120,8 +120,9 @@ def main():
     ap.add_argument("--num_workers", type=int, default=4)
     a = ap.parse_args()
 
+    npair = None
     if a.tar:
-        tar, sx, cx = _align_dirs(Path(a.tar), Path(a.sty), Path(a.cnt))
+        tar, sx, cx, npair = _align_dirs(Path(a.tar), Path(a.sty), Path(a.cnt))
         tag = Path(a.tar).name
     else:
         if a.seed is None:
@@ -132,10 +133,21 @@ def main():
             if not p_.exists():
                 sys.exit(f"!! 缺 {p_} —— 先跑 protocol.py --align --seed {a.seed}")
         tag = f"seed{a.seed}"
-    n = {p_.name: len(list(p_.glob("*.png"))) for p_ in (sx, cx, tar)}
+    # tar 里可能混着 matrix_*.png（热图），按**配对数**核对，不按 glob 计数。
+    n = {p_.name: len(list(p_.glob("*.png"))) for p_ in (sx, cx)}
+    n[tar.name] = npair if npair is not None else len(list(tar.glob("*.png")))
     if len(set(n.values())) != 1:
         sys.exit(f"!! 三边张数不等 {n} —— eval_artfid 会断言失败")
     print(f"{tag}: 三边各 {n[tar.name]} 张")
+    if npair is not None and npair != len(list(tar.glob("*.png"))):
+        # eval_artfid 会 glob 整个 tar 目录，热图混进去会让断言失败。
+        # 把它们挪到子目录，而不是删 —— 那些图还要看。
+        junk = tar / "_plots"
+        junk.mkdir(exist_ok=True)
+        for f in list(tar.glob("*.png")):
+            if "__" not in f.stem:
+                f.rename(junk / f.name)
+        print(f"   把热图挪到 {junk}（eval_artfid 会 glob 整个目录）")
 
     patch_sqrtm()
     sys.path.insert(0, str(EVAL))

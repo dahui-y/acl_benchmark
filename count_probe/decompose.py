@@ -63,6 +63,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--arms", required=True)
+    ap.add_argument("--dump-ids", action="store_true",
+                    help="把两个方向的 id 各写一个文件，供 countgen_batch.py --only-ids 用")
     a = ap.parse_args()
     p = Path(a.arms) / "yolo_results.csv"
     if not p.exists():
@@ -166,6 +168,13 @@ def main():
           f"数少了 {lo} 题（{_pct(lo, len(rows)).strip()}）"
           f" —— 偏向哪边决定了它更容易触发哪套修正机制")
     print("注意：YOLO 自己也会错，这里只是两个数数器互比，当相对读数看。")
+
+    if a.dump_ids:
+        d = Path(a.arms)
+        for name, g in (("under", under), ("over", over)):
+            f = d / f"{name}_ids.txt"
+            f.write_text("\n".join(r["stem"] for r in g) + "\n")
+            print(f"\n→ {f}  ({len(g)} 个 id)")
 
 
 if __name__ == "__main__":

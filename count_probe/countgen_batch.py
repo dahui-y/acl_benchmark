@@ -387,6 +387,9 @@ def main():
                     help="只用本地缓存，一次网络都不发。设了 HF_HUB_OFFLINE 时自动打开。"
                          "批量跑两三小时，中途一次元数据探测超时就白费，建议开着")
     ap.add_argument("--limit", type=int, default=0, help="只跑前 N 题（冒烟用）")
+    ap.add_argument("--only-ids", default=None,
+                    help="只跑这个文件里列出的 id（每行一个），**并忽略续跑记录**。"
+                         "用于给已经跑过的子集补存 mask 数组")
     ap.add_argument("--skip-over9", action="store_true",
                     help="连 vanilla 都不跑 N>9（完全等同官方行为）")
     ap.add_argument("--no-masks", action="store_true", help="不存 mask 可视化")
@@ -412,6 +415,7 @@ def main():
     sys.path.insert(0, str(MIC))
     os.chdir(MIC)                       # 他们的 config 用相对路径
 
+    import numpy as np
     import torch
     import yaml
     from diffusers.utils.torch_utils import randn_tensor
@@ -485,6 +489,14 @@ def main():
     done = {i for i, r in last.items()
             if a.vanilla_only or r.get("has_countgen_img") or r.get("skipped_by_official")}
     partial = len(last) - len(done)
+    if a.only_ids:
+        want = {l.strip() for l in Path(a.only_ids).read_text().splitlines() if l.strip()}
+        data = [d for d in data
+                if f"{d['object']}_num={d['int_number']}_seed={d['seed']}" in want]
+        done, partial = set(), 0        # 指定了 id 就重跑，不看续跑记录
+        print(f"--only-ids：只跑 {len(data)} 题（忽略续跑记录）")
+        if len(data) != len(want):
+            print(f"⚠️ 文件里有 {len(want)} 个 id，数据集里只找到 {len(data)} 个")
     if done:
         print(f"续跑：已完成 {len(done)} 题")
     if partial:
@@ -526,6 +538,13 @@ def main():
                 pipe, prompt, N, cfg, seed)
             n_dbscan = counter.get("n")                 # DBSCAN 真实簇数（可能是 0）
             n_used = int(vanilla_masks.max().item())    # 兜底之后管线实际用的数
+            # 把三张 mask 存成数组（32×32，几百字节）。可视化 png 看得见但量不了，
+            # 而"新增的 blob 位置上到底长没长出物体"这个问题必须拿数组去问。
+            np.savez_compressed(out / f"{img_id}_masks.npz",
+                                vanilla=vanilla_masks.cpu().numpy(),
+                                corrected=correct_mask.cpu().numpy(),
+                                postprocess=object_masks.cpu().numpy(),
+                                n_dbscan=n_dbscan, N=N)
             if not a.no_masks:
                 show_mask_list([vanilla_masks, correct_mask, object_masks],
                                titles=[f"Vanilla: {n_used}",

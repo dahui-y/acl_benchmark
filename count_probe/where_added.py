@@ -56,6 +56,9 @@ def main():
     ap.add_argument("--arms", required=True, help="make_arms.py 的输出目录")
     ap.add_argument("--weights", default="yolov9e.pt")
     ap.add_argument("--conf", type=float, default=None)
+    ap.add_argument("--min-det", type=int, default=3,
+                    help="YOLO 在该图上检出的目标类总数低于此值就单列 —— "
+                         "那种图上「没命中」多半是检测器读不出来，不是引导失败")
     a = ap.parse_args()
     src, arms = Path(a.src), Path(a.arms)
 
@@ -130,6 +133,19 @@ def main():
     print(f"\n{'='*70}")
     print(f"新增 blob 共 {tot_blob} 个，其中位置上真的长出目标类物体的 {hit_blob} 个"
           f"（{100.0*hit_blob/max(tot_blob,1):.1f}%）")
+
+    # ★ 剔除"检测器在这张图上几乎什么都没看见"的题。命中率为 0 在那些图上
+    #   不能说明引导失败 —— 更可能是 YOLO 读不出来（例：car 那两题 YOLO 总数 0）。
+    good = [r for r in per_item if r["yolo"] >= a.min_det]
+    bad = [r for r in per_item if r["yolo"] < a.min_det]
+    tb = sum(r["n_added"] for r in good)
+    hb = sum(r["hit"] for r in good)
+    print(f"剔除 YOLO 总检出 < {a.min_det} 的 {len(bad)} 题后："
+          f"{hb}/{tb} = {100.0*hb/max(tb,1):.1f}%")
+    if bad:
+        print(f"  被剔除的：{', '.join(r['stem'][:20] for r in bad)}")
+        print(f"  它们贡献了 {sum(r['n_added']-r['hit'] for r in bad)}/"
+              f"{tot_blob-hit_blob} 个未命中 —— 这些是检测器的问题，不是引导的问题。")
     print("\n判读（事先写死）：")
     print("  · 命中率 ≫ 50% → 引导是听话的，病在**位置提议**（i）：")
     print("      要么位置本来就不该有物体，要么加上去的和邻居粘成了一个。")

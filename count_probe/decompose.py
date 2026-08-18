@@ -127,6 +127,31 @@ def main():
         print(f"{n:<26}{len(rs):>6}{_pct(sum(r['ok_c'] for r in rs), len(rs)):>9}"
               f"{_pct(sum(r['ok_v'] for r in rs), len(rs)):>14}")
 
+    # ---- 3.2 计数器把方向判对了吗 ----
+    # where_added.py 逐行读出来的疑点：有的题 DBSCAN 说"还差 1 个"，
+    # 而最终图里 YOLO 数出的比 N 多一倍（horse_num=7: DBSCAN 6 → YOLO 13）。
+    # 也就是说管线朝**相反方向**在修。表三按 obj_num_match 的真假分组，
+    # 完全看不见这条通道 —— 它只问"匹配没匹配"，不问"差多少、差在哪边"。
+    print("=" * 66)
+    print("表四a 计数器的**方向**判对了吗（以 YOLO 在原版图上的读数为参照）")
+    print(f"{'':<30}{'题数':>6}{'修正后正确':>11}")
+
+    def _sgn(x, y):
+        return 0 if x == y else (1 if x > y else -1)
+
+    agree = [r for r in fixed if _sgn(r["n_dbscan"], r["N"]) == _sgn(r["y_v"], r["N"])]
+    zero = [r for r in fixed if _sgn(r["y_v"], r["N"]) == 0]          # 原版其实就是对的
+    wrong = [r for r in fixed if r not in agree and r not in zero]
+    _row("方向一致（该加就加/该删就删）", sum(r["ok_c"] for r in agree), len(agree))
+    _row("原版其实已经对了", sum(r["ok_c"] for r in zero), len(zero),
+         "计数器误判，这些图本不该动")
+    _row("**方向相反**", sum(r["ok_c"] for r in wrong), len(wrong),
+         "越修越远")
+    print(f"\n若把方向判错的 {len(wrong)} 题和本不该动的 {len(zero)} 题都拿掉，"
+          f"修正成功率 {_pct(sum(r['ok_c'] for r in agree), len(agree)).strip()}"
+          f"（现状 {_pct(sum(r['ok_c'] for r in fixed), len(fixed)).strip()}）")
+    print("这是「换一个更准的计数器」的第二条通道 —— 表三只算了「说匹配却不匹配」那一条。\n")
+
     # ---- 3.5 分方向的配对表：净增益到底是不是噪声 ----
     print("\n" + "=" * 66)
     print("表六b 分方向的**配对**变化（准确率之差看不出样本量，配对数才看得出）")

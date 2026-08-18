@@ -119,16 +119,38 @@ def main():
         tot_blob += n_added
         hit_blob += nh
         new_area = int(((post > 0) & (van == 0)).sum())
+        # ★ 原版图的 YOLO 读数是判读的关键列。少了它就分不清两件事：
+        #     · 原版本来就超量（计数器低估）——那是计数器的问题
+        #     · 原版确实不足、修正却把总数顶过头 ——那是引导的全局副作用
+        #   我上一轮就是把"最终图超量"误当成"原版超量"，结论错了。
+        yv = rows.get(stem, {}).get("yolo_vanilla")
         per_item.append(dict(stem=stem, N=N, n_dbscan=n_db, n_added=n_added,
                              hit=nh, yolo=len(boxes),
+                             y_v=None if yv in (None, "", "None") else int(float(yv)),
                              ok=rows.get(stem, {}).get("ok_countgen"),
                              new_area=new_area))
 
-    print(f"{'题':<34}{'N':>3}{'DBSCAN':>7}{'新增blob':>8}{'其中长出物体':>12}"
-          f"{'YOLO总数':>9}{'最终对':>7}")
+    print(f"{'题':<32}{'N':>3}{'DBSCAN':>7}{'原版YOLO':>9}{'新增':>5}{'长出':>5}"
+          f"{'最终YOLO':>9}{'对':>4}")
     for r in per_item:
-        print(f"{r['stem'][:33]:<34}{r['N']:>3}{r['n_dbscan']:>7}{r['n_added']:>8}"
-              f"{r['hit']:>12}{r['yolo']:>9}{str(r['ok']):>7}")
+        print(f"{r['stem'][:31]:<32}{r['N']:>3}{r['n_dbscan']:>7}"
+              f"{str(r['y_v']):>9}{r['n_added']:>5}{r['hit']:>5}"
+              f"{r['yolo']:>9}{str(r['ok']):>4}")
+
+    # ---- 计数器低估 vs 修正顶过头 ----
+    ok3 = [r for r in per_item if r["y_v"] is not None and r["yolo"] >= a.min_det]
+    if ok3:
+        under_cnt = [r for r in ok3 if r["y_v"] > r["N"]]      # 原版就已超量 → 计数器低估
+        over_shoot = [r for r in ok3 if r["y_v"] <= r["N"] and r["yolo"] > r["N"]]
+        stay_low = [r for r in ok3 if r["y_v"] <= r["N"] and r["yolo"] < r["N"]]
+        print(f"\n在检测器读得出的 {len(ok3)} 题里：")
+        print(f"  原版就已超量（计数器低估，方向本身错）      {len(under_cnt):>3}")
+        print(f"  原版不足、修正后**顶过头**（引导的全局副作用）{len(over_shoot):>3}")
+        print(f"  原版不足、修正后仍不足                    {len(stay_low):>3}")
+        if over_shoot:
+            ex = sorted(over_shoot, key=lambda r: -(r["yolo"] - r["N"]))[:4]
+            print("  顶过头最厉害的：" + "，".join(
+                f"{r['stem'][:16]} N={r['N']} 原版{r['y_v']}→{r['yolo']}" for r in ex))
 
     print(f"\n{'='*70}")
     print(f"新增 blob 共 {tot_blob} 个，其中位置上真的长出目标类物体的 {hit_blob} 个"

@@ -54,7 +54,14 @@ def _tuple(v):
 
 
 def main():
-    print(f"python {sys.version.split()[0]}   （建议 3.10；scikit-image 0.23 要 >=3.10）\n")
+    # ★ 第一行就把环境打出来。这条线上已经发生过"命令敲在另一个环境里"的事，
+    #   而那种错的表现是别处报依赖冲突，不是这里报错，很难顺藤摸回来。
+    print(f"环境   {sys.prefix}")
+    print(f"python {sys.version.split()[0]}   （建议 3.10；scikit-image 0.23 要 >=3.10）")
+    if Path(sys.prefix).name not in ("countgen",):
+        print(f"       ⚠️ 环境名不是 countgen —— 确认没敲错 conda activate\n")
+    else:
+        print()
 
     print("── 版本 " + "─" * 48)
     tv = ver("torch", "2.1.2")

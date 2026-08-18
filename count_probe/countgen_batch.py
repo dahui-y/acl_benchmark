@@ -56,6 +56,8 @@ import time
 from pathlib import Path
 
 os.environ.setdefault("MPLBACKEND", "Agg")      # 无头环境；他们的代码会画图
+# 修正步的显存峰值很尖（带梯度的 UNet 前向），碎片化会让本来够的显存不够
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 REPO = Path(__file__).resolve().parent.parent
 MIC = REPO / "help_code" / "make-it-count"
@@ -104,6 +106,70 @@ def _patch_caches():
         return m
 
     torch.hub.load = hub_load
+
+
+def _patch_mem_attn():
+    """只对「概率矩阵算完就丢」的注意力层改走 SDPA，省掉 24G 装不下的那部分显存。
+
+    OOM 出在 `perform_iterative_refinement_step`：那里 `latents.requires_grad_(True)`，
+    整个 UNet 前向的中间量被 autograd 留住。而 `CountingProcessor` 走的是**显式**
+    注意力（`get_attention_scores` → `baddbmm`），SDXL 1024² 下 64×64 那一档有
+    4096 个 token，一层的概率矩阵是 [2×10, 4096, 4096] fp16 = **671 MB**，
+    这一档约 10 个 block → 光概率矩阵就 6–7 GB。
+
+    但那些层的概率矩阵是**白留的**。看 attention_processors.py：
+      · 只有 `attn.shape[1] == attn_res²(=1024)` 才会被存进 attention store（55-74 行）
+      · 只有 `shape[0]==40 and shape[2]==1024 and 'up' in place` 才会被屏蔽（34-38 行）
+    4096 那一档两个条件都不满足，probs 算出来只喂了一次 bmm 就扔。
+    换成 `scaled_dot_product_attention` 算的是同一个东西，只是不物化那个矩阵。
+
+    **32×32 那一档原封不动走它们的原路**，所以被存下来、被屏蔽的张量一个字节没变。
+
+    保守起见，只要遇到任何本函数没覆盖的情形（有 attention_mask、
+    upcast_attention、group_norm…）就退回原路，不赌。
+
+    等价性可以自己验：`--vanilla-only` 跑两遍（带/不带 --mem-attn），
+    那一档无梯度、显存够，两次的图和 n_dbscan 应当一致。
+    """
+    import torch
+    import torch.nn.functional as F
+    import pipeline.self_counting_sdxl_pipeline as SP
+    from pipeline.attention_processors import CountingProcessor
+
+    class MemAttnCountingProcessor(CountingProcessor):
+        def __call__(self, attn, hidden_states, encoder_hidden_states=None,
+                     attention_mask=None, **kwargs):
+            n = hidden_states.shape[1]
+            keep = (n == self.attnstore.attn_res[0] ** 2      # 这一档要存/要屏蔽
+                    or attention_mask is not None
+                    or getattr(attn, "upcast_attention", False)
+                    or getattr(attn, "group_norm", None) is not None
+                    or getattr(attn, "spatial_norm", None) is not None
+                    or getattr(attn, "residual_connection", False))
+            if keep:
+                return super().__call__(attn, hidden_states, encoder_hidden_states,
+                                        attention_mask, **kwargs)
+
+            is_cross = encoder_hidden_states is not None
+            ehs = encoder_hidden_states if is_cross else hidden_states
+            q = attn.head_to_batch_dim(attn.to_q(hidden_states))
+            k = attn.head_to_batch_dim(attn.to_k(ehs))
+            v = attn.head_to_batch_dim(attn.to_v(ehs))
+            # scale 显式传：diffusers 的 attn.scale 与 SDPA 的默认值都是 d^-0.5，
+            # 但写出来就不必依赖"默认值恰好相同"这个假设
+            out = F.scaled_dot_product_attention(q, k, v, attn_mask=None,
+                                                 dropout_p=0.0, is_causal=False,
+                                                 scale=attn.scale)
+            # 仍要调 store —— 它管着 cur_att_layer 和 between_steps 的时序。
+            # 给一个 meta 张量（不占显存），形状让它走进"跳过"分支，与原路一致。
+            self.attnstore(torch.empty((1, n, 1), device="meta"),
+                           is_cross, self.place_in_unet, attn.heads)
+            out = attn.batch_to_head_dim(out)
+            # 与它们的处理器一致：不做 group_norm / residual / rescale
+            return attn.to_out[1](attn.to_out[0](out))
+
+    SP.CountingProcessor = MemAttnCountingProcessor   # register_attention_control 用的是这个名字
+    return MemAttnCountingProcessor
 
 
 def _patch_counter_probe():
@@ -171,6 +237,9 @@ def main():
                     help="ReLayout 权重路径。默认用 pipeline_config.yaml 里的相对路径"
                          "（仓库内），但那是个 GB 级文件，不该塞进仓库——"
                          "指到有空间的盘即可，或设环境变量 RELAYOUT_CKPT")
+    ap.add_argument("--no-mem-attn", action="store_true",
+                    help="关掉省显存的注意力改路，完全走它们的原实现。"
+                         "24G 卡上带梯度的修正步会 OOM；留着这个开关是为了验等价性")
     ap.add_argument("--vanilla-only", action="store_true",
                     help="只跑原版 SDXL + DBSCAN 计数，不做任何修正。"
                          "不需要 ReLayout 权重，一次前向无梯度，快三四倍。"
@@ -226,6 +295,10 @@ def main():
         print(f"ReLayout 权重：{ckpt}")
 
     counter = _patch_counter_probe()
+    if not a.no_mem_attn:
+        _patch_mem_attn()
+        print("注意力改路已开：只对「概率矩阵会被丢弃」的层走 SDPA"
+              "（32×32 那一档原样不动）")
     pipe = _load_pipeline(cfg)
     phase1 = cfg["pipeline"]["phase1_type"]
     phase2 = cfg["pipeline"]["phase2_type"]
@@ -293,8 +366,20 @@ def main():
                                        f"Postprocess: {int(object_masks.max())}"],
                                save_path=str(out / f"{img_id}_masks.png"))
             # ★ 与官方一致：计数器认为已经对了，就直接输出原版图，不做任何干预
-            image = vanilla_img if match else run_counting_pipeline_corrected_masks(
-                pipe, prompt, generator, object_masks, latents, cfg)
+            if match:
+                image = vanilla_img
+            else:
+                # 修正步是显存峰值所在。原版那一趟存下来的 9 个时间步 × 各层
+                # 32×32 注意力图（约 0.7 GB）到这里已经用完了 —— 下一次 __call__
+                # 会新建 store，所以现在清掉是安全的。
+                for st in (pipe.attention_store.self_step_store,
+                           pipe.attention_store.cross_step_store):
+                    st.clear()
+                pipe.attention_store.all_cross_attention = {}
+                pipe.attention_store.all_self_attention = {}
+                torch.cuda.empty_cache()
+                image = run_counting_pipeline_corrected_masks(
+                    pipe, prompt, generator, object_masks, latents, cfg)
         t_count = time.time() - t0
 
         vanilla_img.save(out / f"{img_id}_vanilla.png")

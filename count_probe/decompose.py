@@ -181,6 +181,42 @@ def main():
         print(f"⚠️ 有 {len(harm)} 题是**被修坏的** —— 计数器说它不匹配，其实原版就是对的。"
               f"\n   这一项在表三里被并进了「没修好」，单看那张表看不出来。")
 
+    # ---- 4.5 引导对"总数"的控制到底灵不灵 ----
+    # where_added 的读数：新增 blob 有 86% 真的长出了物体（引导会**放**东西），
+    # 但总数经常失控（horse_num=7：原版 7、只加 1 个 blob、最终 13）。
+    # 这两件事不矛盾 —— 它说明引导是"局部听话、全局失控"。用一个标量量它：
+    #     意图改变量 = N − n_dbscan     （管线想改多少个）
+    #     实际改变量 = y_c − y_v        （实际改了多少个）
+    #     残差 = 实际 − 意图            （引导多做/少做了多少）
+    # 机制上的解释在 utils/loss_utils.py:5：`foreground_mask = (desired_mask != 0)`
+    # 把逐实例标签压成二值前景图，配 pos_weight=10 的 BCE。这个目标只要求
+    # "这片区域要有物体感"，从没要求"恰好 N 个彼此分开的"，所以把区域填满
+    # 正是它奖励的行为。
+    print("\n" + "=" * 66)
+    print("表九 引导的保真度：想改的和实际改的差多少")
+    print(f"{'':<26}{'题数':>6}{'|残差|=0':>9}{'|残差|≥2':>9}{'残差中位':>9}")
+
+    def _resid(rs):
+        v = sorted(r["y_c"] - r["y_v"] - (r["N"] - r["n_dbscan"]) for r in rs)
+        return v
+
+    for tag, g in (("全部进修正的", fixed),
+                   ("  其中 数多了", over), ("  其中 数少了", under)):
+        g = [r for r in g if r["y_c"] is not None and r["y_v"] is not None]
+        if not g:
+            continue
+        v = _resid(g)
+        z = sum(1 for x in v if x == 0)
+        big = sum(1 for x in v if abs(x) >= 2)
+        print(f"{tag:<26}{len(v):>6}{_pct(z, len(v)):>9}{_pct(big, len(v)):>9}"
+              f"{v[len(v)//2]:>9}")
+    allv = _resid([r for r in fixed if r["y_c"] is not None and r["y_v"] is not None])
+    print(f"\n残差范围 {min(allv)} ~ {max(allv)}；"
+          f"其中 >0（凭空多出物体）{sum(1 for x in allv if x > 0)} 题，"
+          f"<0（该出没出）{sum(1 for x in allv if x < 0)} 题")
+    print("残差 ≈ 0 才说明引导忠实执行了意图。|残差| 大 = 引导在改动指定位置之外，"
+          "\n还顺手改了整张图 —— 那正是 loss_utils.py:5 把实例身份压成二值前景的后果。")
+
     # ---- 5. 计数器的两类错误 ----
     print("\n" + "=" * 66)
     print("表八 DBSCAN 计数器本身（以 YOLO 在原版图上的读数为参照）")

@@ -29,6 +29,7 @@
 import argparse
 import os
 import runpy
+import shutil
 import sys
 from pathlib import Path
 
@@ -63,31 +64,79 @@ def patch_sqrtm():
           f"只改调用约定，不动度量）")
 
 
+def _align_dirs(tar, sty, cnt):
+    """从 tar 的文件名 {style}__{content}.png 反推对齐目录。
+
+    eval_artfid 按 sorted() 逐一配对且断言三边张数相等，所以要造两个与 tar
+    同名的软链目录。**不需要 manifest** —— 配对关系已经编码在文件名里，
+    这比再维护一份索引更不容易错。
+    """
+    pairs = []
+    for f in sorted(tar.glob("*.png")):
+        if "__" not in f.stem:
+            sys.exit(f"!! {f.name} 不含 '__'，无法反推配对")
+        s_, c_ = f.stem.split("__", 1)
+        pairs.append((f.name, s_, c_))
+    if not pairs:
+        sys.exit(f"!! {tar} 里没有 png")
+    sx, cx = tar.parent / f"{tar.name}_sty_x", tar.parent / f"{tar.name}_cnt_x"
+    for p_ in (sx, cx):
+        if p_.exists():
+            shutil.rmtree(p_)
+        p_.mkdir(parents=True)
+
+    def _find(d, stem):
+        for ext in (".png", ".jpg", ".jpeg", ".JPG", ".PNG"):
+            if (d / f"{stem}{ext}").exists():
+                return (d / f"{stem}{ext}").resolve()
+        sys.exit(f"!! 在 {d} 里找不到 {stem}.*")
+
+    for name, s_, c_ in pairs:
+        (sx / name).symlink_to(_find(sty, s_))
+        (cx / name).symlink_to(_find(cnt, c_))
+    print(f"对齐 {len(pairs)} 组 → {sx.name} / {cx.name}")
+    return tar, sx, cx
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--seed", type=int, default=None)
+    # 任意目录模式：styleid_batch.py 的输出不在 protocol/seedN 布局里。
+    # tar 的文件名是 {style}__{content}.png，对齐目录可以从文件名直接反推，
+    # 不需要 manifest。
+    ap.add_argument("--tar", default=None, help="stylized 目录")
+    ap.add_argument("--sty", default=None, help="style 源图目录")
+    ap.add_argument("--cnt", default=None, help="content 源图目录")
     ap.add_argument("--mode", default="art_fid_inf",
                     choices=["art_fid", "art_fid_inf"])
     ap.add_argument("--batch_size", type=int, default=25)
     ap.add_argument("--num_workers", type=int, default=4)
     a = ap.parse_args()
 
-    d = OUT / f"seed{a.seed}"
-    for nm in ("sty_x", "cnt_x", "tar"):
-        if not (d / nm).exists():
-            sys.exit(f"!! 缺 {d/nm} —— 先跑 protocol.py --align --seed {a.seed}")
-    n = {nm: len(list((d / nm).glob("*.png"))) for nm in ("sty_x", "cnt_x", "tar")}
+    if a.tar:
+        tar, sx, cx = _align_dirs(Path(a.tar), Path(a.sty), Path(a.cnt))
+        tag = Path(a.tar).name
+    else:
+        if a.seed is None:
+            sys.exit("!! 给 --seed 或给 --tar/--sty/--cnt")
+        d = OUT / f"seed{a.seed}"
+        tar, sx, cx = d / "tar", d / "sty_x", d / "cnt_x"
+        for p_ in (sx, cx, tar):
+            if not p_.exists():
+                sys.exit(f"!! 缺 {p_} —— 先跑 protocol.py --align --seed {a.seed}")
+        tag = f"seed{a.seed}"
+    n = {p_.name: len(list(p_.glob("*.png"))) for p_ in (sx, cx, tar)}
     if len(set(n.values())) != 1:
-        sys.exit(f"!! 三边张数不等 {n} —— eval_artfid 会断言失败，重跑 --align")
-    print(f"seed {a.seed}: 三边各 {n['tar']} 张")
+        sys.exit(f"!! 三边张数不等 {n} —— eval_artfid 会断言失败")
+    print(f"{tag}: 三边各 {n[tar.name]} 张")
 
     patch_sqrtm()
     sys.path.insert(0, str(EVAL))
     os.chdir(EVAL)                      # utils.download 用相对路径
     sys.argv = ["eval_artfid.py",
-                "--sty", str(d / "sty_x"), "--cnt", str(d / "cnt_x"),
-                "--tar", str(d / "tar"), "--mode", a.mode,
+                "--sty", str(sx), "--cnt", str(cx),
+                "--tar", str(tar), "--mode", a.mode,
                 "--batch_size", str(a.batch_size),
                 "--num_workers", str(a.num_workers)]
     runpy.run_path(str(EVAL / "eval_artfid.py"), run_name="__main__")

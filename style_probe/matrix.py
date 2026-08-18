@@ -138,18 +138,53 @@ def sheet(M, path, title):
     plt.close(fig)
 
 
+def _from_dirs(tdir, sdir, cdir):
+    """任意目录模式：从 tar 的文件名 {style}__{content}.png 反推 40×20 网格。
+
+    styleid_batch.py 的输出不在 protocol/seedN 布局里，也没有 manifest。
+    配对关系已经写在文件名里，直接反推比再维护一份索引更不容易错。
+    """
+    import collections
+    grid = collections.defaultdict(dict)
+    for f in sorted(Path(tdir).glob("*.png")):
+        if "__" not in f.stem:
+            continue
+        s_, c_ = f.stem.split("__", 1)
+        grid[s_][c_] = f
+    ss = sorted(grid)
+    cs = sorted({c for v in grid.values() for c in v})
+    bad = [(s_, c_) for s_ in ss for c_ in cs if c_ not in grid[s_]]
+    if bad:
+        sys.exit(f"!! 网格不完整，缺 {len(bad)} 格，例：{bad[0]}")
+
+    def _find(d, stem):
+        for ext in (".png", ".jpg", ".jpeg", ".JPG", ".PNG"):
+            if (Path(d) / f"{stem}{ext}").exists():
+                return Path(d) / f"{stem}{ext}"
+        sys.exit(f"!! 在 {d} 里找不到 {stem}.*")
+
+    sty = [_find(sdir, s_) for s_ in ss]
+    cnt = [_find(cdir, c_) for c_ in cs]
+    tar = [[grid[s_][c_] for c_ in cs] for s_ in ss]
+    return sty, cnt, tar
+
+
 def run(seed, args):
     import torch
-    d = OUT / f"seed{seed}"
-    man = json.loads((d / "manifest.json").read_text())
-    sty = [d / "sty" / x["file"] for x in man["style"]]
-    cnt = [d / "cnt" / x["file"] for x in man["content"]]
-    ns, nc = len(sty), len(cnt)
-    tar = [[d / "tar" / f"{s.stem}__{c.stem}.png" for c in cnt] for s in sty]
+    if getattr(args, "tar", None):
+        d = Path(args.tar)
+        sty, cnt, tar = _from_dirs(args.tar, args.sty, args.cnt)
+        ns, nc = len(sty), len(cnt)
+    else:
+        d = OUT / f"seed{seed}"
+        man = json.loads((d / "manifest.json").read_text())
+        sty = [d / "sty" / x["file"] for x in man["style"]]
+        cnt = [d / "cnt" / x["file"] for x in man["content"]]
+        ns, nc = len(sty), len(cnt)
+        tar = [[d / "tar" / f"{s.stem}__{c.stem}.png" for c in cnt] for s in sty]
     miss = [p for row in tar for p in row if not p.exists()]
     if miss:
-        sys.exit(f"!! 缺 {len(miss)} 张 stylized，例：{miss[0].name}"
-                 f" —— 先跑 --gen --seed {seed}")
+        sys.exit(f"!! 缺 {len(miss)} 张 stylized，例：{miss[0].name}")
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     flat = [p for row in tar for p in row]
 
@@ -217,6 +252,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--tar", default=None, help="stylized 目录（任意目录模式）")
+    ap.add_argument("--sty", default=None, help="style 源图目录")
+    ap.add_argument("--cnt", default=None, help="content 源图目录")
     ap.add_argument("--seeds", type=int, nargs="*", default=None,
                     help="给多个 seed 时，额外报**噪声地板**：同一格在不同抽样"
                          "下的差。任何小于地板的结构都不是结构。")

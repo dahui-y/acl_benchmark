@@ -72,11 +72,17 @@ def _align_dirs(tar, sty, cnt):
     这比再维护一份索引更不容易错。
     """
     pairs = []
+    skipped = 0
     for f in sorted(tar.glob("*.png")):
+        # matrix.py 把 matrix_*.png 写进了同一个目录。不含 '__' 的不是输出图，
+        # 跳过而不是退出 —— 第一版直接 sys.exit，把两个基线挡在门外。
         if "__" not in f.stem:
-            sys.exit(f"!! {f.name} 不含 '__'，无法反推配对")
+            skipped += 1
+            continue
         s_, c_ = f.stem.split("__", 1)
         pairs.append((f.name, s_, c_))
+    if skipped:
+        print(f"   跳过 {skipped} 个不含 '__' 的文件（热图等）")
     if not pairs:
         sys.exit(f"!! {tar} 里没有 png")
     sx, cx = tar.parent / f"{tar.name}_sty_x", tar.parent / f"{tar.name}_cnt_x"

@@ -147,7 +147,7 @@ def _from_dirs(tdir, sdir, cdir):
     import collections
     grid = collections.defaultdict(dict)
     for f in sorted(Path(tdir).glob("*.png")):
-        if "__" not in f.stem:
+        if "__" not in f.stem:      # matrix_*.png 是我们自己写的热图，不是输出
             continue
         s_, c_ = f.stem.split("__", 1)
         grid[s_][c_] = f

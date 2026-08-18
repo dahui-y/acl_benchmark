@@ -11,12 +11,40 @@ Python 选 **3.10**：`scikit-image 0.23.2` 要 `>=3.10`，`spacy 3.5.2` 和
 conda create -n countgen python=3.10 -y --override-channels -c conda-forge
 conda activate countgen
 
-# PyPI 上 torch 2.1.2 的 linux 轮子默认就是 cu121 构建，走国内 PyPI 镜像即可，
-# 不必绕 download.pytorch.org。装完确认：python -c "import torch;print(torch.version.cuda)" → 12.1
+# ★ 先把 pip 指到国内镜像，然后**不要**加 --index-url download.pytorch.org（见下）
+pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 pip install torch==2.1.2 torchvision==0.16.2
+python -c "import torch;print(torch.__version__, torch.version.cuda)"   # 期望 2.1.2 / 12.1
 
 pip install -r count_probe/requirements_infer.txt
 ```
+
+### 装 torch 千万别加 `--index-url https://download.pytorch.org/whl/cu121`
+
+那个源在美国、没有国内镜像，实测只有 ~400 kB/s（2.2 GB 要一个半小时）；
+而且它发的是**胖轮子**——把 CUDA 运行时静态打进 whl 里，所以才 2.2 GB。
+
+走普通 PyPI（国内镜像）就行：`torch 2.1.2` 的 cp310 linux 轮子只有 **639 MB**，
+它的依赖里带
+
+```
+nvidia-cuda-nvrtc-cu12==12.1.105   nvidia-cudnn-cu12==8.9.2.26
+nvidia-cublas-cu12==12.1.3.1       ...共 11 个
+```
+
+**它本来就是 cu121 构建**，只是把 CUDA 运行时拆成独立 pip 包，而这些包国内镜像都有。
+
+镜像备选（实测都通）：
+
+| 镜像 | index-url |
+|---|---|
+| 清华 | `https://pypi.tuna.tsinghua.edu.cn/simple` |
+| 阿里云 | `https://mirrors.aliyun.com/pypi/simple/` |
+| 中科大 | `https://mirrors.ustc.edu.cn/pypi/simple` |
+| 南大 | `https://mirror.nju.edu.cn/pypi/web/simple` |
+
+torch 加那 11 个 nvidia 包解包后约 5 GB。先 `df -h /openbayes/home` 看配额；
+不够就把 pip 缓存挪走：`export PIP_CACHE_DIR=$SD_OUT/pipcache`。
 
 ### OpenBayes 上 `conda create` 报 `UnavailableInvalidChannel ... anaconda/pkgs/r`
 

@@ -145,8 +145,29 @@ def main():
         print(line + ("   ← 官方跳过修正" if N > 9 else ""))
 
     # ---------- 表三：天花板拆解 ----------
+    if "vanilla" in arms and "countgen" not in arms:
+        # --vanilla-only 的先行档：四个格子里能算出三个，只差"修正成功率"。
+        v = [r for r in main_rows
+             if r["obj_num_match"] is not None and r["ok_vanilla"] is not None]
+        if v:
+            n = len(v)
+            m_ok = sum(1 for r in v if r["obj_num_match"] and r["ok_vanilla"])
+            m_bad = sum(1 for r in v if r["obj_num_match"] and not r["ok_vanilla"])
+            f_all = sum(1 for r in v if not r["obj_num_match"])
+            print(f"\n{'='*64}\n表三（先行档：只有 vanilla 臂，N≤9 共 {n} 题）")
+            print(f"{'计数器说对 & 实际对（会被原样输出，白捡）':<40}{m_ok:>5}{_pct(m_ok, n):>9}")
+            print(f"{'计数器说对 & 实际错 ← 永远修不到':<40}{m_bad:>5}{_pct(m_bad, n):>9}")
+            print(f"{'计数器说错 → 会进修正（成功率待测）':<40}{f_all:>5}{_pct(f_all, n):>9}")
+            print(f"\n读法：CountGen 的准确率 = {_pct(m_ok, n)} + "
+                  f"{_pct(f_all, n)}×修正成功率。")
+            print(f"      中间那 {m_bad} 题（{_pct(m_bad, n).strip()}）是**结构性损失**——"
+                  f"管线信任自己的计数器，这些图不会被送进修正，")
+            print(f"      所以无论修正做得多好都拿不到。换掉计数器才拿得到。")
+            _agree(v)
+        _over9(over9)
+        return
     if "vanilla" not in arms or "countgen" not in arms:
-        print("\n（缺 vanilla 或 countgen 臂，跳过拆解）")
+        print("\n（缺 vanilla 臂，跳过拆解）")
         return
     dec = [r for r in main_rows
            if r["obj_num_match"] is not None and r["ok_vanilla"] is not None
@@ -180,20 +201,31 @@ def main():
     print(f"  上限 ≈ {_pct(len(m_ok) + (len(f_ok)+len(f_bad)+len(m_bad))*rate, n)}"
           f"   ← 换计数器最多能拿到这么多")
 
-    agree = [r for r in dec if r["n_dbscan"] is not None]
-    if agree:
-        same = sum(1 for r in agree if r["n_dbscan"] == r["yolo_vanilla"])
-        mae = sum(abs(r["n_dbscan"] - r["yolo_vanilla"]) for r in agree) / len(agree)
-        print(f"\nDBSCAN 计数器 vs YOLO（同一张原版图，{len(agree)} 题）："
-              f"完全一致 {_pct(same, len(agree))}，MAE {mae:.2f}")
-        print("  注意：这是两个都会错的数数器在互比，只能当相对读数。")
+    _agree(dec)
+    _over9(over9)
 
-    if over9:
-        ok = [r for r in over9 if r["ok_vanilla"] is not None]
-        print(f"\n{'='*64}\nN>9 单列（{len(over9)} 题，官方 run_countgen.py:104 整题跳过）")
-        print(f"  vanilla 准确率 {_pct(sum(r['ok_vanilla'] for r in ok), len(ok))}"
-              f"，CountGen 无输出")
-        print("  这一档不能并入总分；报数时要写明它被在位者的实现排除在外。")
+
+def _agree(rows):
+    """DBSCAN 计数器与 YOLO 在同一张原版图上的一致程度。"""
+    agree = [r for r in rows if r.get("n_dbscan") is not None
+             and r.get("yolo_vanilla") is not None]
+    if not agree:
+        return
+    same = sum(1 for r in agree if r["n_dbscan"] == r["yolo_vanilla"])
+    mae = sum(abs(r["n_dbscan"] - r["yolo_vanilla"]) for r in agree) / len(agree)
+    print(f"\nDBSCAN 计数器 vs YOLO（同一张原版图，{len(agree)} 题）："
+          f"完全一致 {_pct(same, len(agree))}，MAE {mae:.2f}")
+    print("  注意：这是两个都会错的数数器在互比，只能当相对读数。")
+
+
+def _over9(over9):
+    if not over9:
+        return
+    ok = [r for r in over9 if r["ok_vanilla"] is not None]
+    print(f"\n{'='*64}\nN>9 单列（{len(over9)} 题，官方 run_countgen.py:104 整题跳过）")
+    print(f"  vanilla 准确率 {_pct(sum(r['ok_vanilla'] for r in ok), len(ok))}"
+          f"，CountGen 无输出")
+    print("  这一档不能并入总分；报数时要写明它被在位者的实现排除在外。")
 
 
 if __name__ == "__main__":

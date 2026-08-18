@@ -135,9 +135,14 @@ def main():
     print(f"countgen 臂 {nc} 张 → {out/'countgen'}")
     if missing_cg:
         over9 = [s for s in missing_cg if data[s]["int_number"] > 9]
+        vo = [s for s in missing_cg if log.get(s, {}).get("vanilla_only")]
         print(f"⚠️ {len(missing_cg)} 题没有 CountGen 图，其中 {len(over9)} 题是 N>9"
               f"（官方 run_countgen.py:104 主动跳过，不是失败）")
-        rest = [s for s in missing_cg if data[s]['int_number'] <= 9]
+        if vo:
+            print(f"   {len(vo)} 题是 --vanilla-only 跑的（还没拿到 ReLayout 权重）"
+                  f"—— 拿到权重后不加该开关重跑一遍即可补上")
+        rest = [s for s in missing_cg if data[s]["int_number"] <= 9
+                and not log.get(s, {}).get("vanilla_only")]
         if rest:
             print(f"   另有 {len(rest)} 题 N≤9 却缺图 —— 这是**真的没跑成**，例：{rest[:3]}")
     if non_coco:

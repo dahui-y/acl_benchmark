@@ -31,13 +31,24 @@ def say(tag, what, detail=""):
         _bad.append(what)
 
 
+DIST = {"sklearn": "scikit-learn", "skimage": "scikit-image", "cv2": "opencv-python",
+        "spacy_transformers": "spacy-transformers", "huggingface_hub": "huggingface-hub"}
+
+
 def ver(mod, want=None):
     try:
         m = importlib.import_module(mod)
     except Exception as e:
         say(BAD, f"import {mod}", str(e).split("\n")[0][:90])
         return None
-    v = getattr(m, "__version__", "?")
+    # 先问包元数据，再退回 __version__ —— 有些包压根没有 __version__
+    # （spacy-transformers、inflect），click 则把它标成了将要移除的弃用属性。
+    try:
+        from importlib.metadata import version as _mv
+        v = _mv(DIST.get(mod, mod))
+    except Exception:
+        v = getattr(m, "__version__", "?")
+    v = str(v).split("+")[0]         # 剥掉 +cu121 这类本地版本后缀再比
     if want and v != want:
         say(WARN, f"{mod} {v}", f"（他们钉的是 {want}；不等不一定错，但复现出偏差先想这里）")
     else:
@@ -134,11 +145,16 @@ def main():
                 "" if gb >= 20 else "（SDXL 1024² + 带梯度的 refinement，低于 20G 很可能 OOM）")
 
     print("\n── 资产 " + "─" * 48)
-    ck = MIC / "pipeline/mask_extraction/relayout_weights/relayout_checkpoint.pth"
+    # 权重不必放在仓库里 —— 用 RELAYOUT_CKPT 指到有空间的盘（如 $SD_OUT 同级）
+    ck = Path(os.environ.get(
+        "RELAYOUT_CKPT",
+        MIC / "pipeline/mask_extraction/relayout_weights/relayout_checkpoint.pth"))
     if ck.exists():
         say(OK, "ReLayout 权重", f"{ck.stat().st_size/1024**2:.0f} MB")
     else:
-        say(BAD, "缺 ReLayout 权重", f"应放在 {ck}（Google Drive，见 make-it-count README）")
+        say(BAD, "缺 ReLayout 权重",
+            f"找的是 {ck}（Google Drive，见 make-it-count README；HF 上无镜像）。"
+            f"放别处就 export RELAYOUT_CKPT=/那个/路径")
 
     y = next((p for p in (Path("yolov9e.pt"), REPO / "yolov9e.pt", MIC / "yolov9e.pt")
               if p.exists()), None)
@@ -153,7 +169,9 @@ def main():
         say(OK, "spacy 模型 en_core_web_trf 已安装")
     except Exception:
         say(BAD, "缺 en_core_web_trf",
-            "python -m spacy download en_core_web_trf（约 460MB，走 GitHub release）")
+            "直接装 wheel（别用 spacy CLI，见 ENV.md）：pip install https://github.com/"
+            "explosion/spacy-models/releases/download/en_core_web_trf-3.5.0/"
+            "en_core_web_trf-3.5.0-py3-none-any.whl")
 
     sdxl = os.environ.get("SDXL_PATH")
     if not sdxl:

@@ -147,14 +147,29 @@ pip install https://github.com/explosion/spacy-models/releases/download/en_core_
 
 ### 2. ReLayout 权重（Google Drive）
 
-```
-help_code/make-it-count/pipeline/mask_extraction/relayout_weights/relayout_checkpoint.pth
+**不要放进仓库**——GB 级文件，而且仓库所在盘不一定有空间。放到可写盘，
+用 `RELAYOUT_CKPT` 指过去：
+
+```bash
+export CK=/openbayes/input/input0/Sim2Struct-1000/temp/weights/relayout_checkpoint.pth
+mkdir -p "$(dirname "$CK")"
+pip install gdown
+gdown 1xyfkwmX9plMB5-c0VDwl7WiPuQ2qt5yb -O "$CK"    # 若下下来是压缩包，解开再放
+export RELAYOUT_CKPT="$CK"                           # env_check 和跑批都认这个
 ```
 
-链接在 make-it-count 的 README 里。国内取不到就得换机器下载再传。
-**没有它，只有"少了要补物体"那条分支跑不了**——`relayout_overgeneration`（多了删）
-和 `obj_num_match`（直接输出原版图）两条都不需要权重。所以真拿不到，
-仍可先跑出 vanilla 臂和一部分拆解，但那不是完整复现，报数时必须写明。
+也可以 `python count_probe/countgen_batch.py --relayout-ckpt "$CK" ...`。
+脚本会把它写成绝对路径塞回 config——**必须绝对路径**，因为跑批时已经
+`chdir` 到了 make-it-count，相对路径会解到仓库里去。
+
+HF 上没有任何人镜像过这个权重（`make-it-count` / `countgen` / `relayout` 都搜过），
+所以国内取不到就只能换机器下载再传。
+
+**没有它也能先开跑**：它只在 `relayout_undergeneration`（数少了要补物体）里用。
+加 `--vanilla-only` 可以先把不依赖它的三个读数拿到手——
+vanilla SDXL 的 baseline、DBSCAN 计数器与 YOLO 的一致率、
+以及「计数器说对但实际错」那一桶有多大（那是天花板损失）。
+只有"修正成功率"要等权重。而且那一档是一次前向无梯度，快三四倍。
 
 ### 3. ReLayout U-Net 的骨架来自 torch.hub
 

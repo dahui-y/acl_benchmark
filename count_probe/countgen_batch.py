@@ -159,6 +159,15 @@ def main():
     ap.add_argument("--skip-over9", action="store_true",
                     help="连 vanilla 都不跑 N>9（完全等同官方行为）")
     ap.add_argument("--no-masks", action="store_true", help="不存 mask 可视化")
+    ap.add_argument("--relayout-ckpt", default=os.environ.get("RELAYOUT_CKPT"),
+                    help="ReLayout 权重路径。默认用 pipeline_config.yaml 里的相对路径"
+                         "（仓库内），但那是个 GB 级文件，不该塞进仓库——"
+                         "指到有空间的盘即可，或设环境变量 RELAYOUT_CKPT")
+    ap.add_argument("--vanilla-only", action="store_true",
+                    help="只跑原版 SDXL + DBSCAN 计数，不做任何修正。"
+                         "不需要 ReLayout 权重，一次前向无梯度，快三四倍。"
+                         "拿到的是表三四个格子里的前三个（baseline、计数器一致率、"
+                         "「计数器说对但实际错」这一桶），只差修正成功率。")
     a = ap.parse_args()
 
     _patch_caches()
@@ -189,6 +198,22 @@ def main():
     print(f"数据集 {Path(a.dataset).name}：{len(data)} 题，其中 N>9 的 {n_over9} 题"
           f"（官方 run_countgen.py:104 会整题跳过）")
 
+    # ★ 权重缺失要在**启动时**就报。它只在 relayout_undergeneration 里被 load，
+    #   即"DBSCAN 数少了"才走到；等跑到第 N 张才炸，前面的 GPU 就白烧了。
+    if a.relayout_ckpt:
+        # 绝对路径写回 config —— relayout_undergeneration 是从 config 里读它的，
+        # 而我们已经 chdir 到 make-it-count，相对路径会解到仓库里去。
+        cfg["mask_creation"]["dbscan_mask"]["unet_checkpoint_path"] = str(
+            Path(a.relayout_ckpt).resolve())
+    ckpt = Path(cfg["mask_creation"]["dbscan_mask"]["unet_checkpoint_path"])
+    if not a.vanilla_only and not ckpt.exists():
+        sys.exit(f"!! 缺 ReLayout 权重：{ckpt if ckpt.is_absolute() else ckpt.resolve()}\n"
+                 f"   （Google Drive，见 make-it-count README；HF 上没有镜像）\n"
+                 f"   放在别处就用 --relayout-ckpt /那个/路径（或 export RELAYOUT_CKPT）。\n"
+                 f"   想先把不依赖它的三个读数拿到手，加 --vanilla-only。")
+    if not a.vanilla_only:
+        print(f"ReLayout 权重：{ckpt}")
+
     counter = _patch_counter_probe()
     pipe = _load_pipeline(cfg)
     phase1 = cfg["pipeline"]["phase1_type"]
@@ -198,10 +223,21 @@ def main():
 
     meta_p, log_p = out / "metadata.json", out / "counter_log.jsonl"
     meta = json.load(open(meta_p)) if meta_p.exists() else []
-    done = {r["id"] for r in
-            (json.loads(l) for l in log_p.open() if l.strip())} if log_p.exists() else set()
+    # 续跑判据要跟模式走：先跑过 --vanilla-only 的题，在完整模式下**不算做完**，
+    # 否则补跑时会把它们全跳过，永远拿不到 CountGen 臂。
+    last = {}
+    if log_p.exists():
+        for line in log_p.open():                 # 追加式日志，同 id 以最后一条为准
+            if line.strip():
+                r = json.loads(line)
+                last[r["id"]] = r
+    done = {i for i, r in last.items()
+            if a.vanilla_only or r.get("has_countgen_img") or r.get("skipped_by_official")}
+    partial = len(last) - len(done)
     if done:
         print(f"续跑：已完成 {len(done)} 题")
+    if partial:
+        print(f"其中 {partial} 题此前是 --vanilla-only 跑的，本次会补上修正那一步")
 
     t_all = time.time()
     for item in tqdm(data, desc="CoCoCount"):
@@ -222,12 +258,14 @@ def main():
         latents = randn_tensor(shape, generator=generator,
                                device=pipe.device, dtype=torch.float16)
 
-        if over9:
-            # ★ N>9：只跑 vanilla + 计数，**不进 relayout**。
-            #   官方在更早的地方就 continue 了（run_countgen.py:104），根因是
-            #   ReLayout U-Net 只有 9 个通道（relayout.py:7），送 10 进去是未定义行为。
-            #   这里复刻 extract_mask.py:12-16 的前两步，好歹把 baseline 和
-            #   计数器读数留下来 —— 官方连这两个都丢了。
+        if over9 or a.vanilla_only:
+            # 只跑 vanilla + 计数，**不进 relayout**。两种情况会走到这里：
+            #   · N>9：官方在更早的地方就 continue 了（run_countgen.py:104），
+            #     根因是 ReLayout U-Net 只有 9 个通道（relayout.py:7），
+            #     送 10 进去是未定义行为。官方连 baseline 都不留，我们留。
+            #   · --vanilla-only：还没拿到 ReLayout 权重时的先行档。
+            # 这里复刻 extract_mask.py:12-16 的前两步（DBSCAN + 去稀疏 blob），
+            # 得到的 n_dbscan 与完整流程里那个是同一个量。
             raw, _, vanilla_img = dbscan_extract_mask(prompt, pipe, cfg, seed)
             _, n_dbscan = remove_sparse_blobs(raw)
             n_used, match, image = n_dbscan, n_dbscan == N, None
@@ -259,10 +297,12 @@ def main():
                "zero_cluster_fallback": n_dbscan == 0,
                "obj_num_match": bool(match),
                "skipped_by_official": bool(over9),
+               "vanilla_only": bool(a.vanilla_only),
                "has_countgen_img": image is not None,
                "sec": round(t_count, 2)}
-        meta.append({k: rec[k] for k in
-                     ("id", "prompt", "seed", "obj_class", "requiered_object_num")})
+        if not any(m["id"] == img_id for m in meta):     # 补跑时别重复写
+            meta.append({k: rec[k] for k in
+                         ("id", "prompt", "seed", "obj_class", "requiered_object_num")})
         json.dump(meta, open(meta_p, "w"), indent=4)
         with log_p.open("a") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")

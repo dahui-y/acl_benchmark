@@ -31,11 +31,24 @@ python count_probe/env_check.py
 
 ```bash
 export SD_OUT=/openbayes/input/input0/Sim2Struct-1000/temp/scalediff_out
+export RELAYOUT_CKPT=/openbayes/input/input0/Sim2Struct-1000/temp/weights/relayout_checkpoint.pth
+
 # 先冒烟 5 题，确认能跑通、量一下单张耗时
 python count_probe/countgen_batch.py --limit 5 --out $SD_OUT/count/cocoount
 # 全量 200 题
 python count_probe/countgen_batch.py --out $SD_OUT/count/cocoount
 ```
+
+**还没拿到 ReLayout 权重**（Google Drive，HF 无镜像）也能先开跑：
+
+```bash
+python count_probe/countgen_batch.py --vanilla-only --out $SD_OUT/count/cocoount
+```
+
+这一档只跑原版 SDXL + DBSCAN 计数，一次前向、无梯度，快三四倍。
+表三四个格子里能先拿到三个（baseline、计数器一致率、「计数器说对但实际错」
+那一桶＝天花板损失），只差修正成功率。拿到权重后**不加该开关重跑一遍**，
+脚本会认出哪些题是先行档跑的并补上修正那一步，不会重复劳动。
 
 不改 make-it-count 一行源码。与直接跑 `pipeline/run_countgen.py` 的差别只有三处，
 脚本头部逐条写明了理由：**记下 DBSCAN 计数器读数**、**N>9 仍跑 vanilla**、

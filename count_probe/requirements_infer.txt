@@ -19,6 +19,14 @@
 #
 # 用法： pip install -r count_probe/requirements_infer.txt
 
+# ★ setuptools 不是可选的：accelerate 0.18.0 在 utils/torch_xla.py 里
+#   `import pkg_resources`，而那是 setuptools 提供的。conda-forge 的 python
+#   现在默认不往环境里装 setuptools，而我们全用 wheel 装（wheel 运行时不需要它），
+#   于是 `import diffusers` 会在 transformers→accelerate 这条链上炸
+#   `ModuleNotFoundError: No module named 'pkg_resources'`。
+#   钉 <81：setuptools 81 起把 pkg_resources 标为弃用并计划移除（最新已 84.x）。
+setuptools<81
+
 diffusers==0.25.0
 transformers==4.29.2
 tokenizers==0.13.3

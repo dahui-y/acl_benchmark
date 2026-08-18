@@ -82,6 +82,14 @@ def main():
     tok = ver("tokenizers", "0.13.3")
     ver("huggingface_hub", "0.20.1")
     ver("numpy", "1.23.3")
+    # accelerate 0.18.0 里 `import pkg_resources`（setuptools 提供）。conda-forge
+    # 的 python 默认不装 setuptools，全 wheel 安装也不会带进来 —— 结果是
+    # `import diffusers` 在 transformers→accelerate 这条链上炸。这一条要单独查。
+    try:
+        import pkg_resources  # noqa: F401
+        say(OK, "pkg_resources 可用（accelerate 0.18.0 要它）")
+    except Exception:
+        say(BAD, "缺 pkg_resources", 'accelerate 0.18.0 要它；pip install "setuptools<81"')
     ver("scipy")
     ver("sklearn")
     ver("skimage")

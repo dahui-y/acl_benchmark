@@ -7,15 +7,55 @@ Python 选 **3.10**：`scikit-image 0.23.2` 要 `>=3.10`，`spacy 3.5.2` 和
 `torch 2.1.2` 上限到 3.11，交集就是 3.10/3.11，取 3.10 更稳。
 
 ```bash
-conda create -n countgen python=3.10 -y
+# ★ 必须带 --override-channels -c conda-forge，原因见下一节
+conda create -n countgen python=3.10 -y --override-channels -c conda-forge
 conda activate countgen
 
-# torch 按机器的 CUDA 选。4090 用 cu121 那条：
-pip install torch==2.1.2 torchvision==0.16.2 \
-    --index-url https://download.pytorch.org/whl/cu121
+# PyPI 上 torch 2.1.2 的 linux 轮子默认就是 cu121 构建，走国内 PyPI 镜像即可，
+# 不必绕 download.pytorch.org。装完确认：python -c "import torch;print(torch.version.cuda)" → 12.1
+pip install torch==2.1.2 torchvision==0.16.2
 
 pip install -r count_probe/requirements_infer.txt
 ```
+
+### OpenBayes 上 `conda create` 报 `UnavailableInvalidChannel ... anaconda/pkgs/r`
+
+不是我们的配置问题，是**镜像源整个下架了**。2024 年 Anaconda 改商业授权条款后，
+国内镜像站陆续停掉了 `repo.anaconda.com` 官方 pkgs 的镜像，而 OpenBayes 预置的
+`.condarc` 还把 `default_channels` 指在那儿。实测（2026-08）：
+
+| 地址 | 状态 |
+|---|---|
+| `mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/linux-64/repodata.json` | **404** |
+| `mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r/linux-64/repodata.json` | **404** ← 报错的就是它 |
+| `mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/linux-64/repodata.json` | **200** |
+
+`defaults` 没了，conda-forge 还在。所以要么像上面那样每次带
+`--override-channels -c conda-forge`（不动全局配置，最省事），要么永久改：
+
+```bash
+conda config --show-sources          # 先看是哪个文件写的
+conda config --remove-key default_channels
+conda config --remove-key channels
+conda config --add channels conda-forge
+conda config --set channel_priority flexible
+```
+
+### 不想碰 conda：venv 一样够
+
+我们用 conda 只是为了拿一个解释器，其余全是 pip。
+
+```bash
+python -V     # 3.10 或 3.11 都行
+python -m venv /openbayes/home/venv/countgen      # 放可写盘，别放容器临时目录
+source /openbayes/home/venv/countgen/bin/activate
+pip install -U pip
+pip install torch==2.1.2 torchvision==0.16.2
+pip install -r count_probe/requirements_infer.txt
+```
+
+3.11 也可以：`numpy==1.23.3` 的 linux wheel 覆盖 cp38/39/310/311（查过 PyPI），
+不是非 3.10 不可。
 
 ## 三样要单独弄的东西
 

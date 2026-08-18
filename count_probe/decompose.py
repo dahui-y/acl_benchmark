@@ -40,6 +40,21 @@ def _pct(a, b):
     return f"{100.0*a/b:5.1f}%" if b else "   n/a"
 
 
+def _mcnemar(b, c):
+    """McNemar 的精确二项检验，双尾。不引 scipy —— 只用到组合数。
+
+    H0：在"修正改变了对错"的那些题里，修坏与修好等概率（p=0.5）。
+    n=b+c 很小时它检不出任何东西，这正是我们要看见的事实。
+    """
+    from math import comb
+    n = b + c
+    if n == 0:
+        return "  n/a"
+    k = min(b, c)
+    p = 2.0 * sum(comb(n, i) for i in range(k + 1)) / 2.0 ** n
+    return f"{min(p, 1.0):7.3f}"
+
+
 def _row(label, ok, n, extra=""):
     print(f"{label:<26}{n:>6}{_pct(ok, n):>9}  {extra}")
 
@@ -109,6 +124,17 @@ def main():
         rs = by_n[n]
         print(f"{n:<26}{len(rs):>6}{_pct(sum(r['ok_c'] for r in rs), len(rs)):>9}"
               f"{_pct(sum(r['ok_v'] for r in rs), len(rs)):>14}")
+
+    # ---- 3.5 分方向的配对表：净增益到底是不是噪声 ----
+    print("\n" + "=" * 66)
+    print("表六b 分方向的**配对**变化（准确率之差看不出样本量，配对数才看得出）")
+    print(f"{'方向':<22}{'题数':>5}{'错→对':>7}{'对→错':>7}{'净':>6}{'双尾 p':>9}")
+    for tag, g in (("数多了（删 blob）", over), ("数少了（U-Net）", under)):
+        b = sum(1 for r in g if r["ok_v"] and not r["ok_c"])      # 修坏
+        c = sum(1 for r in g if not r["ok_v"] and r["ok_c"])      # 修好
+        print(f"{tag:<22}{len(g):>5}{c:>7}{b:>7}{c-b:>6}{_mcnemar(b, c):>9}")
+    print("p 是 McNemar 的精确二项检验（H0：修好与修坏等概率）。"
+          "b+c 太小时它本来就检不出东西，这一点要老实说。")
 
     # ---- 4. 修正的净效果 ----
     print("\n" + "=" * 66)

@@ -68,8 +68,9 @@ def main():
     ver("sklearn")
     ver("skimage")
     ver("cv2")
-    ver("spacy", "3.5.2")
+    sp = ver("spacy", "3.5.2")          # 这一句会连带拉起 typer/click（见下）
     ver("spacy_transformers", "1.2.5")
+    ck_v = ver("click")
     ver("inflect")
     ver("ultralytics")
     ver("supervision")
@@ -92,6 +93,14 @@ def main():
     except Exception:
         say(WARN, "huggingface_hub 里没有 cached_download",
             "若 transformers 报 ImportError，降到 0.19.4")
+
+    # spacy 3.5.2 → typer 0.7.0 → click。typer 0.7 只写了 click<9，pip 会装 8.4.x，
+    # 而 click 8.2 之后的参数解析改动 typer 0.7 没适配。spacy/__init__.py 里有
+    # `from .cli.info import info`，所以这个冲突连 import spacy 都可能带塌。
+    if ck_v and _tuple(ck_v) >= (8, 2):
+        say(BAD, f"click {ck_v} 太新", "spacy 3.5.2 的 typer 0.7.0 适配不了；装 click==8.1.7")
+    elif ck_v:
+        say(OK, f"click {ck_v} 与 typer 0.7.0 相容")
 
     # torch↔numpy 的桥。版本号对不代表桥是通的：torch 2.1.2 的 C 扩展按 NumPy 1.x
     # 的 ABI 编译，装上 numpy 2.x 时 import torch 照样成功、版本号照样正确，

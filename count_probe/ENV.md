@@ -115,11 +115,30 @@ pip install -r count_probe/requirements_infer.txt
 
 ### 1. spacy 的 en_core_web_trf（≈460MB，GitHub release，国内常被卡）
 
+**直接装 wheel，别用 `python -m spacy download`：**
+
 ```bash
-python -m spacy download en_core_web_trf     # 先直接试
-# 不通就手动取这个 wheel，传到服务器再 pip install 本地文件：
-# https://github.com/explosion/spacy-models/releases/download/en_core_web_trf-3.5.0/en_core_web_trf-3.5.0-py3-none-any.whl
+pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_trf-3.5.0/en_core_web_trf-3.5.0-py3-none-any.whl
 ```
+
+这个 URL 就是 make-it-count 的 `requirements.txt` 里钉的那一个（连 sha256 都是），
+版本一定对。取不到就在别的机器下好传过去，`pip install` 本地文件。
+
+> **为什么不走 `python -m spacy download`**：spacy 3.5.2 依赖 `typer 0.7.0`，
+> 而 typer 0.7.0 只写了 `click>=7.1.1,<9.0.0`，pip 会装最新的 click 8.4.x ——
+> 差三年多，click 8.2 之后的参数解析改动 typer 0.7 没适配。症状是 spacy 拼出
+> ```
+> .../download/-en_core_web_trf/-en_core_web_trf.tar.gz#egg===en_core_web_trf
+> ```
+> 模型名成了空串。`requirements_infer.txt` 已经把 `click==8.1.7` 钉住了；
+> 若是先前装的环境，补一句 `pip install "click==8.1.7"`。
+> 这条不只影响下模型 —— spacy 3.5.2 的 `__init__.py` 里有
+> `from .cli.info import info`，**`import spacy` 就会拉起 typer/click**。
+
+> **别用 hf-mirror 上的 `spacy/en_core_web_trf`。** 我查过：主分支是 **3.7.3**，
+> `meta.json` 写 `spacy_version >=3.7.2,<3.8.0` 且依赖 `spacy-curated-transformers`，
+> 和我们钉的 spacy 3.5.2 + spacy-transformers 1.2.5 不兼容，仓库里也没有 3.5 的 tag。
+> 这是条看起来能走、实际会把环境搞乱的岔路。
 
 > 退而求其次可以用 `en_core_web_sm`（12MB），但**不能直接换**：
 > `self_counting_sdxl_pipeline.py:357` 取的 `object_token_idx` 依赖依存分析结果，

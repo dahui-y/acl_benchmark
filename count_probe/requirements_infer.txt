@@ -47,6 +47,15 @@ ipython
 # 解析 "six kittens" 里的 nummod —— pipeline 每次调用都要用
 spacy==3.5.2
 spacy-transformers==1.2.5
+# ★ click 必须 <8.2。spacy 3.5.2 依赖 typer 0.7.0，而 typer 0.7.0 只写了
+#   click>=7.1.1,<9.0.0，pip 会装最新的 8.4.x —— 两者差三年多，click 8.2 之后的
+#   参数解析改动 typer 0.7 没适配。症状：`python -m spacy download` 拼出
+#   `.../download/-en_core_web_trf/-en_core_web_trf.tar.gz#egg===en_core_web_trf`
+#   （模型名成了空串）。更要命的是 spacy/__init__.py 里有
+#   `from .cli.info import info`，所以 **import spacy 就会拉起 typer/click**，
+#   这个冲突不止影响下模型。
+click==8.1.7
+typer==0.7.0
 
 # 官方评测器（evaluation_script.py:13 的 YOLO('yolov9e.pt')）
 ultralytics==8.2.12

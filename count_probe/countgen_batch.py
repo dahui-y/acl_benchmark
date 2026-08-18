@@ -133,9 +133,13 @@ def _load_pipeline(cfg):
     import diffusers
     import torch
 
+    # ★ local_files_only 必须显式传。diffusers 0.25 的 download() 会**无条件**
+    #   先调 model_info() 问 HF 元数据；此时若设了 HF_HUB_OFFLINE，它是抛
+    #   OfflineModeIsEnabled 而不是回退到缓存。传 True 才会整条跳过网络。
     pipe = SelfCountingSDXLPipeline.from_pretrained(
         cfg["model"]["sdxl_path"], use_safetensors=True,
         torch_dtype=torch.float16, variant=cfg["model"].get("variant") or None,
+        local_files_only=cfg["model"]["local_only"],
         use_onnx=False)
     pipe.to(torch.device(cfg["pipeline"]["device"]))
     pipe.counting_config = cfg["counting_model"]
@@ -155,6 +159,10 @@ def main():
         "SDXL_PATH", "stabilityai/stable-diffusion-xl-base-1.0"))
     ap.add_argument("--variant", default="fp16",
                     help="本地权重目录若没有 fp16 分支，传空字符串")
+    ap.add_argument("--local-files-only", action="store_true",
+                    default=bool(os.environ.get("HF_HUB_OFFLINE")),
+                    help="只用本地缓存，一次网络都不发。设了 HF_HUB_OFFLINE 时自动打开。"
+                         "批量跑两三小时，中途一次元数据探测超时就白费，建议开着")
     ap.add_argument("--limit", type=int, default=0, help="只跑前 N 题（冒烟用）")
     ap.add_argument("--skip-over9", action="store_true",
                     help="连 vanilla 都不跑 N>9（完全等同官方行为）")
@@ -186,7 +194,10 @@ def main():
     from utils.generate_random_masks import show_mask_list
 
     cfg = yaml.safe_load(open(a.config))
-    cfg["model"] = {"sdxl_path": a.sdxl, "variant": a.variant}
+    cfg["model"] = {"sdxl_path": a.sdxl, "variant": a.variant,
+                    "local_only": a.local_files_only}
+    if a.local_files_only:
+        print("SDXL 只从本地缓存加载（local_files_only=True）")
     out = Path(a.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     cfg["pipeline"]["output_path"] = str(out)

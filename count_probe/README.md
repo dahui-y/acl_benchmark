@@ -3,23 +3,29 @@
 三步，一条命令接一条。目的不是"跑通"，是**先对齐发表数，再看天花板卡在哪一段**
 ——和风格线上先复现 StyleID 的 28.801 是同一套做法。
 
-## 0. 先备齐四样东西
+## 0. 建环境 + 备资产
+
+**要新建环境**，不能沿用风格线那套（那边是另一代 torch/diffusers）。
+完整步骤见 **[ENV.md](ENV.md)**，一句话版：
 
 ```bash
-cd help_code/make-it-count
-# 1) ReLayout 权重（Google Drive，见 README）
-#    → pipeline/mask_extraction/relayout_weights/relayout_checkpoint.pth
-ls pipeline/mask_extraction/relayout_weights/relayout_checkpoint.pth
-# 2) YOLOv9e（评测器，官方指定）
-wget https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov9e.pt
-# 3) spacy 解析器
+conda create -n countgen python=3.10 -y && conda activate countgen
+pip install torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu121
+pip install -r count_probe/requirements_infer.txt
 python -m spacy download en_core_web_trf
-# 4) SDXL base 1.0；本地权重就用 SDXL_PATH 指过去
-export SDXL_PATH=/path/to/stable-diffusion-xl-base-1.0
 ```
 
-`relayout_undergeneration` 里那句 `torch.hub.load('mateuszbuda/brain-segmentation-pytorch', ...)`
-要连 GitHub。连不上时 `countgen_batch.py` 会告诉你怎么把 hub 缓存拷过来。
+⚠️ **不要直接 `pip install -r help_code/make-it-count/requirements.txt`**：
+那份文件里 `transformers` 指向一个 GitHub commit，与同文件的
+`spacy-transformers==1.2.5`（要求 `transformers<4.31`）冲突，国内也多半拉不动。
+`requirements_infer.txt` 换成了 `transformers==4.29.2`——依据是那个 commit 自己的
+`__version__ = "4.29.0.dev0"`——并删掉了推理路径根本没 import 的一堆包。
+
+装完先自检（不占 GPU，只查版本约束和四样资产在不在）：
+
+```bash
+python count_probe/env_check.py
+```
 
 ## 1. 跑批
 

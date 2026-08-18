@@ -1,0 +1,87 @@
+# 建环境（CountGen 线）
+
+**要新建，不能沿用风格线那套。** make-it-count 钉的是 torch 2.1.2 / diffusers 0.25.0 /
+transformers 4.29 系 / numpy 1.23.3，和 StyleID·StyleSSP 那套是两代人。
+
+Python 选 **3.10**：`scikit-image 0.23.2` 要 `>=3.10`，`spacy 3.5.2` 和
+`torch 2.1.2` 上限到 3.11，交集就是 3.10/3.11，取 3.10 更稳。
+
+```bash
+conda create -n countgen python=3.10 -y
+conda activate countgen
+
+# torch 按机器的 CUDA 选。4090 用 cu121 那条：
+pip install torch==2.1.2 torchvision==0.16.2 \
+    --index-url https://download.pytorch.org/whl/cu121
+
+pip install -r count_probe/requirements_infer.txt
+```
+
+## 三样要单独弄的东西
+
+### 1. spacy 的 en_core_web_trf（≈460MB，GitHub release，国内常被卡）
+
+```bash
+python -m spacy download en_core_web_trf     # 先直接试
+# 不通就手动取这个 wheel，传到服务器再 pip install 本地文件：
+# https://github.com/explosion/spacy-models/releases/download/en_core_web_trf-3.5.0/en_core_web_trf-3.5.0-py3-none-any.whl
+```
+
+> 退而求其次可以用 `en_core_web_sm`（12MB），但**不能直接换**：
+> `self_counting_sdxl_pipeline.py:357` 取的 `object_token_idx` 依赖依存分析结果，
+> 换模型可能换 token 下标，就不是复现了。真要换，先在 200 条 prompt 上
+> 逐条比对两个模型给出的下标是否完全一致，一致才算数。
+
+### 2. ReLayout 权重（Google Drive）
+
+```
+help_code/make-it-count/pipeline/mask_extraction/relayout_weights/relayout_checkpoint.pth
+```
+
+链接在 make-it-count 的 README 里。国内取不到就得换机器下载再传。
+**没有它，只有"少了要补物体"那条分支跑不了**——`relayout_overgeneration`（多了删）
+和 `obj_num_match`（直接输出原版图）两条都不需要权重。所以真拿不到，
+仍可先跑出 vanilla 臂和一部分拆解，但那不是完整复现，报数时必须写明。
+
+### 3. ReLayout U-Net 的骨架来自 torch.hub
+
+`relayout.py:10` 每张图都会调
+
+```python
+torch.hub.load('mateuszbuda/brain-segmentation-pytorch', 'unet', ...)
+```
+
+要连 GitHub。`countgen_batch.py` 已经把它 memoize 成只调一次，并在失败时
+提示怎么用本地缓存；预热办法是在能联网的机器上跑一次同样的调用，
+再把 `~/.cache/torch/hub/` 拷过来（或设 `TORCH_HOME` 指过去）。
+
+### 4. 模型权重
+
+```bash
+export SDXL_PATH=/openbayes/.../stable-diffusion-xl-base-1.0    # fp16 分支，约 7GB
+wget https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov9e.pt
+export SD_OUT=/openbayes/input/input0/Sim2Struct-1000/temp/scalediff_out
+```
+
+若本地 SDXL 目录没有 `fp16` variant，跑批时传 `--variant ""`。
+
+## 装完先自检
+
+```bash
+python count_probe/env_check.py
+```
+
+它只做静态检查（版本、约束、四样资产在不在），不占 GPU、不生成图。
+过了再去跑 `countgen_batch.py --limit 5`。
+
+## 已知的坑
+
+- `huggingface-hub==0.20.1` 是他们 requirements 里的原值。若报
+  `cannot import name 'cached_download'`，降到 `0.19.4`。
+- `opencv-python-headless` 而不是 `opencv-python`：服务器无显示，装全版会拖
+  一堆 GUI 依赖；代码只用 `cv2.findContours / dilate / imread` 这类纯计算 API。
+- `matplotlib` 必须走 Agg。`countgen_batch.py` 里已经 `MPLBACKEND=Agg` 兜底了
+  （他们的 `db_scan` 每次聚类都画一张图）。
+- 评测（ultralytics）和跑批可以同一个环境——ultralytics 8.2.12 的约束很松，
+  torch 2.1.2 / numpy 1.23.3 都在范围内。不想冒险的话单独开一个 `yolo` 环境
+  也行，两步之间只通过磁盘上的 PNG 交接，没有别的耦合。

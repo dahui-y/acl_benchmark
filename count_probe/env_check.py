@@ -1,0 +1,170 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+装完环境先跑这个。**不占 GPU、不生成任何图**，只回答一句话：能不能开跑。
+
+    为什么值得单独写：这条线上要凑齐的东西有四样在国内都可能卡住
+    （spacy 的 460MB wheel、Google Drive 上的 ReLayout 权重、
+      torch.hub 要连 GitHub、SDXL 权重），而其中三样**不是在启动时报错，
+    是在跑到第 N 张图时才炸**——`torch.hub.load` 写在 relayout 的补物体分支里，
+    只有当 DBSCAN 数少了才会被调到。等跑了半小时才发现，就白烧半小时。
+
+用法：
+    python count_probe/env_check.py
+"""
+
+import importlib
+import os
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+MIC = REPO / "help_code" / "make-it-count"
+
+OK, WARN, BAD = "  ok ", " 注意 ", " 失败 "
+_bad = []
+
+
+def say(tag, what, detail=""):
+    print(f"[{tag}] {what}" + (f"  {detail}" if detail else ""))
+    if tag is BAD:
+        _bad.append(what)
+
+
+def ver(mod, want=None):
+    try:
+        m = importlib.import_module(mod)
+    except Exception as e:
+        say(BAD, f"import {mod}", str(e).split("\n")[0][:90])
+        return None
+    v = getattr(m, "__version__", "?")
+    if want and v != want:
+        say(WARN, f"{mod} {v}", f"（他们钉的是 {want}；不等不一定错，但复现出偏差先想这里）")
+    else:
+        say(OK, f"{mod} {v}")
+    return v
+
+
+def _tuple(v):
+    out = []
+    for p in str(v).split("."):
+        n = "".join(c for c in p if c.isdigit())
+        out.append(int(n) if n else 0)
+    return tuple(out)
+
+
+def main():
+    print(f"python {sys.version.split()[0]}   （建议 3.10；scikit-image 0.23 要 >=3.10）\n")
+
+    print("── 版本 " + "─" * 48)
+    tv = ver("torch", "2.1.2")
+    ver("torchvision", "0.16.2")
+    ver("diffusers", "0.25.0")
+    trf = ver("transformers", "4.29.2")
+    tok = ver("tokenizers", "0.13.3")
+    ver("huggingface_hub", "0.20.1")
+    ver("numpy", "1.23.3")
+    ver("scipy")
+    ver("sklearn")
+    ver("skimage")
+    ver("cv2")
+    ver("spacy", "3.5.2")
+    ver("spacy_transformers", "1.2.5")
+    ver("inflect")
+    ver("ultralytics")
+    ver("supervision")
+
+    print("\n── 约束核对 " + "─" * 44)
+    # 这两条是 make-it-count 那份 requirements.txt 内部就自相矛盾的地方
+    if trf:
+        if _tuple(trf) >= (4, 31):
+            say(BAD, "transformers 版本过高",
+                "spacy-transformers 1.2.5 要求 <4.31.0；requirements.txt 里那条 git 装法会踩这个")
+        elif _tuple(trf) < (4, 25, 1):
+            say(BAD, "transformers 版本过低", "diffusers 0.25.0 要求 >=4.25.1")
+        else:
+            say(OK, "transformers 同时满足 spacy-transformers(<4.31) 与 diffusers(>=4.25.1)")
+    if tok and _tuple(tok) >= (0, 14):
+        say(BAD, "tokenizers >=0.14", f"transformers {trf} 要求 <0.14")
+    try:
+        from huggingface_hub import cached_download  # noqa: F401
+        say(OK, "huggingface_hub.cached_download 还在")
+    except Exception:
+        say(WARN, "huggingface_hub 里没有 cached_download",
+            "若 transformers 报 ImportError，降到 0.19.4")
+
+    print("\n── 设备 " + "─" * 48)
+    if tv:
+        import torch
+        if not torch.cuda.is_available():
+            say(BAD, "看不到 CUDA 设备")
+        else:
+            g = torch.cuda.get_device_properties(0)
+            gb = g.total_memory / 1024 ** 3
+            say(OK if gb >= 20 else WARN, f"{g.name}  {gb:.1f} GB",
+                "" if gb >= 20 else "（SDXL 1024² + 带梯度的 refinement，低于 20G 很可能 OOM）")
+
+    print("\n── 资产 " + "─" * 48)
+    ck = MIC / "pipeline/mask_extraction/relayout_weights/relayout_checkpoint.pth"
+    if ck.exists():
+        say(OK, "ReLayout 权重", f"{ck.stat().st_size/1024**2:.0f} MB")
+    else:
+        say(BAD, "缺 ReLayout 权重", f"应放在 {ck}（Google Drive，见 make-it-count README）")
+
+    y = next((p for p in (Path("yolov9e.pt"), REPO / "yolov9e.pt", MIC / "yolov9e.pt")
+              if p.exists()), None)
+    if y:
+        say(OK, "yolov9e.pt", f"{y}  {y.stat().st_size/1024**2:.0f} MB")
+    else:
+        say(WARN, "没找到 yolov9e.pt",
+            "评测那步才用；ultralytics 会自动下载，服务器不通就先手动 wget")
+
+    try:
+        importlib.import_module("en_core_web_trf")
+        say(OK, "spacy 模型 en_core_web_trf 已安装")
+    except Exception:
+        say(BAD, "缺 en_core_web_trf",
+            "python -m spacy download en_core_web_trf（约 460MB，走 GitHub release）")
+
+    sdxl = os.environ.get("SDXL_PATH")
+    if not sdxl:
+        say(WARN, "没设 SDXL_PATH", "会去 HF 拉 stabilityai/stable-diffusion-xl-base-1.0")
+    elif Path(sdxl).exists():
+        has_fp16 = any(Path(sdxl).rglob("*fp16*"))
+        say(OK, f"SDXL_PATH={sdxl}",
+            "有 fp16 分支" if has_fp16 else "→ 没看到 fp16 文件，跑批要加 --variant \"\"")
+    else:
+        say(BAD, "SDXL_PATH 指向的目录不存在", sdxl)
+
+    out = os.environ.get("SD_OUT")
+    if not out:
+        say(BAD, "没设 SD_OUT", "服务器上唯一有空间可写的路径，必须设")
+    else:
+        p = Path(out)
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            t = p / ".w"
+            t.write_text("x")
+            t.unlink()
+            say(OK, f"SD_OUT={out} 可写")
+        except Exception as e:
+            say(BAD, "SD_OUT 不可写", str(e)[:80])
+
+    if tv:
+        import torch
+        hub = Path(torch.hub.get_dir()) / "mateuszbuda_brain-segmentation-pytorch_master"
+        if hub.exists():
+            say(OK, "torch.hub 已缓存 brain-segmentation-pytorch")
+        else:
+            say(WARN, "torch.hub 没缓存 brain-segmentation-pytorch",
+                "relayout 补物体那条分支会去连 GitHub；连不上就得先把缓存拷过来")
+
+    print("\n" + "─" * 56)
+    if _bad:
+        print(f"有 {len(_bad)} 项过不去：" + "；".join(_bad))
+        sys.exit(1)
+    print("可以开跑：python count_probe/countgen_batch.py --limit 5 --out $SD_OUT/count/cocoount")
+
+
+if __name__ == "__main__":
+    main()

@@ -294,6 +294,41 @@ def _patch_mem_attn():
     return MemAttnCountingProcessor
 
 
+def _patch_unet_detach(pipe):
+    """把**引导前向**的 UNet 返回值 detach 掉。数值等价，因为它从来没被用过。
+
+    实测（--mem-log）：清掉 `_loss_tensor` 和 attention store 之后，
+    已分配显存从 18.59 GB 只掉到 18.58 GB —— 图根本没释放。
+    漏掉的引用是 `self_counting_sdxl_pipeline.py:476` 的
+
+        _ = self.unet(latent, t, ...)[0]
+
+    那个 `_` 是**调用方栈帧里的局部变量**，握着 UNet 输出，把整张图钉住；
+    我们清不掉它（还是 f_locals 那个问题）。
+
+    但它从来没被用过：`_ = self.unet(...)` 出现在 :175 / :205 / :476 三处，
+    全是丢弃赋值；loss 是从 attention store 里算的，与 UNet 的输出无关。
+    所以把它 detach 掉，图就只剩 attention store 那一条引用 —— 那条我们能清。
+
+    主去噪路径的 `noise_pred`（:511 之后）是要用的，但那一段在 `@torch.no_grad()`
+    下、本来就没有图，所以用 `torch.is_grad_enabled()` 正好把两者分开。
+    """
+    import torch
+
+    unet = pipe.unet
+    orig = unet.forward
+
+    def forward(*a, **kw):
+        out = orig(*a, **kw)
+        if not torch.is_grad_enabled():
+            return out                       # 主去噪路径：本来就无图，原样返回
+        if isinstance(out, tuple):
+            return (out[0].detach(),) + tuple(out[1:])
+        return out.__class__(sample=out.sample.detach())
+
+    unet.forward = forward
+
+
 def _patch_counter_probe():
     """把 DBSCAN 的簇数原样取出来，而不是从 mask 反推。
 
@@ -430,6 +465,8 @@ def main():
         _patch_mem_attn()
         print("显存改动（浮点级）：probs 不会被任何地方读的层改走 SDPA")
     pipe = _load_pipeline(cfg)
+    if not a.no_mem_graph:
+        _patch_unet_detach(pipe)
     phase1 = cfg["pipeline"]["phase1_type"]
     phase2 = cfg["pipeline"]["phase2_type"]
     assert phase1 == "dbscan_mask" and phase2 == "ours_counting_loss", \

@@ -108,6 +108,51 @@ def _patch_caches():
     torch.hub.load = hub_load
 
 
+def _patch_mem_graph():
+    """两处**数值完全等价**的改动，专治修正步的显存峰值。
+
+    ① `update_latent`（self_counting_sdxl_pipeline.py:222）写的是
+           torch.autograd.grad(loss, latents, create_graph=True)
+       `create_graph=True` 会为"梯度的梯度"再建一张图，并且隐含 retain_graph=True
+       —— **算完不释放**。但全仓库没有任何地方用二阶导：拿到 grad 后是
+           latents = latents - step_size * grad
+       下一轮立刻 `clone().detach()`（refinement 第 174 行 / __call__ 第 462 行）。
+       改成 False 后 grad 的**数值一模一样**，只是图算完就放。
+
+    ② 进修正步时同时活着两张完整的图：`__call__:476` 先做了一次带梯度前向得到
+       `loss`，再把它传进 `perform_iterative_refinement_step`，函数里立刻又建第二张。
+       而那个 `loss` 在函数内**只用作 `while loss > target_loss` 的比较量**，
+       第 186 行就被重算覆盖。所以进门先把它变成 Python float，
+       并清掉 attention store 里指向那张图的引用 —— 两者都在被读之前会被
+       本函数的第一次前向重新填好（`between_steps` 在前向末尾触发，
+       `loss_and_plot` 在其后才读）。
+
+    这两条都不改任何一个会被使用的数值，只改张量的存活期。
+    """
+    import torch
+    import pipeline.self_counting_sdxl_pipeline as SP
+
+    cls = SP.SelfCountingSDXLPipeline
+
+    def update_latent(self, latents, loss, step_size):
+        grad = torch.autograd.grad(loss, latents, create_graph=False)[0]
+        return latents - step_size * grad
+
+    orig_refine = cls.perform_iterative_refinement_step
+
+    def perform_iterative_refinement_step(self, loss, latents, *a, **kw):
+        loss = float(loss)                       # 只当比较量用，进函数后即被覆盖
+        self.attention_store.all_cross_attention = {}
+        self.attention_store.all_self_attention = {}
+        self.attention_store.cross_attention_store = {}
+        self.attention_store.self_attention_store = {}
+        torch.cuda.empty_cache()
+        return orig_refine(self, loss, latents, *a, **kw)
+
+    cls.update_latent = update_latent
+    cls.perform_iterative_refinement_step = perform_iterative_refinement_step
+
+
 def _patch_mem_attn():
     """只对「概率矩阵算完就丢」的注意力层改走 SDPA，省掉 24G 装不下的那部分显存。
 
@@ -117,19 +162,31 @@ def _patch_mem_attn():
     4096 个 token，一层的概率矩阵是 [2×10, 4096, 4096] fp16 = **671 MB**，
     这一档约 10 个 block → 光概率矩阵就 6–7 GB。
 
-    但那些层的概率矩阵是**白留的**。看 attention_processors.py：
-      · 只有 `attn.shape[1] == attn_res²(=1024)` 才会被存进 attention store（55-74 行）
-      · 只有 `shape[0]==40 and shape[2]==1024 and 'up' in place` 才会被屏蔽（34-38 行）
-    4096 那一档两个条件都不满足，probs 算出来只喂了一次 bmm 就扔。
-    换成 `scaled_dot_product_attention` 算的是同一个东西，只是不物化那个矩阵。
+    但很多层的概率矩阵是**白留的**。把「谁会读它」查全（见 `_probs_are_read`）：
 
-    **32×32 那一档原封不动走它们的原路**，所以被存下来、被屏蔽的张量一个字节没变。
+      · **存**：`attention_store_counting.py:56` 要求 `shape[1] == attn_res²(=1024)`。
+        4096 那一档不满足 → 不存。
+      · **读**：`aggregate_attention` 全仓库只有 `self_counting_sdxl_pipeline.py:152`
+        一处调用，且 `get_cross=True` → **`all_self_attention` 从来没被读过**。
+        `self_step_store` 只有 `dbscan_mask_extract.py:181` 读，而它只在
+        `loss=False` 的原版那趟被写入（`:73` 的 `and not self.loss`）。
+      · **屏蔽**：`attention_processors.py:34-38` 要求 `shape[0]==40`，即
+        batch2×20heads。而修正前向是 `latent.unsqueeze(0)`（`:469`）→ **batch=1**，
+        `shape[0]=20`，屏蔽在那一趟**根本不生效**。
+
+    结论：真正需要显式概率矩阵的只有三种层 ——
+      ① 32² 的 **cross**-attn（loss 要用）
+      ② **原版趟**的 32² self-attn（喂 DBSCAN）
+      ③ **主 CFG 前向**里 up 块、步 0–10 的 32² self-attn（要被屏蔽）
+    其余一律走 `scaled_dot_product_attention`：算的是同一个东西，
+    但 SDPA 的后端在反向时**重算**而不保存那个矩阵。
 
     保守起见，只要遇到任何本函数没覆盖的情形（有 attention_mask、
     upcast_attention、group_norm…）就退回原路，不赌。
 
-    等价性可以自己验：`--vanilla-only` 跑两遍（带/不带 --mem-attn），
-    那一档无梯度、显存够，两次的图和 n_dbscan 应当一致。
+    ⚠️ 这一条是**浮点级**改动（SDPA 与 baddbmm+softmax+bmm 归约顺序不同），
+       不是逐比特复现。`_patch_mem_graph` 那两条才是数值完全等价的。
+       等价性验法：`--vanilla-only` 跑两遍（带/不带 `--no-mem-attn`）比 n_dbscan。
     """
     import torch
     import torch.nn.functional as F
@@ -137,10 +194,30 @@ def _patch_mem_attn():
     from pipeline.attention_processors import CountingProcessor
 
     class MemAttnCountingProcessor(CountingProcessor):
+        def _probs_are_read(self, attn, hidden_states, is_cross):
+            """这一层的 attention_probs 会不会真的被读？读才留显式路径。"""
+            st = self.attnstore
+            res2 = st.attn_res[0] ** 2
+            n = hidden_states.shape[1]
+            if n != res2:
+                return False                     # 别的分辨率：存和屏蔽的门限都不满足
+            if is_cross:
+                return True                      # loss 要 aggregate_attention(get_cross=True)
+            if not st.loss:
+                return True                      # 原版那趟：self_step_store 要喂 DBSCAN
+            # counting 那趟的 self-attn：只会进 all_self_attention，而
+            # aggregate_attention 全仓库仅 :152 一处调用且 get_cross=True → 从不读。
+            # 唯一还会用到它的是屏蔽块，条件见 attention_processors.py:34-38。
+            m = st.masking_dict
+            return (bool(m.get("enable"))
+                    and hidden_states.shape[0] * attn.heads == 40     # batch2×20 heads
+                    and m["start_step"] <= st.curr_step_index <= m["end_step"]
+                    and "up" in self.place_in_unet)
+
         def __call__(self, attn, hidden_states, encoder_hidden_states=None,
                      attention_mask=None, **kwargs):
-            n = hidden_states.shape[1]
-            keep = (n == self.attnstore.attn_res[0] ** 2      # 这一档要存/要屏蔽
+            is_cross = encoder_hidden_states is not None
+            keep = (self._probs_are_read(attn, hidden_states, is_cross)
                     or attention_mask is not None
                     or getattr(attn, "upcast_attention", False)
                     or getattr(attn, "group_norm", None) is not None
@@ -150,7 +227,6 @@ def _patch_mem_attn():
                 return super().__call__(attn, hidden_states, encoder_hidden_states,
                                         attention_mask, **kwargs)
 
-            is_cross = encoder_hidden_states is not None
             ehs = encoder_hidden_states if is_cross else hidden_states
             q = attn.head_to_batch_dim(attn.to_q(hidden_states))
             k = attn.head_to_batch_dim(attn.to_k(ehs))
@@ -160,9 +236,11 @@ def _patch_mem_attn():
             out = F.scaled_dot_product_attention(q, k, v, attn_mask=None,
                                                  dropout_p=0.0, is_causal=False,
                                                  scale=attn.scale)
-            # 仍要调 store —— 它管着 cur_att_layer 和 between_steps 的时序。
-            # 给一个 meta 张量（不占显存），形状让它走进"跳过"分支，与原路一致。
-            self.attnstore(torch.empty((1, n, 1), device="meta"),
+            # 仍要调 store —— 它管着 cur_att_layer 的推进和 between_steps 的时序，
+            # 少调一次整条时序就错位了。给一个 meta 张量（不占显存），
+            # shape[1]=0 必然 ≠ attn_res²，于是它只推进计数器、不落任何张量。
+            # 走到这里的层，其 probs 本来也不会被任何地方读（见 _probs_are_read）。
+            self.attnstore(torch.empty((1, 0, 1), device="meta"),
                            is_cross, self.place_in_unet, attn.heads)
             out = attn.batch_to_head_dim(out)
             # 与它们的处理器一致：不做 group_norm / residual / rescale
@@ -238,8 +316,10 @@ def main():
                          "（仓库内），但那是个 GB 级文件，不该塞进仓库——"
                          "指到有空间的盘即可，或设环境变量 RELAYOUT_CKPT")
     ap.add_argument("--no-mem-attn", action="store_true",
-                    help="关掉省显存的注意力改路，完全走它们的原实现。"
-                         "24G 卡上带梯度的修正步会 OOM；留着这个开关是为了验等价性")
+                    help="关掉注意力改路（那一条是浮点级改动）。留着是为了验等价性")
+    ap.add_argument("--no-mem-graph", action="store_true",
+                    help="关掉两条数值完全等价的显存改动（create_graph=False、"
+                         "进修正步前丢掉上一张图）。只在审计时用；关了 24G 必 OOM")
     ap.add_argument("--vanilla-only", action="store_true",
                     help="只跑原版 SDXL + DBSCAN 计数，不做任何修正。"
                          "不需要 ReLayout 权重，一次前向无梯度，快三四倍。"
@@ -295,10 +375,12 @@ def main():
         print(f"ReLayout 权重：{ckpt}")
 
     counter = _patch_counter_probe()
+    if not a.no_mem_graph:
+        _patch_mem_graph()
+        print("显存改动（数值等价）：create_graph=False；进修正步前丢掉上一张图")
     if not a.no_mem_attn:
         _patch_mem_attn()
-        print("注意力改路已开：只对「概率矩阵会被丢弃」的层走 SDPA"
-              "（32×32 那一档原样不动）")
+        print("显存改动（浮点级）：probs 不会被任何地方读的层改走 SDPA")
     pipe = _load_pipeline(cfg)
     phase1 = cfg["pipeline"]["phase1_type"]
     phase2 = cfg["pipeline"]["phase2_type"]

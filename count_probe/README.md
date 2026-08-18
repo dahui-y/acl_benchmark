@@ -106,6 +106,22 @@ python evaluation_script.py --images_dir "$SD_OUT/count/cocoount_arms/countgen" 
 - `CODE_READ_countgen.md`：源码通读，硬限制逐条带行号。
 - `INCUMBENTS.md`：这一格的在位者与「SOTA 到天花板」的距离。
 
+## 24G 卡上的三处显存改动（必须在论文里交代）
+
+原版在 24G 上跑不动：修正步 `perform_iterative_refinement_step` 带梯度，
+SDXL 1024² 的注意力图被 autograd 全留住。三处改动，前两处**数值完全等价**：
+
+| # | 改动 | 依据 | 数值影响 |
+|---|---|---|---|
+| ① | `update_latent` 的 `create_graph=True` → `False` | 全仓库无二阶导；拿到 grad 后下一轮立刻 `clone().detach()`。`create_graph` 只决定"梯度计算本身可不可再求导"，**grad 的值不变**，且它隐含的 `retain_graph=True` 让图算完不释放 | **无** |
+| ② | 进修正步前丢掉上一张图 | 传进去的 `loss` 只当 `while` 的比较量，`:186` 就被重算覆盖；attention store 里的引用会被本函数第一次前向重新填好（`between_steps` 在前向末尾，`loss_and_plot` 在其后） | **无** |
+| ③ | probs 不会被任何地方读的注意力层改走 SDPA | 存的门限是 `shape[1]==attn_res²`；`aggregate_attention` 全仓库只有 `:152` 一处且 `get_cross=True`（`all_self_attention` 从不被读）；`self_step_store` 只在 `loss=False` 时写；屏蔽要求 `shape[0]==40` 而修正前向是 `latent.unsqueeze(0)` batch=1 → 屏蔽在那趟不生效 | **浮点级**（SDPA 与 baddbmm+softmax+bmm 归约顺序不同） |
+
+③ 用 `--no-mem-attn` 可关掉验等价（`--vanilla-only` 那一档无梯度、显存够，
+两条路都跑得动，比 `n_dbscan`）。已知：三题里有一题的 `Best Epsilon` 从 0.14
+变成 0.17，簇数仍相同 —— 所以**这不是逐比特复现，是同分布的两次采样**，
+最终判据只能是准确率能否落在发表值附近。
+
 ## 已知口径风险（先写下来，免得事后争）
 
 1. **YOLOv9e 自己会数错。** 它是在位者选定的尺子，用它是为了跟人家的表对齐；

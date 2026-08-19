@@ -324,7 +324,8 @@ def _patch_instance_loss(a):
     def compute_loss(self, object_attention_map):
         return instance_layout_loss(object_attention_map, self.desired_mask,
                                     w_sep=a.w_sep, w_bg=a.w_bg,
-                                    w_conc=a.w_conc, dilate=a.dilate)
+                                    w_conc=a.w_conc, w_cov=a.w_cov,
+                                    dilate=a.dilate)
 
     SP.SelfCountingSDXLPipeline.compute_loss = compute_loss
 
@@ -440,6 +441,11 @@ def main():
                    help="orig=原版二值前景 BCE；instance=实例感知目标（组件 1）")
     g.add_argument("--w-sep", type=float, default=1.0, help="间隔带项权重")
     g.add_argument("--w-bg", type=float, default=1.0, help="背景项权重")
+    g.add_argument("--w-cov", type=float, default=0.0,
+                   help="逐 blob 覆盖度项权重。第一轮实测：w_cov=0 时 75 个前景格里"
+                        "只有 **1 格** 拿到梯度（L_peak 用 min_k，只剩最弱 blob 的"
+                        "argmax），而原版 BCE 对整片前景施压且带 pos_weight=10。"
+                        "这是第一轮'删多余'从 49.2%% 塌到 17.4%% 的病根")
     g.add_argument("--w-conc", type=float, default=0.0,
                    help="blob 内集中度项权重。最不确定的一项，默认关，留作消融")
     g.add_argument("--dilate", type=int, default=1, help="间隔带的膨胀半径")
@@ -448,7 +454,9 @@ def main():
                         "1.0=不约束（原版）。0.25 是我们推出的阈值可达线")
     g.add_argument("--thresholds", default=None,
                    help="覆盖 refinement 的退出阈值，形如 0:0.5,10:0.4,20:0.35。"
-                        "换了损失就必须重定 —— 量纲完全不同")
+                        "换了损失就必须重定 —— 量纲完全不同。"
+                        "传 max 则全部置 0 = 每次跑满 max_refinement_steps，"
+                        "与原版实际行为一致，省掉这个旋钮")
     g.add_argument("--scale-factor", type=float, default=None,
                    help="覆盖 latent 更新步长的系数（原版 50）")
 
@@ -517,7 +525,12 @@ def main():
     global MEM_LOG
     MEM_LOG = a.mem_log
     # ---- 方法开关。全部默认关闭时，行为与原版 CountGen 逐位一致 ----
-    if a.thresholds:
+    if a.thresholds == "max":
+        # 去掉阈值这个旋钮：原版实测就是"每次跑满 max_refinement_steps"，
+        # 阈值置 0 让我们的预算与它一致，对比里少一个自由参数。
+        cfg["counting_model"]["loss"]["thresholds"] = {
+            k: 0.0 for k in cfg["counting_model"]["loss"]["thresholds"]}
+    elif a.thresholds:
         cfg["counting_model"]["loss"]["thresholds"] = {
             int(k): float(v) for k, v in
             (kv.split(":") for kv in a.thresholds.split(","))}
@@ -525,8 +538,8 @@ def main():
         cfg["counting_model"]["loss"]["scale_factor"] = a.scale_factor
     if a.loss == "instance":
         _patch_instance_loss(a)
-        print(f"★ 损失 = 实例感知（w_sep={a.w_sep} w_bg={a.w_bg} "
-              f"w_conc={a.w_conc} dilate={a.dilate}）")
+        print(f"★ 损失 = 实例感知（w_cov={a.w_cov} w_sep={a.w_sep} "
+              f"w_bg={a.w_bg} w_conc={a.w_conc} dilate={a.dilate}）")
         print(f"  阈值 {cfg['counting_model']['loss']['thresholds']}"
               f"  步长系数 {cfg['counting_model']['loss']['scale_factor']}")
     if a.fg_max < 1.0:

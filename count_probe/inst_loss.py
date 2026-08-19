@@ -69,7 +69,8 @@ def normalize(A):
     return (A - A.min()) / (A.max() - A.min() + EPS)
 
 
-def instance_layout_loss(A, M, w_sep=1.0, w_bg=1.0, w_conc=0.0, dilate=1):
+def instance_layout_loss(A, M, w_sep=1.0, w_bg=1.0, w_conc=0.0, w_cov=0.0,
+                         dilate=1):
     """A: (H,W) 物体 token 的 cross-attention；M: (H,W) 标签 0..K（0=背景）。"""
     A = normalize(A)
     K = int(M.max().item())
@@ -86,6 +87,19 @@ def instance_layout_loss(A, M, w_sep=1.0, w_bg=1.0, w_conc=0.0, dilate=1):
     peaks = torch.stack([A[m].max() for m in masks])
     L_peak = 1.0 - peaks.min()
 
+    # L_cov：逐 blob 的覆盖度。第一轮实测出来的教训 ——
+    #   L_peak 只对每个 blob 的 argmax **一个格子**产生梯度，而原版 BCE 对
+    #   整片前景（约 350 格）施压且带 pos_weight=10。梯度密度差两个数量级，
+    #   结果是"删多余"那一支从 49.2% 塌到 17.4%：压制多余物体靠的正是那股
+    #   稠密的前景/背景压力，我第一版把有用的那一面连同有害的一面一起扔了。
+    # 与原版全局前景项的区别：**逐 blob 取平均再对 blob 平均**。
+    #   原版的全局平均允许"一个 blob 过饱和补偿另一个空着"，逐 blob 不允许。
+    if w_cov > 0:
+        cov = torch.stack([A[m].mean() for m in masks])
+        L_cov = 1.0 - cov.mean()
+    else:
+        L_cov = A.sum() * 0
+
     # 间隔带：各 blob 膨胀一圈后被 ≥2 个覆盖的格子（含前景，理由见文件头）
     d = F.max_pool2d(masks.float().unsqueeze(1), 2 * dilate + 1,
                      stride=1, padding=dilate).squeeze(1)
@@ -101,7 +115,8 @@ def instance_layout_loss(A, M, w_sep=1.0, w_bg=1.0, w_conc=0.0, dilate=1):
     else:
         L_conc = A.sum() * 0
 
-    return L_peak + w_sep * L_sep + w_bg * L_bg + w_conc * L_conc
+    return (L_peak + w_cov * L_cov + w_sep * L_sep
+            + w_bg * L_bg + w_conc * L_conc)
 
 
 def shrink_mask(mask, fg_max=0.25, min_blob=4):
@@ -190,11 +205,28 @@ def _selftest():
           f"—— 值越小越优，所以它**主动奖励铺满**，不只是看不见 N")
     print(f"  ✓ 我们的把「理想解」({ideal[1]:.4f}) 排在「铺满」({fld[1]:.4f}) 前面")
 
-    # 梯度能回传
-    A = torch.rand(H, H, requires_grad=True)
-    instance_layout_loss(A, M).backward()
-    assert A.grad is not None and torch.isfinite(A.grad).all()
-    print("  ✓ 梯度可回传且有限")
+    # 梯度能回传，且 w_cov 显著提高梯度密度 —— 那是第一轮的病根
+    fg = (M > 0)
+
+    def nnz(**kw):
+        """返回 (前景里拿到梯度的格数, 背景里拿到梯度的格数)。
+
+        要分开数：背景压力（L_bg）一直是稠密的，第一轮的病根是**前景**那一侧 ——
+        L_peak 只对每个 blob 的 argmax 一个格子产生梯度。
+        """
+        A = torch.rand(H, H, requires_grad=True)
+        instance_layout_loss(A, M, **kw).backward()
+        assert A.grad is not None and torch.isfinite(A.grad).all()
+        g = A.grad != 0
+        return int((g & fg).sum()), int((g & ~fg).sum())
+
+    f0, b0 = nnz(w_cov=0.0)
+    f1, b1 = nnz(w_cov=1.0)
+    n_fg = int(fg.sum())
+    print(f"  ✓ 梯度可回传且有限。前景 {n_fg} 格中拿到梯度的："
+          f"w_cov=0 → **{f0}**，w_cov=1 → **{f1}**；背景两者都是 {b0}/{b1}")
+    assert f0 <= len(set(range(1, 4))) + 8, "w_cov=0 时前景应当几乎没有梯度"
+    assert f1 == n_fg, "L_cov 必须让整片前景都拿到梯度"
 
     # shrink_mask
     big = torch.zeros(H, H)

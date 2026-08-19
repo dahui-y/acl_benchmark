@@ -70,7 +70,7 @@ def normalize(A):
 
 
 def instance_layout_loss(A, M, w_sep=1.0, w_bg=1.0, w_conc=0.0, w_cov=0.0,
-                         dilate=1, tau_fg=None, tau_bg=None):
+                         dilate=1, tau_fg=None, tau_bg=None, hinge_pow=1.0):
     """A: (H,W) 物体 token 的 cross-attention；M: (H,W) 标签 0..K（0=背景）。
 
     tau_fg / tau_bg 给了就走 **hinge**：只罚"前景暗于 τ_fg"和"背景亮于 τ_bg"，
@@ -99,9 +99,24 @@ def instance_layout_loss(A, M, w_sep=1.0, w_bg=1.0, w_conc=0.0, w_cov=0.0,
     if masks.shape[0] == 0:
         return A.mean()
 
-    # hinge：到位就松手。lo(x)=罚"太暗"，hi(x)=罚"太亮"
-    lo = (lambda x: F.relu(tau_fg - x)) if tau_fg is not None else (lambda x: 1.0 - x)
-    hi = (lambda x: F.relu(x - tau_bg)) if tau_bg is not None else (lambda x: x)
+    # hinge：到位就松手。lo(x)=罚"太暗"，hi(x)=罚"太亮"。
+    #
+    # hinge_pow 为什么要能调：`relu(x)` 的导数是**阶跃**——满足余量处梯度精确为 0、
+    # 不满足处是常数。于是注意力图上的梯度场成了一张 0/1 指示函数，边界就是
+    # A=τ 这条等值线。把这种**分片常数、带硬边界**的梯度回传到 latent，
+    # 解码出来就是画面被切成若干轴对齐矩形、块间有亮度断层
+    # （tune_hinge 的 airplane_num=7_seed=149069 上肉眼可见，而原版 BCE 与
+    #   无余量版的梯度都是连续的，没有这个现象）。
+    # `relu(x)²` 的导数是 `2·relu(x)`，在边界处**连续地**降到 0：
+    # 既保住"满足就不再推"，又去掉梯度场的阶跃。
+    def _h(x):
+        return x if hinge_pow == 1.0 else x.pow(hinge_pow) if torch.is_tensor(x) \
+            else x ** hinge_pow
+
+    lo = ((lambda x: _h(F.relu(tau_fg - x))) if tau_fg is not None
+          else (lambda x: 1.0 - x))
+    hi = ((lambda x: _h(F.relu(x - tau_bg))) if tau_bg is not None
+          else (lambda x: x))
 
     # L_peak：逐 blob 取峰，盯最弱的那个 —— N 从这里进入目标函数
     peaks = torch.stack([A[m].max() for m in masks])
@@ -264,6 +279,26 @@ def _selftest():
     assert float(Lh.detach()) == 0.0 and float(gh.grad.abs().sum()) == 0.0, \
         "hinge 满足 τ 后损失与梯度都该精确为 0"
     assert float(Ln.detach()) > 0.0, "无余量版会继续往极端推 —— 那正是塌图的来源"
+
+    # hinge 的梯度场：relu 版在背景里只有"0"和"一个常数"两种取值（阶跃），
+    # 平方版随"超出余量多少"连续变化。tune_hinge 的图上出现了轴对齐的矩形
+    # 断层，怀疑就是阶跃梯度场回传到 latent 的结果。
+    bgm = (M == 0)
+
+    def bg_grad_levels(pw):
+        A = torch.linspace(0.05, 0.45, H).repeat(H, 1).clone()
+        A[M > 0] = 0.9
+        A[0, 0], A[5, 5] = 0.0, 1.0
+        A = A.requires_grad_(True)
+        instance_layout_loss(A, M, w_cov=1.0, tau_fg=0.8, tau_bg=0.2,
+                             hinge_pow=pw).backward()
+        g = A.grad[bgm].abs()
+        return len(torch.unique(torch.round(g[g > 1e-12] * 1e6)))
+
+    l1, l2 = bg_grad_levels(1.0), bg_grad_levels(2.0)
+    print(f"  ✓ 背景梯度的不同取值数：hinge_pow=1 → **{l1} 种（阶跃）**，"
+          f"hinge_pow=2 → {l2} 种（平滑）")
+    assert l1 <= 2 < l2, "平方 hinge 必须把阶跃梯度场变成平滑场"
     print(f"  ✓ 梯度可回传且有限。前景 {n_fg} 格中拿到梯度的："
           f"w_cov=0 → **{f0}**，w_cov=1 → **{f1}**；背景两者都是 {b0}/{b1}")
     assert f0 <= len(set(range(1, 4))) + 8, "w_cov=0 时前景应当几乎没有梯度"

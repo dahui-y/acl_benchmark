@@ -326,7 +326,8 @@ def _patch_instance_loss(a):
                                     w_sep=a.w_sep, w_bg=a.w_bg,
                                     w_conc=a.w_conc, w_cov=a.w_cov,
                                     dilate=a.dilate,
-                                    tau_fg=a.tau_fg, tau_bg=a.tau_bg)
+                                    tau_fg=a.tau_fg, tau_bg=a.tau_bg,
+                                    hinge_pow=a.hinge_pow)
 
     SP.SelfCountingSDXLPipeline.compute_loss = compute_loss
 
@@ -468,6 +469,10 @@ def main():
                         "硬 0/1 图，图从照片塌成白底剪影")
     g.add_argument("--tau-bg", type=float, default=None,
                    help="hinge 余量：背景只要 ≤ 此值就不再压（建议 0.2）")
+    g.add_argument("--hinge-pow", type=float, default=1.0,
+                   help="hinge 的幂次。1=relu，其梯度是**阶跃**（背景里只有 0 和"
+                        "一个常数两种取值），怀疑是 tune_hinge 那些轴对齐矩形断层的"
+                        "来源；2=平方 hinge，梯度随超出量连续变化，边界处渐进到 0")
     g.add_argument("--fg-max", type=float, default=1.0,
                    help="组件 2：把 desired_mask 逐 blob 腐蚀到总前景占比 ≤ 此值。"
                         "1.0=不约束（原版）。0.25 是我们推出的阈值可达线")
@@ -559,7 +564,7 @@ def main():
         _patch_instance_loss(a)
         print(f"★ 损失 = 实例感知（w_cov={a.w_cov} w_sep={a.w_sep} "
               f"w_bg={a.w_bg} w_conc={a.w_conc} dilate={a.dilate}"
-              + (f" hinge τ_fg={a.tau_fg} τ_bg={a.tau_bg}"
+              + (f" hinge^{a.hinge_pow:g} τ_fg={a.tau_fg} τ_bg={a.tau_bg}"
                  if a.tau_fg is not None or a.tau_bg is not None
                  else " 无余量") + "）")
         print(f"  阈值 {cfg['counting_model']['loss']['thresholds']}"

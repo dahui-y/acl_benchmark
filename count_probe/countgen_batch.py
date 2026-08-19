@@ -109,6 +109,10 @@ def _patch_caches():
 
 
 MEM_LOG = False
+# 每进一次修正步记一条 (触发的 step, 迭代次数, 进入时 loss, 出来时 loss)。
+# 没有它就看不出阈值定得对不对：跑满 max_refinement_steps 说明阈值太严（或不可达），
+# 一两步就退出说明太松。原版实测是 100% 跑满 20 步。
+REFINE = []
 
 
 def _mem(tag):
@@ -161,6 +165,8 @@ def _patch_mem_graph():
         `loss_and_plot` 的调用点只有 :156 / :186 / :216 / :487 四处，都在这条链上。
         """
         v = orig_loss_and_plot(self, object_token_idx, i)
+        self._n_loss_calls = getattr(self, "_n_loss_calls", 0) + 1
+        self._last_loss_val = float(v) if torch.is_tensor(v) else float(v or 0)
         _mem(f"step {i} 前向后")
         if torch.is_tensor(v):
             self._loss_tensor = v            # update_latent 要用的就是这一个对象
@@ -188,7 +194,12 @@ def _patch_mem_graph():
         self.attention_store.self_attention_store = {}
         torch.cuda.empty_cache()
         _mem("进修正步（已丢掉上一张图）")
-        out = orig_refine(self, float(loss), latents, *a, **kw)
+        self._n_loss_calls = 0
+        loss_in = float(loss)
+        out = orig_refine(self, loss_in, latents, *a, **kw)
+        REFINE.append((int(getattr(self.attention_store, "curr_step_index", -1)),
+                       int(self._n_loss_calls), round(loss_in, 4),
+                       round(float(getattr(self, "_last_loss_val", 0.0)), 4)))
         _mem("出修正步")
         return out
 
@@ -657,7 +668,9 @@ def main():
                "vanilla_only": bool(a.vanilla_only),
                "has_countgen_img": image is not None,
                "sec": round(t_count, 2),
-               "loss": a.loss, "fg_before": round(fg0, 4), "fg_after": round(fg1, 4)}
+               "loss": a.loss, "fg_before": round(fg0, 4), "fg_after": round(fg1, 4),
+               "refine": list(REFINE)}
+        REFINE.clear()
         if not any(m["id"] == img_id for m in meta):     # 补跑时别重复写
             meta.append({k: rec[k] for k in
                          ("id", "prompt", "seed", "obj_class", "requiered_object_num")})

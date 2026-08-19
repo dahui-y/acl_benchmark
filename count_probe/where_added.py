@@ -39,7 +39,25 @@ from pathlib import Path
 
 import numpy as np
 
+from edit_share import _perm
+
 RES = 32          # mask 的边长；1024² 的图上每格 32 像素
+
+
+def _prior_dist(vanilla):
+    """每个格子到**最近的 vanilla blob**的距离（格）。vanilla blob 内部为 0。
+
+    这是「模型自己的先验在这儿有没有质量」的代理。真正想要的是 vanilla 那一趟的
+    注意力图，但跑批时没存（只存了聚类后的 mask）。vanilla mask 的非零区正是
+    模型自己选择放物体的位置，所以「离它多远」是手头能拿到的最接近的量。
+    这个代理的粗糙之处要记在账上：它只看聚类**之后**的硬边界，看不到
+    次阈值的弱峰 —— 而弱峰恰恰是假设里最有意思的那部分。
+    """
+    from scipy.ndimage import distance_transform_edt
+    fg = vanilla != 0
+    if not fg.any():                       # vanilla 一个 blob 都没聚出来
+        return np.full(vanilla.shape, np.nan, dtype=float)
+    return distance_transform_edt(~fg).astype(float)
 
 
 def _blob_box(mask, label):
@@ -93,6 +111,8 @@ def main():
     tot_rnd, hit_rnd = [0], [0]
     rng = np.random.default_rng(a.seed)
     per_item = []
+    per_blob = []          # 逐个新增 blob：命中与否 + 它离模型自己的先验多远
+    rnd_d = []             # 随机撒的框的同一个距离，作零基准
     for stem, meta, z, n_db, N in items:
         post = z["postprocess"].astype(int)
         van = z["vanilla"].astype(int)
@@ -111,6 +131,7 @@ def main():
         centers = [((b[0] + b[2]) / 2, (b[1] + b[3]) / 2) for b in boxes]
 
         added = [l for l in range(n_db + 1, int(post.max()) + 1)]
+        dist = _prior_dist(van)
         nh = 0
         rnd_hit = rnd_n = 0
         for l in added:
@@ -119,8 +140,13 @@ def main():
                 continue
             x0, y0, x1, y1, area = bb
             px0, py0, px1, py1 = x0 * sx, y0 * sy, x1 * sx, y1 * sy
-            if any(px0 <= cx < px1 and py0 <= cy < py1 for cx, cy in centers):
+            got = any(px0 <= cx < px1 and py0 <= cy < py1 for cx, cy in centers)
+            if got:
                 nh += 1
+            cells = post == l
+            per_blob.append(dict(stem=stem, hit=bool(got), area=int(area),
+                                 d_min=float(np.nanmin(dist[cells])),
+                                 d_mean=float(np.nanmean(dist[cells]))))
             # ★ 空对照：把同样大小的框**随机扔到画面别处**，看能蒙中多少。
             #   必要性来自肉眼检查：修正后的图常常被物体填满（horse_num=7 那张是
             #   一大群马），那么"在指定位置找到物体"可能只是因为到处都是物体。
@@ -134,6 +160,7 @@ def main():
                 rnd_n += 1
                 if any(qx0 <= cx < qx1 and qy0 <= cy < qy1 for cx, cy in centers):
                     rnd_hit += 1
+                rnd_d.append(float(np.nanmean(dist[ry:ry + h, rx:rx + w])))
         n_added = sum(1 for l in added if _blob_box(post, l) is not None)
         tot_blob += n_added
         hit_blob += nh
@@ -209,6 +236,53 @@ def main():
     print("      → 方法方向：动 loss_utils.py:5 那个把实例身份压成二值前景的损失。")
     print("  · 两边都不像（40–60%）→ 两种病都有，得再切一刀，比如按新增 blob 的")
     print("      面积和它与已有 blob 的距离分开看。")
+
+    # ---- 先验对齐：新增的 blob 离模型自己已经选好的位置有多远 ----
+    #
+    # 这是目前唯一还没被否掉的假设的判据。前面几轮否掉的三条都是「把引导做强/
+    # 做准」：hinge 把目标解满 91% 无收益；编辑区权重份额高 13 倍的支路反而无效；
+    # 执行保真度从 44.4% 提到 36.1% 也无收益。剩下的解释是**要求本身**的性质：
+    #   · 删多余 = 让模型少做一点它本来就在做的事（新 mask 是原布局的子集）
+    #   · 补缺失 = 让模型在它自己没选的地方凭空造一个
+    # 若这条成立，那么**离已有物体近的新增 blob 更容易长出来**。
+    #
+    # 注意这里检验的是「blob 层面」的关系，不是「题目层面」的成败 —— 一道题
+    # 计数对不对还牵扯别的因素，blob 长没长出来才是这条假设的直接读数。
+    if per_blob:
+        # vanilla 一个 blob 都没聚出来的题，距离是 nan（没有先验可对齐），剔掉
+        fin = [b for b in per_blob if np.isfinite(b["d_mean"])]
+        hit_d = [b["d_mean"] for b in fin if b["hit"]]
+        mis_d = [b["d_mean"] for b in fin if not b["hit"]]
+        rnd_d = [d for d in rnd_d if np.isfinite(d)]
+        if len(fin) < len(per_blob):
+            print(f"\n（{len(per_blob)-len(fin)} 个新增 blob 所在的题 vanilla 没聚出"
+                  f"任何 blob，无先验可比，已剔除）")
+        print(f"\n{'='*70}")
+        print("先验对齐检验：新增 blob 到最近的 vanilla blob 的平均距离（格，1 格 = 32 像素）")
+        print(f"{'':<24}{'个数':>6}{'距离中位':>10}{'距离均值':>10}")
+        for lab, v in (("长出来了", hit_d), ("没长出来", mis_d),
+                       ("随机撒的框（零基准）", rnd_d)):
+            if v:
+                print(f"{lab:<24}{len(v):>6}{np.median(v):>10.2f}{np.mean(v):>10.2f}")
+        if len(hit_d) >= 2 and len(mis_d) >= 2:
+            p = _perm(hit_d, mis_d)
+            print(f"\n  长出 vs 没长出，置换检验（中位数之差，20000 次）p = {p:.3f}")
+            if p > 0.05:
+                print("  → **假设不成立**。离先验远近不预测新增 blob 能不能长出来。")
+                print("     那么「删=先验子集、补=违背先验」这条也就没有支撑，"
+                      "\n     「用先验引导放置来替换 ReLayout」这个方法提案不要写。")
+            elif np.median(hit_d) < np.median(mis_d):
+                print("  → **假设成立且方向对**：离已有物体越近越容易长出来。")
+                print("     方法提案有了依据：放置时优先选靠近模型自身先验的位置，"
+                      "\n     可以完全 training-free 地替掉那 474MB 的 ReLayout U-Net。")
+            else:
+                print("  → 显著，但**方向是反的**（离得远反而更容易长出来）。")
+                print("     假设按原样不成立；这个反向关系本身要先解释清楚再谈方法。")
+        else:
+            print("\n  （某一组不足 2 个，检不了。先把「数少了」那一支的题跑全。）")
+        if rnd_d:
+            print(f"  随机基准的意义：若真实新增 blob 的距离与随机撒的框差不多，"
+                  f"\n  说明 ReLayout 的放置本身是**不看先验的**——那本身就是一条结论。")
 
     # 与通道记账无关的旁证：新前景面积
     ar = [r["new_area"] for r in per_item]

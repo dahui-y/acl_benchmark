@@ -547,6 +547,14 @@ def main():
                         "ρ<1 按构造必然可达，且无量纲（换损失不用重标定）。"
                         "实测原版兑现率中位 0.31、四分位 0.24/0.39 —— "
                         "要真正提前停就得取 ρ < 0.31。与 --thresholds 互斥")
+    g.add_argument("--thresh-frac-over", type=float, default=None,
+                   help="只给「数多了→删 blob」那一支用的 ρ。实测两支路要的精修量"
+                        "**相反**：删多余在 ρ=0.10（平均 5.4 轮）时最好 52.2%，"
+                        "跑满 20.3 轮反而掉到 34.8%")
+    g.add_argument("--thresh-frac-under", type=float, default=None,
+                   help="只给「数少了→ReLayout 补 blob」那一支用的 ρ。这一支的成功率"
+                        "随精修轮数**单调上升**：0→15.4%、5.4→38.5%、11.2→46.2%、"
+                        "20.3→53.8%。所以这一支通常该留空（= 不提前停）")
 
     ap.add_argument("--mem-log", action="store_true",
                     help="在修正步前后打印显存占用。再 OOM 就开它，别继续猜")
@@ -613,25 +621,42 @@ def main():
     global MEM_LOG
     MEM_LOG = a.mem_log
     # ---- 方法开关。全部默认关闭时，行为与原版 CountGen 逐位一致 ----
+    if a.thresh_frac is not None and (a.thresh_frac_over is not None
+                                      or a.thresh_frac_under is not None):
+        raise SystemExit("!! --thresh-frac 是两支路统一的写法，不要再同时给 "
+                         "--thresh-frac-over / --thresh-frac-under。")
+    frac_any = (a.thresh_frac if a.thresh_frac is not None
+                else (a.thresh_frac_over if a.thresh_frac_over is not None
+                      else a.thresh_frac_under))
     if sum(x is not None and x != "" for x in
-           (a.thresh_margin, a.thresh_frac, a.thresholds)) > 1:
-        raise SystemExit("!! --thresh-margin / --thresh-frac / --thresholds 三选一："
+           (a.thresh_margin, frac_any, a.thresholds)) > 1:
+        raise SystemExit("!! --thresh-margin / --thresh-frac* / --thresholds 三选一："
                          "它们都在定同一个退出判据，同时给等于把变量搅在一起。")
-    if a.thresh_frac is not None:
-        if not 0.0 < a.thresh_frac < 1.0:
-            raise SystemExit("!! --thresh-frac 要在 (0,1) 开区间内：ρ≥1 等价于要求"
-                             "损失降到下界，那按构造不可达，就退回上一轮那个坑了。")
+    if frac_any is not None:
+        for nm, v in (("--thresh-frac", a.thresh_frac),
+                      ("--thresh-frac-over", a.thresh_frac_over),
+                      ("--thresh-frac-under", a.thresh_frac_under)):
+            if v is not None and not 0.0 < v < 1.0:
+                raise SystemExit(f"!! {nm} 要在 (0,1) 开区间内：ρ≥1 等价于要求"
+                                 f"损失降到下界，那按构造不可达，就退回上一轮那个坑了。")
         # 外层的门 `loss > thresholds[i]` 要恒真，真正的判据在精修函数内部按
         # 进入时的损失现算。置 0 让门恒开，别让两处判据打架。
         cfg["counting_model"]["loss"]["thresholds"] = {
             int(k): 0.0 for k in cfg["counting_model"]["loss"]["thresholds"]}
-        print(f"★ 退出判据 = 兑现掉可达降幅的 ρ={a.thresh_frac:g}"
-              f"（target = L_min + {1-a.thresh_frac:.2f}·(进入损失 − L_min)）"
-              f"\n  参照：原版实测兑现率中位 0.31，四分位 0.24 / 0.39。"
-              f"ρ={a.thresh_frac:g} "
-              + ("会明显提前停" if a.thresh_frac < 0.24 else
-                 "约在原版一半的题上提前停" if a.thresh_frac < 0.31 else
-                 "⚠️ 高于中位兑现率，多数题仍会跑满 —— 这一轮很可能白跑"))
+        print("★ 退出判据 = 兑现掉可达降幅的 ρ（target = L_min + (1−ρ)·(进入损失 − L_min)）")
+        print("  参照：原版实测兑现率中位 0.31，四分位 0.24 / 0.39。")
+        for lab, v in (("两支路统一", a.thresh_frac),
+                       ("删多余（数多了）", a.thresh_frac_over),
+                       ("补缺失（数少了）", a.thresh_frac_under)):
+            if v is None:
+                continue
+            print(f"    {lab:<16} ρ={v:g}  "
+                  + ("会明显提前停" if v < 0.24 else
+                     "约在一半的题上提前停" if v < 0.31 else
+                     "⚠️ 高于中位兑现率，多数题仍会跑满 —— 这一支很可能白跑"))
+        if a.thresh_frac is None:
+            miss = ("补缺失" if a.thresh_frac_under is None else "删多余")
+            print(f"    {miss:<16} 未给 → 不提前停，跑满 max_refinement_steps")
     global ORIG_THRESHOLDS
     ORIG_THRESHOLDS = {int(k): float(v) for k, v in
                        cfg["counting_model"]["loss"]["thresholds"].items()}
@@ -730,6 +755,7 @@ def main():
         t0 = time.time()
         fg0 = fg1 = float("nan")        # --vanilla-only 那一支不走 mask 这段
         thr_used = None
+        pipe._thresh_frac = pipe._l_min = None   # 逐题重置，别把上一题的 ρ 带过来
         # ★ 顺序必须与 run_countgen.py:94-98 一致：先 set_seed 再造 latents
         set_seed(seed)
         generator = torch.Generator().manual_seed(seed)
@@ -769,8 +795,16 @@ def main():
                                                a.thresh_margin)
                 cfg["counting_model"]["loss"]["thresholds"] = thr_used
             # 组件 3b 的两个量挂到 pipe 上，精修函数进去时现算 target
-            pipe._thresh_frac = a.thresh_frac
-            pipe._l_min = l_min(fg1) if a.thresh_frac is not None else None
+            # 两支路要的精修量是相反的（见 --thresh-frac-over/under 的说明），
+            # 所以 ρ 按本题的修正方向选。方向以计数器的读数为准 —— 管线也是
+            # 照它分支去调 relayout_overgeneration / relayout_undergeneration 的。
+            n_dir = n_dbscan if n_dbscan is not None else n_used
+            rho = a.thresh_frac
+            if rho is None and n_dir is not None:
+                rho = (a.thresh_frac_over if n_dir > N else
+                       a.thresh_frac_under if n_dir < N else None)
+            pipe._thresh_frac = rho
+            pipe._l_min = l_min(fg1) if rho is not None else None
             # 把三张 mask 存成数组（32×32，几百字节）。可视化 png 看得见但量不了，
             # 而"新增的 blob 位置上到底长没长出物体"这个问题必须拿数组去问。
             np.savez_compressed(out / f"{img_id}_masks.npz",
@@ -818,7 +852,7 @@ def main():
                "loss": a.loss, "fg_before": round(fg0, 4), "fg_after": round(fg1, 4),
                "l_min": None if fg1 != fg1 else round(l_min(fg1), 4),
                "thresholds": thr_used and {k: round(v, 4) for k, v in thr_used.items()},
-               "thresh_frac": a.thresh_frac,
+               "thresh_frac": getattr(pipe, "_thresh_frac", None),
                "refine": list(REFINE)}
         REFINE.clear()
         if not any(m["id"] == img_id for m in meta):     # 补跑时别重复写

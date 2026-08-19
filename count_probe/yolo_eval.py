@@ -38,6 +38,7 @@ import argparse
 import csv
 import json
 import sys
+import numpy as np
 from collections import defaultdict
 from pathlib import Path
 
@@ -46,6 +47,33 @@ from make_arms import COCO80  # 同目录；断言用
 
 def _pct(x, n):
     return f"{100.0*x/n:5.1f}%" if n else "   n/a"
+
+
+def _photo_stats(path, side=256, blk=8, flat_thr=3.0):
+    """两个零依赖的"照片感"代理，专门量我们看到的那种失效：照片 → 平涂剪贴画。
+
+    · **colourfulness**（Hasler & Süsstrunk 2003，通行定义）：
+        rg = R−G, yb = ½(R+G)−B
+        C  = √(σ_rg² + σ_yb²) + 0.3·√(μ_rg² + μ_yb²)
+      黑白/灰阶的剪贴画分数极低，真实照片通常在 30~80。
+    · **flat**：把图切成 blk×blk 的块，块内标准差 < flat_thr 的块占比。
+      纯色底一大片 → 这个值高。
+
+    都是**代理**，不是标准指标 —— 论文主表要报的仍是 CLIPScore（--clip）。
+    但它们不依赖任何权重，现在就能算，而且直接对准了肉眼看到的那件事。
+    """
+    from PIL import Image
+    im = Image.open(path).convert("RGB")
+    im.thumbnail((side, side))
+    x = np.asarray(im, dtype=np.float32)
+    R, G, B = x[..., 0], x[..., 1], x[..., 2]
+    rg, yb = R - G, 0.5 * (R + G) - B
+    col = float(np.sqrt(rg.std() ** 2 + yb.std() ** 2)
+                + 0.3 * np.sqrt(rg.mean() ** 2 + yb.mean() ** 2))
+    g = x.mean(-1)
+    h, w = (g.shape[0] // blk) * blk, (g.shape[1] // blk) * blk
+    b = g[:h, :w].reshape(h // blk, blk, w // blk, blk).std(axis=(1, 3))
+    return col, float((b < flat_thr).mean())
 
 
 def evaluate(model, files, conf):
@@ -162,23 +190,39 @@ def main():
     # ---------- 表一b：质量列 ----------
     # 计数准确率单独看是可以被"把图弄糟"骗到的。这一张就是防那个的。
     print(f"\n表一b 质量（只报，不做判据 —— 但计数涨、质量跌就不算赢）")
-    print(f"{'臂':<12}{'YOLO 置信度':>12}{'CLIPScore':>12}")
+    print(f"{'臂':<12}{'YOLO 置信度':>11}{'colourfulness':>14}{'平涂块占比':>11}"
+          f"{'CLIPScore':>11}")
+    base = {}
     for arm in arms:
         cs = [r[f"conf_{arm}"] for r in main_rows if r.get(f"conf_{arm}")]
+        cols, flats = [], []
+        for r in main_rows:
+            f = root / arm / r["file"]
+            if f.exists():
+                c, fl = _photo_stats(f)
+                cols.append(c)
+                flats.append(fl)
         cl = ""
         if clip is not None:
             from PIL import Image
-            v = []
-            for r in main_rows:
-                f = root / arm / r["file"]
-                if f.exists():
-                    v.append(clip.score(Image.open(f).convert("RGB"), r["prompt"]))
-            cl = f"{sum(v)/len(v):12.3f}" if v else f"{'n/a':>12}"
-        print(f"{arm:<12}{(sum(cs)/len(cs) if cs else float('nan')):>12.3f}{cl}")
+            v = [clip.score(Image.open(root / arm / r["file"]).convert("RGB"),
+                            r["prompt"])
+                 for r in main_rows if (root / arm / r["file"]).exists()]
+            cl = f"{sum(v)/len(v):11.3f}" if v else f"{'n/a':>11}"
+        mc = sum(cols) / len(cols) if cols else float("nan")
+        base[arm] = mc
+        print(f"{arm:<12}{(sum(cs)/len(cs) if cs else float('nan')):>11.3f}"
+              f"{mc:>14.1f}{(sum(flats)/len(flats) if flats else float('nan')):>11.1%}{cl}")
+    if "vanilla" in base:
+        for arm in arms:
+            if arm != "vanilla" and base["vanilla"]:
+                d = 100.0 * (base[arm] - base["vanilla"]) / base["vanilla"]
+                print(f"  {arm} 相对 vanilla 的 colourfulness：{d:+.1f}%"
+                      + ("   ⚠️ 掉得很厉害，看图确认是不是塌成平涂了"
+                         if d < -20 else ""))
     if clip is None:
-        print("  （CLIPScore 未算：加 --clip；它复用 scalediff_probe 的加载器，"
-              "只走本地缓存）")
-    print("  置信度是免费代理，不是标准指标。CLIPScore 与在位者报的口径一致。")
+        print("  （CLIPScore 未算：装好 open_clip 后加 --clip。它是论文主表要的那一列，"
+              "colourfulness/平涂块只是代理）")
 
     # ---------- 表二：按 N 分档 ----------
     print(f"\n表二 按要求个数分档")

@@ -56,6 +56,9 @@ def main():
     ap.add_argument("--arms", required=True, help="make_arms.py 的输出目录")
     ap.add_argument("--weights", default="yolov9e.pt")
     ap.add_argument("--conf", type=float, default=None)
+    ap.add_argument("--rand-trials", type=int, default=20,
+                    help="每个新增 blob 随机重放几次做空对照")
+    ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--min-det", type=int, default=3,
                     help="YOLO 在该图上检出的目标类总数低于此值就单列 —— "
                          "那种图上「没命中」多半是检测器读不出来，不是引导失败")
@@ -87,6 +90,8 @@ def main():
     model = YOLO(a.weights)
 
     tot_blob = hit_blob = 0
+    tot_rnd, hit_rnd = [0], [0]
+    rng = np.random.default_rng(a.seed)
     per_item = []
     for stem, meta, z, n_db, N in items:
         post = z["postprocess"].astype(int)
@@ -107,6 +112,7 @@ def main():
 
         added = [l for l in range(n_db + 1, int(post.max()) + 1)]
         nh = 0
+        rnd_hit = rnd_n = 0
         for l in added:
             bb = _blob_box(post, l)
             if bb is None:
@@ -115,9 +121,24 @@ def main():
             px0, py0, px1, py1 = x0 * sx, y0 * sy, x1 * sx, y1 * sy
             if any(px0 <= cx < px1 and py0 <= cy < py1 for cx, cy in centers):
                 nh += 1
+            # ★ 空对照：把同样大小的框**随机扔到画面别处**，看能蒙中多少。
+            #   必要性来自肉眼检查：修正后的图常常被物体填满（horse_num=7 那张是
+            #   一大群马），那么"在指定位置找到物体"可能只是因为到处都是物体。
+            #   没有这个对照，上面那个命中率说明不了引导有没有听话。
+            w, h = x1 - x0, y1 - y0
+            for t in range(a.rand_trials):
+                rx = rng.integers(0, max(RES - w, 1))
+                ry = rng.integers(0, max(RES - h, 1))
+                qx0, qy0 = rx * sx, ry * sy
+                qx1, qy1 = (rx + w) * sx, (ry + h) * sy
+                rnd_n += 1
+                if any(qx0 <= cx < qx1 and qy0 <= cy < qy1 for cx, cy in centers):
+                    rnd_hit += 1
         n_added = sum(1 for l in added if _blob_box(post, l) is not None)
         tot_blob += n_added
         hit_blob += nh
+        tot_rnd[0] += rnd_n
+        hit_rnd[0] += rnd_hit
         new_area = int(((post > 0) & (van == 0)).sum())
         # ★ 原版图的 YOLO 读数是判读的关键列。少了它就分不清两件事：
         #     · 原版本来就超量（计数器低估）——那是计数器的问题
@@ -164,6 +185,18 @@ def main():
     hb = sum(r["hit"] for r in good)
     print(f"剔除 YOLO 总检出 < {a.min_det} 的 {len(bad)} 题后："
           f"{hb}/{tb} = {100.0*hb/max(tb,1):.1f}%")
+
+    # ★ 空对照的读数 —— 没有它，上面那个命中率说明不了任何事
+    rr = 100.0 * hit_rnd[0] / max(tot_rnd[0], 1)
+    real = 100.0 * hit_blob / max(tot_blob, 1)
+    print(f"\n【空对照】同样大小的框随机扔到画面别处（每个 blob 重放 {a.rand_trials} 次，"
+          f"共 {tot_rnd[0]} 次）：命中 {rr:.1f}%")
+    print(f"  真实位置 {real:.1f}%  vs  随机位置 {rr:.1f}%  →  差 {real-rr:+.1f} 个点")
+    if real - rr < 10:
+        print("  ⚠️ 两者接近 —— **命中率高只是因为图里到处都是物体**，"
+              "它不能证明引导把物体放到了指定位置。前面基于命中率的结论要撤回。")
+    else:
+        print("  → 真实位置显著高于随机，命中率确实反映了引导的空间服从性。")
     if bad:
         print(f"  被剔除的：{', '.join(r['stem'][:20] for r in bad)}")
         print(f"  它们贡献了 {sum(r['n_added']-r['hit'] for r in bad)}/"

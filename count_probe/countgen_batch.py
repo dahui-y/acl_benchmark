@@ -225,6 +225,22 @@ def _patch_mem_graph():
         _mem("进修正步（已丢掉上一张图）")
         self._n_loss_calls = 0
         loss_in = float(loss)
+        # ---- 组件 3b：把退出判据换成「兑现掉可达降幅的 ρ」----------------
+        # 绝对阈值这个参数化是错的：达标与否取决于本题优化器能压下去多少，而那个
+        # 量逐题不同。实测（tune_thr15，108 次精修）：进入时离下界中位 0.366、
+        # 跑满 21 轮后仍离 0.249，也就是**只兑现了约 31% 的可达降幅**。所以任何
+        # 低于 L_min+0.25 的绝对阈值在多数题上都够不到 —— 上一轮 0.9% 的早退率
+        # 就是这么来的，不是实现有错（「该退却没退」实测 0 次）。
+        #
+        #     target = L_min + (1 − ρ)·(进入时的损失 − L_min)
+        #
+        # ρ<1 时按构造必然可达，且无量纲 —— 换损失也不用重标定，这正是 instance
+        # 那三轮退化成「永不触发 / 永远跑满」的原因。
+        rho, lm = getattr(self, "_thresh_frac", None), getattr(self, "_l_min", None)
+        if rho is not None and lm is not None and len(a) >= 5:
+            a = list(a)
+            a[4] = lm + (1.0 - rho) * max(loss_in - lm, 0.0)
+            a = tuple(a)
         out = orig_refine(self, loss_in, latents, *a, **kw)
         REFINE.append((int(getattr(self.attention_store, "curr_step_index", -1)),
                        int(self._n_loss_calls), round(loss_in, 4),
@@ -512,12 +528,25 @@ def main():
                         "与原版实际行为一致，省掉这个旋钮")
     g.add_argument("--scale-factor", type=float, default=None,
                    help="覆盖 latent 更新步长的系数（原版 50）")
+    g.add_argument("--max-refine", type=int, default=None,
+                   help="覆盖 max_refinement_steps（原版 20）。这是 --thresh-frac "
+                        "的**必要对照**：自适应early stop 若只是变相「少做精修」，"
+                        "那么把预算砍到同样的平均轮数应当一样好。一样好 = 自适应"
+                        "没价值；明显更差 = 逐题自适应才是关键")
     g.add_argument("--thresh-margin", type=float, default=None,
                    help="组件 3：**逐题**把退出阈值定成「解析下界 + 该余量」，"
                         "而不是全局常数。见 L_MIN_A/L_MIN_B 的推导。"
                         "原版的 {1.3,1.2,1.15} 在多数题上低于下界、数学上不可达，"
                         "于是精修必然跑满 20 步。给了这个就能真正在达标时停下来。"
-                        "与 --thresholds 互斥")
+                        "与 --thresholds 互斥。"
+                        "⚠️ 实测这个绝对余量的参数化不好使：优化器 21 轮只兑现约 31% "
+                        "的可达降幅，余量小于 0.25 基本都够不到。优先用 --thresh-frac")
+    g.add_argument("--thresh-frac", type=float, default=None,
+                   help="组件 3b（推荐）：退出判据 = 兑现掉可达降幅的 ρ，即 "
+                        "target = L_min + (1−ρ)·(进入时的损失 − L_min)。"
+                        "ρ<1 按构造必然可达，且无量纲（换损失不用重标定）。"
+                        "实测原版兑现率中位 0.31、四分位 0.24/0.39 —— "
+                        "要真正提前停就得取 ρ < 0.31。与 --thresholds 互斥")
 
     ap.add_argument("--mem-log", action="store_true",
                     help="在修正步前后打印显存占用。再 OOM 就开它，别继续猜")
@@ -584,9 +613,25 @@ def main():
     global MEM_LOG
     MEM_LOG = a.mem_log
     # ---- 方法开关。全部默认关闭时，行为与原版 CountGen 逐位一致 ----
-    if a.thresh_margin is not None and a.thresholds:
-        raise SystemExit("!! --thresh-margin 与 --thresholds 互斥：一个是逐题的、"
-                         "一个是全局常数，同时给等于把变量搅在一起。")
+    if sum(x is not None and x != "" for x in
+           (a.thresh_margin, a.thresh_frac, a.thresholds)) > 1:
+        raise SystemExit("!! --thresh-margin / --thresh-frac / --thresholds 三选一："
+                         "它们都在定同一个退出判据，同时给等于把变量搅在一起。")
+    if a.thresh_frac is not None:
+        if not 0.0 < a.thresh_frac < 1.0:
+            raise SystemExit("!! --thresh-frac 要在 (0,1) 开区间内：ρ≥1 等价于要求"
+                             "损失降到下界，那按构造不可达，就退回上一轮那个坑了。")
+        # 外层的门 `loss > thresholds[i]` 要恒真，真正的判据在精修函数内部按
+        # 进入时的损失现算。置 0 让门恒开，别让两处判据打架。
+        cfg["counting_model"]["loss"]["thresholds"] = {
+            int(k): 0.0 for k in cfg["counting_model"]["loss"]["thresholds"]}
+        print(f"★ 退出判据 = 兑现掉可达降幅的 ρ={a.thresh_frac:g}"
+              f"（target = L_min + {1-a.thresh_frac:.2f}·(进入损失 − L_min)）"
+              f"\n  参照：原版实测兑现率中位 0.31，四分位 0.24 / 0.39。"
+              f"ρ={a.thresh_frac:g} "
+              + ("会明显提前停" if a.thresh_frac < 0.24 else
+                 "约在原版一半的题上提前停" if a.thresh_frac < 0.31 else
+                 "⚠️ 高于中位兑现率，多数题仍会跑满 —— 这一轮很可能白跑"))
     global ORIG_THRESHOLDS
     ORIG_THRESHOLDS = {int(k): float(v) for k, v in
                        cfg["counting_model"]["loss"]["thresholds"].items()}
@@ -607,6 +652,10 @@ def main():
             (kv.split(":") for kv in a.thresholds.split(","))}
     if a.scale_factor is not None:
         cfg["counting_model"]["loss"]["scale_factor"] = a.scale_factor
+    if a.max_refine is not None:
+        was = cfg["counting_model"]["loss"].get("max_refinement_steps")
+        cfg["counting_model"]["loss"]["max_refinement_steps"] = a.max_refine
+        print(f"★ max_refinement_steps {was} → {a.max_refine}")
     if a.loss == "instance":
         _patch_instance_loss(a)
         print(f"★ 损失 = 实例感知（w_cov={a.w_cov} w_sep={a.w_sep} "
@@ -719,6 +768,9 @@ def main():
                 thr_used = adaptive_thresholds(fg1, ORIG_THRESHOLDS,
                                                a.thresh_margin)
                 cfg["counting_model"]["loss"]["thresholds"] = thr_used
+            # 组件 3b 的两个量挂到 pipe 上，精修函数进去时现算 target
+            pipe._thresh_frac = a.thresh_frac
+            pipe._l_min = l_min(fg1) if a.thresh_frac is not None else None
             # 把三张 mask 存成数组（32×32，几百字节）。可视化 png 看得见但量不了，
             # 而"新增的 blob 位置上到底长没长出物体"这个问题必须拿数组去问。
             np.savez_compressed(out / f"{img_id}_masks.npz",
@@ -766,6 +818,7 @@ def main():
                "loss": a.loss, "fg_before": round(fg0, 4), "fg_after": round(fg1, 4),
                "l_min": None if fg1 != fg1 else round(l_min(fg1), 4),
                "thresholds": thr_used and {k: round(v, 4) for k, v in thr_used.items()},
+               "thresh_frac": a.thresh_frac,
                "refine": list(REFINE)}
         REFINE.clear()
         if not any(m["id"] == img_id for m in meta):     # 补跑时别重复写

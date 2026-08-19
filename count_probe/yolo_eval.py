@@ -76,7 +76,7 @@ def _photo_stats(path, side=256, blk=8, flat_thr=3.0):
     return col, float((b < flat_thr).mean())
 
 
-def evaluate(model, files, conf):
+def evaluate(model, files, conf, device=None):
     """→ ({file: 检出的目标类框数}, {file: 这些框的平均置信度})
 
     置信度是**免费的质量代理**：图糊了、物体畸形，检测器的置信度就掉。
@@ -89,6 +89,8 @@ def evaluate(model, files, conf):
         kw = {"verbose": False}
         if conf is not None:
             kw["conf"] = conf
+        if device:
+            kw["device"] = device
         r = model(str(p), **kw)[0]
         target = p.name.split("__")[1]
         names = r.names
@@ -109,6 +111,9 @@ def main():
     ap.add_argument("--weights", default="yolov9e.pt")
     ap.add_argument("--conf", type=float, default=None,
                     help="不给就用 ultralytics 默认（与官方脚本一致）")
+    ap.add_argument("--device", default=None,
+                   help="传 cpu 就在 CPU 上跑 YOLO —— 跑批占着卡时用这个，"
+                        "免得把它挤 OOM（60 张约 5-10 分钟）")
     ap.add_argument("--clip", action="store_true",
                     help="加算 CLIPScore（复用 scalediff_probe/clip_score.py 的"
                          "加载器，只走本地缓存、不下载）。**跑批还在占卡时别开**，"
@@ -134,7 +139,7 @@ def main():
     for arm in arms:
         files = sorted((root / arm).glob("*.png"))
         print(f"\n跑 {arm}：{len(files)} 张")
-        counts[arm], confs[arm] = evaluate(model, files, a.conf)
+        counts[arm], confs[arm] = evaluate(model, files, a.conf, a.device)
 
     # ---------- 质量列 ----------
     # 只报计数准确率是不够的：方法完全可能靠把图弄糟来把数弄对，而那样的

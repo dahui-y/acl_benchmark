@@ -42,33 +42,40 @@ from PIL import Image
 from yolo_eval import _photo_stats
 
 
-def blockiness(path, period, side_max=1024):
-    """P 像素网格线上的边强度 / 非网格线上的边强度。≈1 无结构，>1 有硬边。"""
+def blockiness(path, periods, side_max=1024):
+    """→ {P: 网格线上的边强度 / 非网格线上的边强度}。≈1 无结构，>1 有周期性硬边。
+
+    一次读图算所有周期 —— 读图和求差分是这里的大头，按周期重复读会白花几倍时间。
+    """
+    if isinstance(periods, int):
+        periods = [periods]
     im = Image.open(path).convert("L")
+    k = 1
     if max(im.size) > side_max:                     # 只缩整数倍，保住网格对齐
-        k = max(im.size) // side_max
+        k = max(1, max(im.size) // side_max)
         if k > 1:
             im = im.resize((im.width // k, im.height // k), Image.BOX)
-            period = max(1, period // k)
     g = np.asarray(im, dtype=np.float32)
-    if period < 2:
-        return float("nan")
+    dc = np.abs(np.diff(g, axis=1)).mean(axis=0)    # 逐列的相邻差
+    dr = np.abs(np.diff(g, axis=0)).mean(axis=1)    # 逐行的相邻差
 
-    def _ratio(d, axis_len):
-        # d[j] = 第 j 与第 j+1 列（行）之间的平均绝对差
-        j = np.arange(axis_len - 1)
-        on = (j + 1) % period == 0
+    def _ratio(d, p):
+        on = (np.arange(len(d)) + 1) % p == 0
         if on.sum() == 0 or (~on).sum() == 0:
             return float("nan")
         # 分母下限：块内完全纯色时分母是 0（自测里的纯块图）。给 1e-2（0~255 标度）
         # 的地板，读数会很大但有限，不会变成 nan 把整批平均污染掉。
         return float(d[on].mean() / max(d[~on].mean(), 1e-2))
 
-    dc = np.abs(np.diff(g, axis=1)).mean(axis=0)
-    dr = np.abs(np.diff(g, axis=0)).mean(axis=1)
-    rc, rr = _ratio(dc, g.shape[1]), _ratio(dr, g.shape[0])
-    v = [x for x in (rc, rr) if x == x]
-    return sum(v) / len(v) if v else float("nan")
+    out = {}
+    for p0 in periods:
+        p = max(1, p0 // k)
+        if p < 2:
+            out[p0] = float("nan")
+            continue
+        v = [x for x in (_ratio(dc, p), _ratio(dr, p)) if x == x]
+        out[p0] = sum(v) / len(v) if v else float("nan")
+    return out
 
 
 def _files(d):
@@ -119,12 +126,11 @@ def main():
             rec["dflat"].append(100.0 * (fm - fv))
             rec["grey_v"] += cv < a.grey
             rec["grey_m"] += cm < a.grey
-            bl = {}
+            bv, bm = blockiness(pv, a.periods), blockiness(pm, a.periods)
             for p in a.periods:
-                bv, bm = blockiness(pv, p), blockiness(pm, p)
-                rec["blk_v"][p].append(bv)
-                rec["blk_m"][p].append(bm)
-                bl[p] = (bv, bm)
+                rec["blk_v"][p].append(bv[p])
+                rec["blk_m"][p].append(bm[p])
+            bl = {p: (bv[p], bm[p]) for p in a.periods}
             rec["per_file"].append((f, dc, 100.0 * (fm - fv), cv, cm, bl))
         rows.append(rec)
 
@@ -172,9 +178,9 @@ def main():
     for r in rows:
         print(f"\n  {r['name']}")
         for f, dc, df, cv, cm, bl in sorted(r["per_file"], key=lambda x: x[1])[:a.worst]:
-            b = " ".join(f"P{p}:{v[0]:.2f}→{v[1]:.2f}" for p, v in bl.items())
+            pk = max(bl, key=lambda p: bl[p][1] - bl[p][0])   # 这张图涨得最多的周期
             print(f"    {f[:-4][:34]:<36}colour {cv:>5.1f}→{cm:>5.1f} ({dc:>+5.0f}%)"
-                  f"  平涂 {df:>+5.1f}pt  {b}")
+                  f"  平涂 {df:>+5.1f}pt  块状峰 P={pk}: {bl[pk][0]:.2f}→{bl[pk][1]:.2f}")
 
 
 if __name__ == "__main__":

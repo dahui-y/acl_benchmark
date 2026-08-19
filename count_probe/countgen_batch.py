@@ -294,6 +294,30 @@ def _patch_mem_attn():
     return MemAttnCountingProcessor
 
 
+def _patch_instance_loss(a):
+    """把 `compute_loss` 换成实例感知的目标。**我们的方法。**
+
+    替换点选在 `SelfCountingSDXLPipeline.compute_loss`
+    （self_counting_sdxl_pipeline.py:144-148），它是原版调用
+    `utils/loss_utils.object_layout_loss` 的唯一入口。这样：
+      · make-it-count 一行源码都不用改
+      · 改动被限制在**一个函数**里，跑批结果的任何变化都只能归因到它
+      · `--loss orig` 一切照旧，A/B 干净
+
+    详细动机与三条根因见 count_probe/inst_loss.py 的文件头。
+    """
+    import pipeline.self_counting_sdxl_pipeline as SP
+    sys.path.insert(0, str(REPO / "count_probe"))
+    from inst_loss import instance_layout_loss
+
+    def compute_loss(self, object_attention_map):
+        return instance_layout_loss(object_attention_map, self.desired_mask,
+                                    w_sep=a.w_sep, w_bg=a.w_bg,
+                                    w_conc=a.w_conc, dilate=a.dilate)
+
+    SP.SelfCountingSDXLPipeline.compute_loss = compute_loss
+
+
 def _patch_unet_detach(pipe):
     """把**引导前向**的 UNet 返回值 detach 掉。数值等价，因为它从来没被用过。
 
@@ -399,6 +423,24 @@ def main():
                          "指到有空间的盘即可，或设环境变量 RELAYOUT_CKPT")
     ap.add_argument("--no-mem-attn", action="store_true",
                     help="关掉注意力改路（那一条是浮点级改动）。留着是为了验等价性")
+    # ---- 我们的方法 ----
+    g = ap.add_argument_group("方法（默认全关 = 原版 CountGen）")
+    g.add_argument("--loss", default="orig", choices=["orig", "instance"],
+                   help="orig=原版二值前景 BCE；instance=实例感知目标（组件 1）")
+    g.add_argument("--w-sep", type=float, default=1.0, help="间隔带项权重")
+    g.add_argument("--w-bg", type=float, default=1.0, help="背景项权重")
+    g.add_argument("--w-conc", type=float, default=0.0,
+                   help="blob 内集中度项权重。最不确定的一项，默认关，留作消融")
+    g.add_argument("--dilate", type=int, default=1, help="间隔带的膨胀半径")
+    g.add_argument("--fg-max", type=float, default=1.0,
+                   help="组件 2：把 desired_mask 逐 blob 腐蚀到总前景占比 ≤ 此值。"
+                        "1.0=不约束（原版）。0.25 是我们推出的阈值可达线")
+    g.add_argument("--thresholds", default=None,
+                   help="覆盖 refinement 的退出阈值，形如 0:0.5,10:0.4,20:0.35。"
+                        "换了损失就必须重定 —— 量纲完全不同")
+    g.add_argument("--scale-factor", type=float, default=None,
+                   help="覆盖 latent 更新步长的系数（原版 50）")
+
     ap.add_argument("--mem-log", action="store_true",
                     help="在修正步前后打印显存占用。再 OOM 就开它，别继续猜")
     ap.add_argument("--no-mem-graph", action="store_true",
@@ -421,6 +463,8 @@ def main():
     from diffusers.utils.torch_utils import randn_tensor
     from tqdm import tqdm
 
+    sys.path.insert(0, str(REPO / "count_probe"))
+    from inst_loss import shrink_mask
     from pipeline.run_countgen import set_seed, run_counting_pipeline_corrected_masks
     from pipeline.mask_extraction.extract_mask import relayout
     from pipeline.mask_extraction.dbscan_mask_extract import dbscan_extract_mask
@@ -461,6 +505,22 @@ def main():
 
     global MEM_LOG
     MEM_LOG = a.mem_log
+    # ---- 方法开关。全部默认关闭时，行为与原版 CountGen 逐位一致 ----
+    if a.thresholds:
+        cfg["counting_model"]["loss"]["thresholds"] = {
+            int(k): float(v) for k, v in
+            (kv.split(":") for kv in a.thresholds.split(","))}
+    if a.scale_factor is not None:
+        cfg["counting_model"]["loss"]["scale_factor"] = a.scale_factor
+    if a.loss == "instance":
+        _patch_instance_loss(a)
+        print(f"★ 损失 = 实例感知（w_sep={a.w_sep} w_bg={a.w_bg} "
+              f"w_conc={a.w_conc} dilate={a.dilate}）")
+        print(f"  阈值 {cfg['counting_model']['loss']['thresholds']}"
+              f"  步长系数 {cfg['counting_model']['loss']['scale_factor']}")
+    if a.fg_max < 1.0:
+        print(f"★ mask 面积约束：前景占比 ≤ {a.fg_max:.0%}")
+
     counter = _patch_counter_probe()
     if not a.no_mem_graph:
         _patch_mem_graph()
@@ -497,6 +557,13 @@ def main():
         print(f"--only-ids：只跑 {len(data)} 题（忽略续跑记录）")
         if len(data) != len(want):
             print(f"⚠️ 文件里有 {len(want)} 个 id，数据集里只找到 {len(data)} 个")
+    # ★ 同一个输出目录里混进两种配置 = 结果作废，而且是静默的。
+    #   续跑逻辑只看 id，不看配置，所以必须在这里挡住。
+    prev = {r.get("loss", "orig") for r in last.values()}
+    if prev and prev != {a.loss}:
+        sys.exit(f"!! {out} 里已有 loss={prev} 的记录，而本次是 loss={a.loss}。\n"
+                 f"   续跑只按 id 判断，混在一起会得到一个两种配置各跑一半的目录。\n"
+                 f"   换个 --out（例如 .../cocoount_inst）。")
     if done:
         print(f"续跑：已完成 {len(done)} 题")
     if partial:
@@ -538,6 +605,14 @@ def main():
                 pipe, prompt, N, cfg, seed)
             n_dbscan = counter.get("n")                 # DBSCAN 真实簇数（可能是 0）
             n_used = int(vanilla_masks.max().item())    # 兜底之后管线实际用的数
+            # 组件 2：把 desired_mask 收紧。必须在这里做 —— 它是喂给
+            # run_counting_pipeline_corrected_masks 的那张图，也是存进 npz 的那张。
+            fg0 = fg1 = float((object_masks > 0).float().mean())
+            if a.fg_max < 1.0:
+                shrunk, fg0, fg1 = shrink_mask(object_masks.cpu().numpy(),
+                                               fg_max=a.fg_max)
+                object_masks = torch.tensor(shrunk, dtype=object_masks.dtype,
+                                            device=object_masks.device)
             # 把三张 mask 存成数组（32×32，几百字节）。可视化 png 看得见但量不了，
             # 而"新增的 blob 位置上到底长没长出物体"这个问题必须拿数组去问。
             np.savez_compressed(out / f"{img_id}_masks.npz",
@@ -581,7 +656,8 @@ def main():
                "skipped_by_official": bool(over9),
                "vanilla_only": bool(a.vanilla_only),
                "has_countgen_img": image is not None,
-               "sec": round(t_count, 2)}
+               "sec": round(t_count, 2),
+               "loss": a.loss, "fg_before": round(fg0, 4), "fg_after": round(fg1, 4)}
         if not any(m["id"] == img_id for m in meta):     # 补跑时别重复写
             meta.append({k: rec[k] for k in
                          ("id", "prompt", "seed", "obj_class", "requiered_object_num")})

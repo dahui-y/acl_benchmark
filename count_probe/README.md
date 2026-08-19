@@ -98,6 +98,69 @@ python evaluation_script.py --images_dir "$SD_OUT/count/cocoount_arms/countgen" 
     --output_dir "$SD_OUT/count/official_eval"
 ```
 
+## 我们的方法（`--loss instance` / `--fg-max`）
+
+默认全关时行为与原版 CountGen 一致，所以 A/B 干净。三条根因、三处改动，
+详见 `inst_loss.py` 文件头和 `POSITIONING.md`。
+
+```
+L = L_peak + w_sep·L_sep + w_bg·L_bg + w_conc·L_conc
+
+L_peak = 1 − min_k ( max_{p∈blob k} A(p) )    ← N 从这里进入目标函数
+L_sep  = mean_{p∈间隔带} A(p)                  ← 相邻 blob 之间挖谷
+L_bg   = mean_{p∈背景} A(p)
+L_conc = mean_k ( mean_blob A / max_blob A )   ← 默认权重 0，留作消融
+```
+
+`inst_loss.py` 的自测把「本方法存在的理由」写成了断言而不是声明：
+
+| 解 | 原版 BCE | 我们的 |
+|---|---:|---:|
+| 理想（每 blob 一个尖峰）| 1.1389 | **0.0200** |
+| 铺满前景 | **0.8718** | 0.5000 |
+| 相邻粘连 | 0.9051 | 0.5580 |
+
+值越小越优 —— **原版损失把「铺满」排在「理想解」前面，它不是看不见 N，
+是主动奖励铺满。** 跑 `python count_probe/inst_loss.py` 可复核。
+
+### 调参必须在另一批 prompt 上做
+
+换了损失，`thresholds` 和 `scale_factor` 就必须重定（原版量纲是带 pos_weight=10
+的 BCE，取值 0.8~2.4；我们的各项都是 [0,1] 上的均值/最大值）。但重定阈值就是调参，
+**不能在那 167 题上调**，否则报出来的数是在测试集上选出来的。
+
+```bash
+python count_probe/make_tune_set.py --n 60 --out $SD_OUT/count/tune.json
+```
+
+用他们自己的生成脚本另抽 60 题，按 id 剔除与评测集重合的。**那份 json 要进版本库**
+——他们的脚本没有 seed 参数，可复现性靠保留文件。
+
+### 跑法
+
+```bash
+# 调参档（60 题，约 40 分钟一轮）
+python count_probe/countgen_batch.py --loss instance --fg-max 0.25 \
+    --thresholds 0:0.5,10:0.4,20:0.35 --scale-factor 50 \
+    --dataset $SD_OUT/count/tune.json --out $SD_OUT/count/tune_inst
+
+# 定下超参后，评测档（167 题，约 105 分钟）——**必须换目录**
+python count_probe/countgen_batch.py --loss instance --fg-max 0.25 \
+    --thresholds <定下来的> --scale-factor <定下来的> \
+    --out $SD_OUT/count/cocoount_inst
+python count_probe/make_arms.py --src $SD_OUT/count/cocoount_inst \
+    --out $SD_OUT/count/cocoount_inst_arms
+python count_probe/yolo_eval.py --arms $SD_OUT/count/cocoount_inst_arms
+python count_probe/decompose.py --arms $SD_OUT/count/cocoount_inst_arms
+```
+
+同一个输出目录里混进两种配置会被脚本挡住（续跑只按 id 判断，混了就是
+一个两种配置各跑一半的目录，而且是静默的）。
+
+**判读必须按两支分开**（`decompose.py` 的表四/表六b）：「删多余」那一支贡献了
+原版几乎全部的增益（+40.0，p<0.001），新损失不能把它弄坏。只看总分会掩盖
+「补涨了、删跌了」。
+
 ## 其他
 
 - `check_selfattn_mask.py`：复算 `attention_processors.py:45` 的

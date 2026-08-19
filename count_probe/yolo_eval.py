@@ -37,6 +37,7 @@
 import argparse
 import csv
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -48,8 +49,14 @@ def _pct(x, n):
 
 
 def evaluate(model, files, conf):
-    """→ {file: 检出的目标类框数}"""
-    out = {}
+    """→ ({file: 检出的目标类框数}, {file: 这些框的平均置信度})
+
+    置信度是**免费的质量代理**：图糊了、物体畸形，检测器的置信度就掉。
+    它不是标准指标，但不需要任何新模型，而且和计数用的是同一次前向。
+    真正要报进论文的质量列是 CLIPScore（见 --clip），与在位者对齐
+    （CountCluster 报 CLIPScore + ImageReward，CountDiffusion 报 CLIP-score + IR）。
+    """
+    out, cf = {}, {}
     for i, p in enumerate(files):
         kw = {"verbose": False}
         if conf is not None:
@@ -57,11 +64,14 @@ def evaluate(model, files, conf):
         r = model(str(p), **kw)[0]
         target = p.name.split("__")[1]
         names = r.names
-        n = sum(1 for c in r.boxes.cls.tolist() if names[int(c)] == target)
-        out[p.name] = n
+        hit = [float(s) for c, s in zip(r.boxes.cls.tolist(),
+                                        r.boxes.conf.tolist())
+               if names[int(c)] == target]
+        out[p.name] = len(hit)
+        cf[p.name] = sum(hit) / len(hit) if hit else None
         if (i + 1) % 50 == 0:
             print(f"    …{i+1}/{len(files)}")
-    return out
+    return out, cf
 
 
 def main():
@@ -71,6 +81,10 @@ def main():
     ap.add_argument("--weights", default="yolov9e.pt")
     ap.add_argument("--conf", type=float, default=None,
                     help="不给就用 ultralytics 默认（与官方脚本一致）")
+    ap.add_argument("--clip", action="store_true",
+                    help="加算 CLIPScore（复用 scalediff_probe/clip_score.py 的"
+                         "加载器，只走本地缓存、不下载）。**跑批还在占卡时别开**，"
+                         "CLIP 塔会再吃 1~2 GB 显存")
     a = ap.parse_args()
     root = Path(a.arms).resolve()
 
@@ -88,11 +102,26 @@ def main():
                          f"   make_arms.py 是按 COCO-80 写文件名的，对不上就会静默全错。")
     print(f"{a.weights}: 类名表与 COCO-80 逐项一致 ✓")
 
-    counts = {}
+    counts, confs = {}, {}
     for arm in arms:
         files = sorted((root / arm).glob("*.png"))
         print(f"\n跑 {arm}：{len(files)} 张")
-        counts[arm] = evaluate(model, files, a.conf)
+        counts[arm], confs[arm] = evaluate(model, files, a.conf)
+
+    # ---------- 质量列 ----------
+    # 只报计数准确率是不够的：方法完全可能靠把图弄糟来把数弄对，而那样的
+    # "提升"没有意义。在位者自己也报质量（CountCluster: CLIPScore+ImageReward；
+    # CountDiffusion: CLIP-score+IR），我们不报，审稿人一定会问。
+    clip = None
+    if a.clip:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent
+                               / "scalediff_probe"))
+        try:
+            from clip_score import load_clip
+            clip = load_clip()
+        except Exception as e:
+            print(f"⚠ CLIP 塔拿不到（{type(e).__name__}: {str(e)[:80]}），"
+                  f"跳过该列，其余不受影响")
 
     # ---------- 明细 ----------
     rows = []
@@ -104,6 +133,7 @@ def main():
             c = counts[arm].get(fn)
             row[f"yolo_{arm}"] = c
             row[f"ok_{arm}"] = None if c is None else int(c == meta["N"])
+            row[f"conf_{arm}"] = confs[arm].get(fn)
         rows.append(row)
     csv_p = root / "yolo_results.csv"
     with csv_p.open("w", newline="") as f:
@@ -128,6 +158,27 @@ def main():
     print("对齐目标【一手】：CountCluster 表 CountGen/SDXL 46.20 / 27.88（CountGD 评测器）；"
           "\n              CountDiffusion 表 CoCoCount CountGen/SDXL 51 / 34（Grounded SAM）。"
           "\n              评测器不同，别指望对上小数点；量级对得上就算复现成功。")
+
+    # ---------- 表一b：质量列 ----------
+    # 计数准确率单独看是可以被"把图弄糟"骗到的。这一张就是防那个的。
+    print(f"\n表一b 质量（只报，不做判据 —— 但计数涨、质量跌就不算赢）")
+    print(f"{'臂':<12}{'YOLO 置信度':>12}{'CLIPScore':>12}")
+    for arm in arms:
+        cs = [r[f"conf_{arm}"] for r in main_rows if r.get(f"conf_{arm}")]
+        cl = ""
+        if clip is not None:
+            from PIL import Image
+            v = []
+            for r in main_rows:
+                f = root / arm / r["file"]
+                if f.exists():
+                    v.append(clip.score(Image.open(f).convert("RGB"), r["prompt"]))
+            cl = f"{sum(v)/len(v):12.3f}" if v else f"{'n/a':>12}"
+        print(f"{arm:<12}{(sum(cs)/len(cs) if cs else float('nan')):>12.3f}{cl}")
+    if clip is None:
+        print("  （CLIPScore 未算：加 --clip；它复用 scalediff_probe 的加载器，"
+              "只走本地缓存）")
+    print("  置信度是免费代理，不是标准指标。CLIPScore 与在位者报的口径一致。")
 
     # ---------- 表二：按 N 分档 ----------
     print(f"\n表二 按要求个数分档")

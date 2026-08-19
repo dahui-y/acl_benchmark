@@ -325,7 +325,8 @@ def _patch_instance_loss(a):
         return instance_layout_loss(object_attention_map, self.desired_mask,
                                     w_sep=a.w_sep, w_bg=a.w_bg,
                                     w_conc=a.w_conc, w_cov=a.w_cov,
-                                    dilate=a.dilate)
+                                    dilate=a.dilate,
+                                    tau_fg=a.tau_fg, tau_bg=a.tau_bg)
 
     SP.SelfCountingSDXLPipeline.compute_loss = compute_loss
 
@@ -461,6 +462,12 @@ def main():
     g.add_argument("--w-conc", type=float, default=0.0,
                    help="blob 内集中度项权重。最不确定的一项，默认关，留作消融")
     g.add_argument("--dilate", type=int, default=1, help="间隔带的膨胀半径")
+    g.add_argument("--tau-fg", type=float, default=None,
+                   help="hinge 余量：前景只要 ≥ 此值就不再推（建议 0.8）。"
+                        "不给则无余量 —— 第二轮实测无余量会把 attention 一路推成"
+                        "硬 0/1 图，图从照片塌成白底剪影")
+    g.add_argument("--tau-bg", type=float, default=None,
+                   help="hinge 余量：背景只要 ≤ 此值就不再压（建议 0.2）")
     g.add_argument("--fg-max", type=float, default=1.0,
                    help="组件 2：把 desired_mask 逐 blob 腐蚀到总前景占比 ≤ 此值。"
                         "1.0=不约束（原版）。0.25 是我们推出的阈值可达线")
@@ -551,7 +558,10 @@ def main():
     if a.loss == "instance":
         _patch_instance_loss(a)
         print(f"★ 损失 = 实例感知（w_cov={a.w_cov} w_sep={a.w_sep} "
-              f"w_bg={a.w_bg} w_conc={a.w_conc} dilate={a.dilate}）")
+              f"w_bg={a.w_bg} w_conc={a.w_conc} dilate={a.dilate}"
+              + (f" hinge τ_fg={a.tau_fg} τ_bg={a.tau_bg}"
+                 if a.tau_fg is not None or a.tau_bg is not None
+                 else " 无余量") + "）")
         print(f"  阈值 {cfg['counting_model']['loss']['thresholds']}"
               f"  步长系数 {cfg['counting_model']['loss']['scale_factor']}")
     if a.fg_max < 1.0:

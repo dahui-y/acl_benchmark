@@ -70,8 +70,24 @@ def normalize(A):
 
 
 def instance_layout_loss(A, M, w_sep=1.0, w_bg=1.0, w_conc=0.0, w_cov=0.0,
-                         dilate=1):
-    """A: (H,W) 物体 token 的 cross-attention；M: (H,W) 标签 0..K（0=背景）。"""
+                         dilate=1, tau_fg=None, tau_bg=None):
+    """A: (H,W) 物体 token 的 cross-attention；M: (H,W) 标签 0..K（0=背景）。
+
+    tau_fg / tau_bg 给了就走 **hinge**：只罚"前景暗于 τ_fg"和"背景亮于 τ_bg"，
+    到位即梯度为 0。不给就是无余量版本（第一、二轮用的）。
+
+    为什么需要 hinge —— 这是第二轮**肉眼看图**才发现的：
+      原版把 A 归一化到 [0,1] 再喂 BCEWithLogits（内部又过一次 sigmoid），
+      预测值只能落在 [0.500, 0.731]，最优解**够不到**。我起初把这当纯缺陷
+      （"损失有下界、阈值不可达"），但它同时在当**正则化器**：因为够不到，
+      优化永远处在"还在往那边走"的状态，不会真的抵达极端。
+      我拆掉它之后，我们的损失有了一个**可达的退化最优解** —— 把 attention
+      变成硬 0/1 图。而真实扩散模型的 cross-attention 本是平滑弥散的，
+      逼 latent 产出退化注意力就得把它推离自然图像流形。
+      实拍结果：`airplane_num=7_seed=149069` 从机场照片变成"白底黑剪影飞机"，
+      且 v2（--thresholds max，每次跑满 20 步）比 v1（提前退出）更极端。
+      hinge 把最优解从一个极端点改成一个**区间**，到位就松手。
+    """
     A = normalize(A)
     K = int(M.max().item())
     if K == 0:                       # 没有 blob，退化成只压背景
@@ -83,9 +99,13 @@ def instance_layout_loss(A, M, w_sep=1.0, w_bg=1.0, w_conc=0.0, w_cov=0.0,
     if masks.shape[0] == 0:
         return A.mean()
 
+    # hinge：到位就松手。lo(x)=罚"太暗"，hi(x)=罚"太亮"
+    lo = (lambda x: F.relu(tau_fg - x)) if tau_fg is not None else (lambda x: 1.0 - x)
+    hi = (lambda x: F.relu(x - tau_bg)) if tau_bg is not None else (lambda x: x)
+
     # L_peak：逐 blob 取峰，盯最弱的那个 —— N 从这里进入目标函数
     peaks = torch.stack([A[m].max() for m in masks])
-    L_peak = 1.0 - peaks.min()
+    L_peak = lo(peaks.min())
 
     # L_cov：逐 blob 的覆盖度。第一轮实测出来的教训 ——
     #   L_peak 只对每个 blob 的 argmax **一个格子**产生梯度，而原版 BCE 对
@@ -95,8 +115,7 @@ def instance_layout_loss(A, M, w_sep=1.0, w_bg=1.0, w_conc=0.0, w_cov=0.0,
     # 与原版全局前景项的区别：**逐 blob 取平均再对 blob 平均**。
     #   原版的全局平均允许"一个 blob 过饱和补偿另一个空着"，逐 blob 不允许。
     if w_cov > 0:
-        cov = torch.stack([A[m].mean() for m in masks])
-        L_cov = 1.0 - cov.mean()
+        L_cov = torch.stack([lo(A[m]).mean() for m in masks]).mean()
     else:
         L_cov = A.sum() * 0
 
@@ -104,10 +123,10 @@ def instance_layout_loss(A, M, w_sep=1.0, w_bg=1.0, w_conc=0.0, w_cov=0.0,
     d = F.max_pool2d(masks.float().unsqueeze(1), 2 * dilate + 1,
                      stride=1, padding=dilate).squeeze(1)
     band = d.sum(0) >= 2
-    L_sep = A[band].mean() if bool(band.any()) else A.sum() * 0
+    L_sep = hi(A[band]).mean() if bool(band.any()) else A.sum() * 0
 
     bg = (M == 0)
-    L_bg = A[bg].mean() if bool(bg.any()) else A.sum() * 0
+    L_bg = hi(A[bg]).mean() if bool(bg.any()) else A.sum() * 0
 
     if w_conc > 0:
         conc = torch.stack([A[m].mean() / (A[m].max() + EPS) for m in masks])
@@ -223,6 +242,28 @@ def _selftest():
     f0, b0 = nnz(w_cov=0.0)
     f1, b1 = nnz(w_cov=1.0)
     n_fg = int(fg.sum())
+    # hinge 到位后梯度必须**精确为 0** —— 这正是第二轮塌成剪贴画的解药：
+    # 无余量版本会一路把 attention 往硬 0/1 图推，把 latent 顶离自然图像流形。
+    # 造一个"够好但不极端"的解：前景 0.85、背景 0.15，两端各留一个锚点格
+    # 让 min-max 归一化不会把它直接拉成 0/1（那样两个版本都是 0，测不出差别）。
+    def good_not_extreme():
+        A = torch.where(M > 0, torch.full((H, H), 0.85), torch.full((H, H), 0.15))
+        A[0, 0] = 0.0                       # 归一化锚点：背景里的最暗格
+        A[5, 5] = 1.0                       # 归一化锚点：blob 1 里的最亮格
+        return A.clone().requires_grad_(True)
+
+    gh = good_not_extreme()
+    Lh = instance_layout_loss(gh, M, w_cov=1.0, tau_fg=0.8, tau_bg=0.2)
+    Lh.backward()
+    gn = good_not_extreme()
+    Ln = instance_layout_loss(gn, M, w_cov=1.0)
+    Ln.backward()
+    print(f"  ✓ 前景 0.85 / 背景 0.15 这个「够好但不极端」的解："
+          f"hinge 版 L={float(Lh.detach()):.4f}（梯度 {float(gh.grad.abs().sum()):.4f}），"
+          f"无余量版 L={float(Ln.detach()):.4f}（梯度 {float(gn.grad.abs().sum()):.4f}）")
+    assert float(Lh.detach()) == 0.0 and float(gh.grad.abs().sum()) == 0.0, \
+        "hinge 满足 τ 后损失与梯度都该精确为 0"
+    assert float(Ln.detach()) > 0.0, "无余量版会继续往极端推 —— 那正是塌图的来源"
     print(f"  ✓ 梯度可回传且有限。前景 {n_fg} 格中拿到梯度的："
           f"w_cov=0 → **{f0}**，w_cov=1 → **{f1}**；背景两者都是 {b0}/{b1}")
     assert f0 <= len(set(range(1, 4))) + 8, "w_cov=0 时前景应当几乎没有梯度"

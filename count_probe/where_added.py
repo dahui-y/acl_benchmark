@@ -183,6 +183,28 @@ def main():
           f"中位数 {int(np.median(ar))}/1024，最小 {min(ar)}，最大 {max(ar)}")
     print("  若中位数接近 0，说明 ReLayout 根本没往空白处加东西，那本身就是结论。")
 
+    # ---- 前景占比 f 与损失下界 ----
+    # CountGen 把 attention map 归一化到 [0,1] 再喂 BCEWithLogits（内部还会过一次
+    # sigmoid），所以"预测值"只能落在 [sigmoid(0), sigmoid(1)] = [0.500, 0.731]，
+    # 两端都够不到。于是损失有一个**只取决于前景占比 f 的下界**：
+    #     L_min(f) = f·10·(−log 0.731) + (1−f)·(−log 0.5) = 0.693 + 2.439·f
+    # 阈值是 {0: 1.3, 10: 1.2, 20: 1.15}（pipeline_config.yaml）。
+    # f 超过约 25% 时 step0 的阈值在数学上就达不到 —— 这正好解释了我们观测到的
+    # 「每次修正都跑满 20 次迭代、从不靠达到阈值退出」。
+    fs = np.array([float((z["postprocess"] > 0).mean())
+                   for _, _, z, _, _ in items])
+    Lmin = 0.6931 + 2.4394 * fs
+    print(f"\n前景占比 f（desired_mask 非零的格子/1024）："
+          f"中位 {np.median(fs):.1%}，最小 {fs.min():.1%}，最大 {fs.max():.1%}")
+    print(f"损失下界 L_min = 0.693 + 2.439·f：中位 {np.median(Lmin):.2f}，"
+          f"最大 {Lmin.max():.2f}")
+    for t, lab in ((1.3, "step0"), (1.15, "step20")):
+        bad = int((Lmin >= t).sum())
+        print(f"  阈值 {t}（{lab}）在 {bad}/{len(fs)} 题上**数学上不可达**"
+              f"（{100.0*bad/len(fs):.0f}%）")
+    print("  → 这些题的 refinement 只能跑满 max_refinement_steps，"
+          "把 latent 一路推下去，直到 20 步用完。")
+
 
 if __name__ == "__main__":
     main()

@@ -20,6 +20,7 @@
 
 import argparse
 import csv
+from math import comb
 from pathlib import Path
 
 from yolo_eval import _photo_stats
@@ -56,6 +57,9 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--arms", nargs="+", required=True)
     ap.add_argument("--no-quality", action="store_true", help="跳过要读图的那两列")
+    ap.add_argument("--pair", nargs=2, default=None, metavar=("A", "B"),
+                    help="对这两个配置做**配对**检验。百分比之差看不出样本量："
+                         "65.0%% vs 58.3%% 在 60 题上只是差 4 张")
     a = ap.parse_args()
 
     out = []
@@ -117,6 +121,53 @@ def main():
                   + ("   ⚠️ 塌了" if d < -20 else ""))
         print("\n  colourfulness 掉得多 = 图从照片塌向平涂/黑白。这两列是代理，"
               "不是标准指标；\n  但计数涨、图塌了不算赢。")
+
+    if a.pair:
+        paired(*a.pair)
+
+
+def _mcnemar(b, c):
+    """McNemar 精确二项检验，双尾。b+c 小的时候它检不出东西，这正是要看见的。"""
+    n = b + c
+    if n == 0:
+        return float("nan")
+    k = min(b, c)
+    return min(1.0, 2.0 * sum(comb(n, i) for i in range(k + 1)) / 2.0 ** n)
+
+
+def paired(da, db):
+    """两个配置逐题配对比较。同一批 prompt、同一批 seed，可以直接配对。"""
+    na, nb = Path(da).name.replace("_arms", ""), Path(db).name.replace("_arms", "")
+    la, lb = _load(da), _load(db)
+    if not la or not lb:
+        print(f"\n（配对检验跳过：{na if not la else nb} 读不到 yolo_results.csv）")
+        return
+    ra = {r["file"]: r for r in la}
+    rb = {r["file"]: r for r in lb}
+    common = sorted(set(ra) & set(rb))
+    if len(common) < len(ra) or len(common) < len(rb):
+        print(f"\n⚠️ 两边题目对不齐：{na} {len(ra)} 题、{nb} {len(rb)} 题，"
+              f"公共 {len(common)} 题。只在公共部分上配对。")
+    a_only = sum(1 for f in common if ra[f]["ok_m"] and not rb[f]["ok_m"])
+    b_only = sum(1 for f in common if rb[f]["ok_m"] and not ra[f]["ok_m"])
+    same = len(common) - a_only - b_only
+    print(f"\n{'='*60}\n配对检验：{na}  vs  {nb}（共 {len(common)} 题）")
+    print(f"  两者都对或都错          {same:>4}")
+    print(f"  只有 {na:<14} 对   {a_only:>4}")
+    print(f"  只有 {nb:<14} 对   {b_only:>4}")
+    if a_only + b_only == 0:
+        print("  两个配置**逐题完全一致**，没有可检验的不一致对。"
+              "\n  → 这不是「打平」，是**同一套输出**：先去查两边的改动是不是真的生效了。")
+        return
+    p = _mcnemar(b_only, a_only)
+    print(f"  净差 {a_only - b_only:+d} 张，双尾 p = {p:.3f}")
+    if p > 0.05:
+        print(f"  → **不显著**。差的这 {abs(a_only-b_only)} 张在这个样本量下"
+              f"与掷硬币无法区分，不能当结论用。")
+    else:
+        print("  → 显著（在这个样本量下能与掷硬币区分开）。")
+    print(f"  （注意：这是**调参集**上的数。真正的判据是拿定下来的配置"
+          f"去评测集 167 题上跑一遍，那才是没被调过参的。）")
 
 
 if __name__ == "__main__":

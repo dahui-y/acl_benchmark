@@ -395,11 +395,23 @@ def _load_pipeline(cfg):
     # ★ local_files_only 必须显式传。diffusers 0.25 的 download() 会**无条件**
     #   先调 model_info() 问 HF 元数据；此时若设了 HF_HUB_OFFLINE，它是抛
     #   OfflineModeIsEnabled 而不是回退到缓存。传 True 才会整条跳过网络。
-    pipe = SelfCountingSDXLPipeline.from_pretrained(
-        cfg["model"]["sdxl_path"], use_safetensors=True,
-        torch_dtype=torch.float16, variant=cfg["model"].get("variant") or None,
-        local_files_only=cfg["model"]["local_only"],
-        use_onnx=False)
+    kw = dict(use_safetensors=True, torch_dtype=torch.float16,
+              variant=cfg["model"].get("variant") or None, use_onnx=False)
+    try:
+        pipe = SelfCountingSDXLPipeline.from_pretrained(
+            cfg["model"]["sdxl_path"],
+            local_files_only=cfg["model"]["local_only"], **kw)
+    except Exception as e:
+        # 权重全在本地缓存里，没理由让一个 45 分钟的任务在第 0 秒死于网络。
+        # nohup 起的 shell 常常没继承 HF_HOME/HF_HUB_OFFLINE，就会走到这里。
+        if cfg["model"]["local_only"]:
+            raise
+        print(f"⚠️ 联网加载失败（{type(e).__name__}），改用本地缓存重试。\n"
+              f"   原因：{str(e).splitlines()[0][:120]}\n"
+              f"   （想彻底避免：跑之前 export HF_HUB_OFFLINE=1，"
+              f"或加 --local-files-only）")
+        pipe = SelfCountingSDXLPipeline.from_pretrained(
+            cfg["model"]["sdxl_path"], local_files_only=True, **kw)
     pipe.to(torch.device(cfg["pipeline"]["device"]))
     pipe.counting_config = cfg["counting_model"]
     if cfg["counting_model"]["use_ddpm"]:

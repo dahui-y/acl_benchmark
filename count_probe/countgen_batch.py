@@ -55,6 +55,35 @@ import sys
 import time
 from pathlib import Path
 
+# ---- 损失的解析下界 L_min(f) = A + B·f ----------------------------------
+# CountGen 把 attention map 归一化到 [0,1] 再喂 binary_cross_entropy_with_logits
+# （内部还会过一次 sigmoid），所以「预测值」只能落在 [σ(0), σ(1)] = [0.500, 0.731]，
+# 两端都够不到。前景带 pos_weight=10，于是每题的损失有一个只取决于前景占比 f
+# 的下界：
+#     L_min(f) = f·10·(−log 0.731) + (1−f)·(−log 0.500) = 0.693 + 2.439·f
+# 原版的退出阈值是全局常数 {0:1.3, 10:1.2, 20:1.15}（pipeline_config.yaml）。
+# 实测：f 中位 32.2% → L_min 中位 1.48，13 道「数少了」的题里 11 道连 step0 的
+# 1.3 都数学上不可达，13/13 够不到 step20 的 1.15。够不到就退不出，于是精修
+# **必然**跑满 max_refinement_steps，把 latent 一路推到预算用完。
+L_MIN_A, L_MIN_B = 0.6931, 2.4394
+
+
+def l_min(fg_frac):
+    """该题损失能取到的最小值。低于它的阈值等于「永不退出」。"""
+    return L_MIN_A + L_MIN_B * float(fg_frac)
+
+
+def adaptive_thresholds(fg_frac, orig, margin):
+    """把阈值锚到逐题的解析下界上，保留原版各步之间的相对形状。
+
+    原版 {0:1.3, 10:1.2, 20:1.15} 的形状是「越往后要求越高」（相对 step0
+    分别 0 / −0.10 / −0.15）。这里只把**基准**从全局常数换成 L_min(f)+margin，
+    形状原样保留 —— 改一个变量，别顺手改两个。
+    """
+    ks = sorted(orig)
+    base = orig[ks[0]]
+    return {k: l_min(fg_frac) + margin + (orig[k] - base) for k in ks}
+
 os.environ.setdefault("MPLBACKEND", "Agg")      # 无头环境；他们的代码会画图
 # 修正步的显存峰值很尖（带梯度的 UNet 前向），碎片化会让本来够的显存不够
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
@@ -483,6 +512,12 @@ def main():
                         "与原版实际行为一致，省掉这个旋钮")
     g.add_argument("--scale-factor", type=float, default=None,
                    help="覆盖 latent 更新步长的系数（原版 50）")
+    g.add_argument("--thresh-margin", type=float, default=None,
+                   help="组件 3：**逐题**把退出阈值定成「解析下界 + 该余量」，"
+                        "而不是全局常数。见 L_MIN_A/L_MIN_B 的推导。"
+                        "原版的 {1.3,1.2,1.15} 在多数题上低于下界、数学上不可达，"
+                        "于是精修必然跑满 20 步。给了这个就能真正在达标时停下来。"
+                        "与 --thresholds 互斥")
 
     ap.add_argument("--mem-log", action="store_true",
                     help="在修正步前后打印显存占用。再 OOM 就开它，别继续猜")
@@ -549,6 +584,18 @@ def main():
     global MEM_LOG
     MEM_LOG = a.mem_log
     # ---- 方法开关。全部默认关闭时，行为与原版 CountGen 逐位一致 ----
+    if a.thresh_margin is not None and a.thresholds:
+        raise SystemExit("!! --thresh-margin 与 --thresholds 互斥：一个是逐题的、"
+                         "一个是全局常数，同时给等于把变量搅在一起。")
+    global ORIG_THRESHOLDS
+    ORIG_THRESHOLDS = {int(k): float(v) for k, v in
+                       cfg["counting_model"]["loss"]["thresholds"].items()}
+    if a.thresh_margin is not None:
+        print(f"★ 退出阈值 = 逐题的解析下界 L_min(f)={L_MIN_A:.3f}+{L_MIN_B:.3f}·f "
+              f"加余量 {a.thresh_margin:g}，保留原版形状 {ORIG_THRESHOLDS}")
+        print(f"  例：f=32.2%（原版中位）→ {adaptive_thresholds(0.322, ORIG_THRESHOLDS, a.thresh_margin)}"
+              f"\n      f=16.6%（收 mask 后中位）→ "
+              f"{adaptive_thresholds(0.166, ORIG_THRESHOLDS, a.thresh_margin)}")
     if a.thresholds == "max":
         # 去掉阈值这个旋钮：原版实测就是"每次跑满 max_refinement_steps"，
         # 阈值置 0 让我们的预算与它一致，对比里少一个自由参数。
@@ -632,6 +679,8 @@ def main():
             continue
 
         t0 = time.time()
+        fg0 = fg1 = float("nan")        # --vanilla-only 那一支不走 mask 这段
+        thr_used = None
         # ★ 顺序必须与 run_countgen.py:94-98 一致：先 set_seed 再造 latents
         set_seed(seed)
         generator = torch.Generator().manual_seed(seed)
@@ -664,6 +713,12 @@ def main():
                                                fg_max=a.fg_max)
                 object_masks = torch.tensor(shrunk, dtype=object_masks.dtype,
                                             device=object_masks.device)
+            # 组件 3：逐题把退出阈值锚到解析下界上。必须在收完 mask 之后算 ——
+            # 下界只取决于最终喂进去的那张 mask 的前景占比。
+            if a.thresh_margin is not None:
+                thr_used = adaptive_thresholds(fg1, ORIG_THRESHOLDS,
+                                               a.thresh_margin)
+                cfg["counting_model"]["loss"]["thresholds"] = thr_used
             # 把三张 mask 存成数组（32×32，几百字节）。可视化 png 看得见但量不了，
             # 而"新增的 blob 位置上到底长没长出物体"这个问题必须拿数组去问。
             np.savez_compressed(out / f"{img_id}_masks.npz",
@@ -709,6 +764,8 @@ def main():
                "has_countgen_img": image is not None,
                "sec": round(t_count, 2),
                "loss": a.loss, "fg_before": round(fg0, 4), "fg_after": round(fg1, 4),
+               "l_min": None if fg1 != fg1 else round(l_min(fg1), 4),
+               "thresholds": thr_used and {k: round(v, 4) for k, v in thr_used.items()},
                "refine": list(REFINE)}
         REFINE.clear()
         if not any(m["id"] == img_id for m in meta):     # 补跑时别重复写

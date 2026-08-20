@@ -78,6 +78,42 @@ def blockiness(path, periods, side_max=1024):
     return out
 
 
+def straight_edges(path, side_max=1024):
+    """→ (列方向, 行方向) 的「最强直边 / 典型边」比值。测**不规则矩形拼接**。
+
+    为什么另开一个：blockiness 只抓**周期性**网格。肉眼在 tune_hinge 的天空里
+    看到的是几块亮度不同的**大矩形**，边界横贯整幅、彼此不等距 —— 不成周期，
+    blockiness 读数 1.00~1.02，完全扫不到。我据此说过「块状伪影不存在」，错了。
+
+    这里换个问法：**有没有某一整行/整列的相邻差远高于其它行/列**。一块矩形补丁
+    的边界会让那一行的平均差跳起来，不管它出现在哪、重不重复。
+
+        score = max(逐行平均相邻差) / 中位数(逐行平均相邻差)
+
+    分子必须用 max 不能用 p99：一幅图里补丁边界只有两三行，而 p99 在 1023 行里
+    是前 10 名，会被七行正常值稀释。自测里 p99 版把「有补丁」和「干净天空」都读成
+    1.12，完全分不开；换成 max 才拉开。
+
+    行/列平均本身就是个好过滤器：物体轮廓那种局部强边被整行一平均就淡了，
+    只有**横贯整幅**的直边才留得住 —— 补丁边界正是这种。
+
+    自然照片也会有横贯整幅的强直边（地平线、墙沿），所以**必须和同一题的基准图比**
+    —— 真实结构两边都有，多出来的那部分才是伪影。
+    """
+    im = Image.open(path).convert("L")
+    if max(im.size) > side_max:
+        k = max(1, max(im.size) // side_max)
+        if k > 1:
+            im = im.resize((im.width // k, im.height // k), Image.BOX)
+    g = np.asarray(im, dtype=np.float32)
+    out = []
+    for d in (np.abs(np.diff(g, axis=1)).mean(axis=0),      # 逐列
+              np.abs(np.diff(g, axis=0)).mean(axis=1)):     # 逐行
+        med = float(np.median(d))
+        out.append(float(d.max() / max(med, 1e-2)))
+    return tuple(out)
+
+
 def _files(d, ref=None, corrected_only=False):
     """→ [(文件名, 基准图, 本配置的图)]
 
@@ -149,7 +185,7 @@ def main():
             continue
         rec = dict(name=d.name.replace("_arms", ""), n=len(fs), dcol=[], dcol_ok=[], dflat=[],
                    grey_v=0, grey_m=0, blk_v={p: [] for p in a.periods},
-                   blk_m={p: [] for p in a.periods}, per_file=[])
+                   blk_m={p: [] for p in a.periods}, se_v=[], se_m=[], per_file=[])
         for f, pv, pm in fs:
             cv, fv = _photo_stats(pv)
             cm, fm = _photo_stats(pm)
@@ -162,6 +198,8 @@ def main():
             rec["dflat"].append(100.0 * (fm - fv))
             rec["grey_v"] += cv < a.grey
             rec["grey_m"] += cm < a.grey
+            rec["se_v"].append(max(straight_edges(pv)))
+            rec["se_m"].append(max(straight_edges(pm)))
             bv, bm = blockiness(pv, a.periods), blockiness(pm, a.periods)
             for p in a.periods:
                 rec["blk_v"][p].append(bv[p])
@@ -222,6 +260,21 @@ def main():
           "\n  峰在 P=8  → 对齐到 VAE latent 一格，解码端的事，与注意力无关 → 改损失没用。"
           "\n  没有峰（全列 ≈vanilla）→ 肉眼看到的「一块一块」不是周期性硬边，"
           "\n    别继续用「块状伪影」描述它，去表三点名的那几张上重新看是什么。")
+
+    # ---------- 表二b：不规则矩形拼接 ----------
+    print(f"\n表二b 不规则矩形拼接：最强直边 / 典型边（周期性抓不到的那种）")
+    print(f"{'配置':<12}{BASE + ' → 本配置':>22}{'差':>8}{'超基准的张数':>14}")
+    for r in rows:
+        v, m = np.array(r["se_v"]), np.array(r["se_m"])
+        worse = int((m > v * 1.3).sum())
+        flag = "  ⚠️ 看表三点名的那几张" if worse > len(m) * 0.15 else ""
+        print(f"{r['name']:<12}{v.mean():>10.2f} →{m.mean():>9.2f}"
+              f"{m.mean()-v.mean():>+8.2f}{worse:>10}/{len(m)} 张{flag}")
+    print("  一块矩形补丁的边界会让某一整行（列）的平均相邻差跳起来，不管它重不重复。")
+    print("  自然照片也有强直边（地平线、墙沿），所以只看**相对同一题基准的增量**；"
+          "\n  「超基准的张数」= 本配置的读数比基准高 30%% 以上的题数。")
+    print("  ⚠️ 这一条是补上去的：blockiness 只抓周期性网格，抓不到大块不规则矩形，"
+          "\n  我曾据此错判「块状伪影不存在」。两条要一起看。")
 
     # ---------- 表三：点名 ----------
     print(f"\n表三 每个配置掉得最狠的 {a.worst} 张（直接去看这几张，别看均值）")

@@ -135,7 +135,7 @@ def main():
         if not fs:
             print(f"（跳过 {d.name}：没有可用的成对图）")
             continue
-        rec = dict(name=d.name.replace("_arms", ""), n=len(fs), dcol=[], dflat=[],
+        rec = dict(name=d.name.replace("_arms", ""), n=len(fs), dcol=[], dcol_ok=[], dflat=[],
                    grey_v=0, grey_m=0, blk_v={p: [] for p in a.periods},
                    blk_m={p: [] for p in a.periods}, per_file=[])
         for f, pv, pm in fs:
@@ -143,6 +143,10 @@ def main():
             cm, fm = _photo_stats(pm)
             dc = 100.0 * (cm - cv) / cv if cv > 1e-6 else float("nan")
             rec["dcol"].append(dc)
+            # 小基数上的百分比不可信：基准本身就只有 7.8 的图掉到 1.3 是 −83%，
+            # 绝对变化才 6.5，肉眼看不出来。所以另记一份「基准本身还有颜色」的，
+            # 那一份才是「我们把一张好图弄坏了」的张数。
+            rec["dcol_ok"].append(dc if cv >= a.grey else float("nan"))
             rec["dflat"].append(100.0 * (fm - fv))
             rec["grey_v"] += cv < a.grey
             rec["grey_m"] += cm < a.grey
@@ -162,16 +166,23 @@ def main():
            else "它自己那张 vanilla")
     print(f"\n表一 每张图相对**{lab}**的 colourfulness 变化（%）")
     print(f"{'配置':<12}{'题数':>5}{'p10':>8}{'中位':>8}{'p90':>8}"
-          f"{'掉>' + str(int(a.drop)) + '%':>10}{'方法无色':>10}{BASE + '无色':>12}")
+          f"{'掉>' + str(int(a.drop)) + '%':>10}{'其中基准有色':>13}"
+          f"{'方法无色':>10}{BASE + '无色':>12}")
     for r in rows:
         v = np.array([x for x in r["dcol"] if x == x])
+        w = np.array([x for x in r["dcol_ok"] if x == x])
         bad = int((v < -a.drop).sum())
+        bad_ok = int((w < -a.drop).sum())
         print(f"{r['name']:<12}{r['n']:>5}{_pct(v,10):>+8.0f}{_pct(v,50):>+8.0f}"
-              f"{_pct(v,90):>+8.0f}{bad:>7} 张{r['grey_m']:>8} 张{r['grey_v']:>10} 张")
+              f"{_pct(v,90):>+8.0f}{bad:>7} 张{bad_ok:>5}/{len(w)} 张"
+              f"{r['grey_m']:>8} 张{r['grey_v']:>10} 张")
     print(f"  「方法无色 / {BASE}无色」= colourfulness < {a.grey:.0f} 的张数。"
           + ("两边一样多 = **我们没有比 CountGen 更糟**，它自己造成的那部分退化"
              "不该记在我们头上。" if a.ref else
              "两边一样多说明本来就是那种题（雪地、白底），不是我们弄的。"))
+    print(f"  「其中基准有色」= 只统计基准 colourfulness ≥ {a.grey:.0f} 的图。"
+          f"小基数上的百分比不可信 —— 基准只有 7.8 的图掉到 1.3 是 −83%，"
+          f"\n  绝对变化才 6.5，肉眼看不出来。**做定稿决策看这一列**，不要看前一列。")
     print("  中位数≈0 而 p10 很负 = **只有尾巴塌了**，这正是均值看不见、肉眼看得见的情形。")
     if not a.ref:
         print("  ⚠️ 这一栏的基准是「完全不干预」，包含了 CountGen 自己造成的退化。"

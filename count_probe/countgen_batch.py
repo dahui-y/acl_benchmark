@@ -142,6 +142,11 @@ MEM_LOG = False
 # 没有它就看不出阈值定得对不对：跑满 max_refinement_steps 说明阈值太严（或不可达），
 # 一两步就退出说明太松。原版实测是 100% 跑满 20 步。
 REFINE = []
+# 逐次精修把 latent 推了多远（相对位移 ‖出−进‖/‖进‖）。这是"离流形多远"的
+# **直接**读数，不像 colourfulness / CLIPScore 那样是代理 —— 引导的全部副作用
+# 都源于"往 score function 没指的方向推 latent"，推了多少就是这个数。
+# 不额外跑任何前向，纯记账。
+DISP = []
 
 
 def _mem(tag):
@@ -209,7 +214,12 @@ def _patch_mem_graph():
         t = getattr(self, "_loss_tensor", None)
         grad = torch.autograd.grad(t if t is not None else loss, latents,
                                    create_graph=False)[0]
-        return latents - step_size * grad
+        new = latents - step_size * grad
+        # 逐步累计：精修内循环和 __call__ 里的单步更新都会走这里
+        self._disp_sum = getattr(self, "_disp_sum", 0.0) + float(
+            (new - latents).norm() / (latents.norm() + 1e-12))
+        self._disp_n = getattr(self, "_disp_n", 0) + 1
+        return new
 
     def perform_iterative_refinement_step(self, loss, latents, *a, **kw):
         # 进了这里就说明外层那张图不会再被用到（返回值会覆盖调用方的 loss/latent）。
@@ -225,6 +235,8 @@ def _patch_mem_graph():
         _mem("进修正步（已丢掉上一张图）")
         self._n_loss_calls = 0
         loss_in = float(loss)
+        _n0 = float(latents.norm()) + 1e-12
+        _l0 = latents.detach()
         # ---- 组件 3b：把退出判据换成「兑现掉可达降幅的 ρ」----------------
         # 绝对阈值这个参数化是错的：达标与否取决于本题优化器能压下去多少，而那个
         # 量逐题不同。实测（tune_thr15，108 次精修）：进入时离下界中位 0.366、
@@ -242,6 +254,9 @@ def _patch_mem_graph():
             a[4] = lm + (1.0 - rho) * max(loss_in - lm, 0.0)
             a = tuple(a)
         out = orig_refine(self, loss_in, latents, *a, **kw)
+        if isinstance(out, tuple) and len(out) > 1 and torch.is_tensor(out[1]):
+            DISP.append((int(getattr(self.attention_store, "curr_step_index", -1)),
+                         round(float((out[1].detach() - _l0).norm() / _n0), 5)))
         REFINE.append((int(getattr(self.attention_store, "curr_step_index", -1)),
                        int(self._n_loss_calls), round(loss_in, 4),
                        round(float(getattr(self, "_last_loss_val", 0.0)), 4)))
@@ -789,6 +804,8 @@ def main():
         fg0 = fg1 = float("nan")        # --vanilla-only 那一支不走 mask 这段
         thr_used = None
         pipe._thresh_frac = pipe._l_min = None   # 逐题重置，别把上一题的 ρ 带过来
+        pipe._disp_sum, pipe._disp_n = 0.0, 0
+        DISP.clear()
         # ★ 顺序必须与 run_countgen.py:94-98 一致：先 set_seed 再造 latents
         set_seed(seed)
         generator = torch.Generator().manual_seed(seed)
@@ -891,7 +908,12 @@ def main():
                "l_min": None if fg1 != fg1 else round(l_min(fg1), 4),
                "thresholds": thr_used and {k: round(v, 4) for k, v in thr_used.items()},
                "thresh_frac": getattr(pipe, "_thresh_frac", None),
-               "refine": list(REFINE)}
+               "refine": list(REFINE),
+               # 引导把 latent 推离的相对距离：net 是每次精修进出的净位移，
+               # step_sum / step_n 是所有梯度步（含精修内循环）的逐步位移之和与次数。
+               "disp_net": [d for _, d in DISP],
+               "disp_step_sum": round(float(getattr(pipe, "_disp_sum", 0.0)), 5),
+               "disp_step_n": int(getattr(pipe, "_disp_n", 0))}
         REFINE.clear()
         if not any(m["id"] == img_id for m in meta):     # 补跑时别重复写
             meta.append({k: rec[k] for k in

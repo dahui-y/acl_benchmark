@@ -78,8 +78,11 @@ def blockiness(path, periods, side_max=1024):
     return out
 
 
-def _files(d, ref=None):
+def _files(d, ref=None, corrected_only=False):
     """→ [(文件名, 基准图, 本配置的图)]
+
+    corrected_only=True 时只留真正进过修正的题（计数器判匹配的那 40% 对所有配置
+    逐字节相同，留着只会把变化的中位数稀释成 0）。
 
     基准默认是**本配置自己的 vanilla 臂**（问「相对没有任何干预的原图退化了多少」）。
     给了 --ref 就换成参照配置的 countgen 臂（问「相对在位者的输出退化了多少」）。
@@ -93,6 +96,11 @@ def _files(d, ref=None):
     out = []
     for r in csv.DictReader(p.open()):
         if r["skipped_by_official"] in ("True", "true", "1"):
+            continue
+        # 计数器判匹配的题，管线原图返回（run_countgen.py:128-129），
+        # 所有配置逐字节相同。这类题占 24/60 = 40%，会把「变化的中位数」
+        # 硬生生拉到 0 —— 看着像「典型图没变」，其实只是四成的题压根没被碰过。
+        if corrected_only and r.get("obj_num_match") in ("True", "true", "1"):
             continue
         pm = Path(d) / "countgen" / r["file"]
         pv = (Path(ref) / "countgen" / r["file"]) if ref else (Path(d) / "vanilla" / r["file"])
@@ -115,6 +123,10 @@ def main():
                     help="相对自己那张 vanilla 掉超过百分之几算「塌了」")
     ap.add_argument("--grey", type=float, default=15.0,
                     help="colourfulness 绝对值低于多少算「基本没颜色」")
+    ap.add_argument("--corrected-only", action="store_true",
+                    help="只统计真正进过修正的题。计数器判匹配的题（60 题里 24 题）"
+                         "管线原图返回，对所有配置逐字节相同，留着会把变化的"
+                         "中位数稀释到 0，看起来像「典型图没变」")
     ap.add_argument("--ref", default=None,
                     help="把基准从「本配置自己的 vanilla」换成「参照配置的 countgen 臂」，"
                          "例如 --ref $SD_OUT/count/tune_orig_arms。我们是建在 CountGen "
@@ -131,7 +143,7 @@ def main():
         if a.ref and d.resolve() == Path(a.ref).resolve():
             print(f"（跳过 {d.name}：它就是参照本身）")
             continue
-        fs = _files(d, a.ref)
+        fs = _files(d, a.ref, a.corrected_only)
         if not fs:
             print(f"（跳过 {d.name}：没有可用的成对图）")
             continue

@@ -518,6 +518,10 @@ def main():
                    help="hinge 的幂次。1=relu，其梯度是**阶跃**（背景里只有 0 和"
                         "一个常数两种取值），怀疑是 tune_hinge 那些轴对齐矩形断层的"
                         "来源；2=平方 hinge，梯度随超出量连续变化，边界处渐进到 0")
+    g.add_argument("--thresh-gate", default="orig", choices=["orig", "open"],
+                   help="外层那道门用原版阈值（orig，默认）还是置 0 恒开（open）。"
+                        "open 是 tune_rhoover / tune_both 那两次跑批的行为，只为复现"
+                        "旧结果保留 —— 它会让没给 ρ 的支路失去原版阈值、无条件跑满")
     g.add_argument("--fg-separate", action="store_true",
                    help="组件 2b（推荐）：把 desired_mask 腐蚀到**各实例互不相邻**"
                         "即止，而不是缩到某个绝对占比。收缩的唯一理由是 "
@@ -654,10 +658,24 @@ def main():
             if v is not None and not 0.0 < v < 1.0:
                 raise SystemExit(f"!! {nm} 要在 (0,1) 开区间内：ρ≥1 等价于要求"
                                  f"损失降到下界，那按构造不可达，就退回上一轮那个坑了。")
-        # 外层的门 `loss > thresholds[i]` 要恒真，真正的判据在精修函数内部按
-        # 进入时的损失现算。置 0 让门恒开，别让两处判据打架。
-        cfg["counting_model"]["loss"]["thresholds"] = {
-            int(k): 0.0 for k in cfg["counting_model"]["loss"]["thresholds"]}
+        # 外层那道门（`loss > thresholds[i]`，self_counting_sdxl_pipeline.py:490）
+        # 保持原版语义，**不再置 0**。
+        #
+        # 之前为了「让门恒开、判据只留一处」把它全局置 0，这是个错误：收 mask 之后
+        # 损失下界被压低，原版阈值 1.3/1.2/1.15 第一次变得**可达** —— tune_fg 因此
+        # 白捡了一个能工作的停机判据。置 0 把这个好处砸掉了，于是没给 ρ 的那一支
+        # （补缺失）既没有 ρ、又失去原版阈值，无条件跑满 21 轮。
+        # failure_scan 的实证：补缺失支上 tune_fg 0/13 失效、tune_both 2 残差变差
+        # + 1 计数改坏，而两者只差这一处。
+        #
+        # 保持原版阈值后：门开不开仍按原版判（损失已经够低就不必精修），
+        # 门开之后，给了 ρ 的支路在精修函数内部用 ρ 现算目标，没给的按原版阈值走。
+        # 两处判据各管各的，不冲突。
+        if a.thresh_gate == "open":
+            cfg["counting_model"]["loss"]["thresholds"] = {
+                int(k): 0.0 for k in cfg["counting_model"]["loss"]["thresholds"]}
+            print("  ⚠️ --thresh-gate open：外层门置 0（复现旧跑批用）。"
+                  "没给 ρ 的支路会无条件跑满，这正是 tune_both 补缺失支失效的原因。")
         print("★ 退出判据 = 兑现掉可达降幅的 ρ（target = L_min + (1−ρ)·(进入损失 − L_min)）")
         print("  参照：原版实测兑现率中位 0.31，四分位 0.24 / 0.39。")
         for lab, v in (("两支路统一", a.thresh_frac),

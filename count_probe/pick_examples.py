@@ -76,8 +76,9 @@ def main():
     ap.add_argument("--n", type=int, default=4, help="每组挑几题")
     ap.add_argument("--grey", type=float, default=15.0)
     ap.add_argument("--drop", type=float, default=10.0,
-                    help="worse 组只收掉超过百分之几的题。凑数把 −2% 的也列进来，"
-                         "会让人以为那也算「弄坏了」")
+                    help="worse 组只收掉超过百分之几的题。凑数把 −2%% 的也列进来，"
+                         "会让人以为那也算「弄坏了」（argparse 会对 help 做 %% 展开，"
+                         "所以这里的百分号要写两遍）")
     ap.add_argument("--seed", type=int, default=0, help="random 组的种子，固定可复现")
     ap.add_argument("--no-figs", action="store_true", help="只打印题目 id，不拼图")
     a = ap.parse_args()

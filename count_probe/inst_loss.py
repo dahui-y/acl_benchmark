@@ -190,6 +190,62 @@ def shrink_mask(mask, fg_max=0.25, min_blob=4):
     return m, before, float((m > 0).sum()) / total
 
 
+def _min_gap_ok(m, gap):
+    """各实例是否已经**两两相距 > gap 格**。"""
+    from scipy.ndimage import binary_dilation
+    labs = [k for k in range(1, int(m.max()) + 1) if (m == k).any()]
+    for i, k in enumerate(labs):
+        d = binary_dilation(m == k, iterations=gap)
+        for j in labs[i + 1:]:
+            if (d & (m == j)).any():
+                return False
+    return True
+
+
+def shrink_to_separate(mask, min_blob=4, gap=1, max_iter=32):
+    """腐蚀到**各实例互不相邻**即止。→ (新 mask, 原占比, 新占比)
+
+    与 shrink_mask(fg_max=...) 的区别，是"为什么停"：
+
+      · fg_max 版：缩到总前景 ≤ 某个绝对数（0.25）。这个数没有依据，而且是
+        绝对目标 —— 起点 30% 的题被压到 8%，起点 21% 的题一格不动。实测这
+        正是坏图的来源：领带题 fg→8% 后物体变小变形，绵羊题 fg→13% 后
+        草地整片消失。
+      · 本函数：缩到目的达成即止。收缩的**唯一**理由是 loss_utils.py:5 把
+        逐实例标签压成了二值前景 —— 两个挨着的实例在二值图上就是一个大块，
+        引导分不出来。一旦彼此之间出现空隙，这个问题就解决了；继续腐蚀只是
+        在扩大"这里不要有东西"的区域，把背景抑制项的相对权重推高（前景带
+        pos_weight=10，前景占比每降一点，背景项的相对分量就涨一截），
+        于是背景被抹平、物体被压小。
+
+    所以没有任何常数：本来就分开的题一格都不缩，粘连的题缩到出现 gap 格
+    空隙就停。每个 blob 仍然至少留 min_blob 格 —— 缩没了等于丢一个实例。
+    """
+    m = np.asarray(mask).astype(int).copy()
+    total = m.size
+    before = float((m > 0).sum()) / total
+    try:
+        from scipy.ndimage import binary_erosion
+    except ImportError:
+        return m, before, before
+    for _ in range(max_iter):
+        if _min_gap_ok(m, gap):
+            break
+        changed = False
+        for k in range(1, int(m.max()) + 1):
+            b = (m == k)
+            if b.sum() <= min_blob:
+                continue
+            e = binary_erosion(b)
+            if e.sum() < min_blob:
+                continue
+            m[b & ~e] = 0
+            changed = True
+        if not changed:      # 都到下限了还分不开，再缩就要丢实例，停
+            break
+    return m, before, float((m > 0).sum()) / total
+
+
 def _selftest():
     torch.manual_seed(0)
     H = 32

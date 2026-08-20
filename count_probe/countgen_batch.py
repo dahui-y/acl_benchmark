@@ -518,6 +518,15 @@ def main():
                    help="hinge 的幂次。1=relu，其梯度是**阶跃**（背景里只有 0 和"
                         "一个常数两种取值），怀疑是 tune_hinge 那些轴对齐矩形断层的"
                         "来源；2=平方 hinge，梯度随超出量连续变化，边界处渐进到 0")
+    g.add_argument("--fg-separate", action="store_true",
+                   help="组件 2b（推荐）：把 desired_mask 腐蚀到**各实例互不相邻**"
+                        "即止，而不是缩到某个绝对占比。收缩的唯一理由是 "
+                        "loss_utils.py:5 把逐实例标签压成了二值前景 —— 挨着的两个"
+                        "实例在二值图上是一个大块；一旦分开，目的就达成了，继续缩"
+                        "只是在放大背景抑制项。实测 --fg-max 0.25 会把起点 30%% 的"
+                        "题压到 8%%，物体变小变形、背景整片抹平。与 --fg-max 互斥")
+    g.add_argument("--fg-gap", type=int, default=1,
+                   help="--fg-separate 要求的最小间隔（格）")
     g.add_argument("--fg-max", type=float, default=1.0,
                    help="组件 2：把 desired_mask 逐 blob 腐蚀到总前景占比 ≤ 此值。"
                         "1.0=不约束（原版）。0.25 是我们推出的阈值可达线")
@@ -579,7 +588,7 @@ def main():
     from tqdm import tqdm
 
     sys.path.insert(0, str(REPO / "count_probe"))
-    from inst_loss import shrink_mask
+    from inst_loss import shrink_mask, shrink_to_separate
     from pipeline.run_countgen import set_seed, run_counting_pipeline_corrected_masks
     from pipeline.mask_extraction.extract_mask import relayout
     from pipeline.mask_extraction.dbscan_mask_extract import dbscan_extract_mask
@@ -621,6 +630,12 @@ def main():
     global MEM_LOG
     MEM_LOG = a.mem_log
     # ---- 方法开关。全部默认关闭时，行为与原版 CountGen 逐位一致 ----
+    if a.fg_separate and a.fg_max < 1.0:
+        raise SystemExit("!! --fg-separate 与 --fg-max 互斥：一个是「缩到实例分开即止」、"
+                         "一个是「缩到某个绝对占比」，同时给等于两条停止规则打架。")
+    if a.fg_separate:
+        print(f"★ desired_mask 腐蚀到各实例间隔 > {a.fg_gap} 格即止"
+              f"（没有绝对目标；本来就分开的题一格不缩）")
     if a.thresh_frac is not None and (a.thresh_frac_over is not None
                                       or a.thresh_frac_under is not None):
         raise SystemExit("!! --thresh-frac 是两支路统一的写法，不要再同时给 "
@@ -783,7 +798,12 @@ def main():
             # 组件 2：把 desired_mask 收紧。必须在这里做 —— 它是喂给
             # run_counting_pipeline_corrected_masks 的那张图，也是存进 npz 的那张。
             fg0 = fg1 = float((object_masks > 0).float().mean())
-            if a.fg_max < 1.0:
+            if a.fg_separate:
+                shrunk, fg0, fg1 = shrink_to_separate(
+                    object_masks.cpu().numpy(), gap=a.fg_gap)
+                object_masks = torch.tensor(shrunk, dtype=object_masks.dtype,
+                                            device=object_masks.device)
+            elif a.fg_max < 1.0:
                 shrunk, fg0, fg1 = shrink_mask(object_masks.cpu().numpy(),
                                                fg_max=a.fg_max)
                 object_masks = torch.tensor(shrunk, dtype=object_masks.dtype,

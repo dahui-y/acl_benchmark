@@ -7,6 +7,13 @@
     只看最差的那几张，必然得出"画质很糟"的印象；只看随机几张，又会漏掉真正的问题。
     所以要**分组看**，每组回答一个不同的问题：
 
+      worse-clip  CLIPScore 相对 CountGen 掉得最狠的题（--clip 时启用）
+                  → 这一组才是「我们把图弄坏了」的正经候选。默认那个按
+                    colourfulness 挑的组已知会判反（它给荧光绿畸变打高分），
+                    用一个不可靠的指标挑「该看哪几张」，看出来的结论也不可靠
+      disagree    CLIPScore 说更好、colourfulness 说更差（或反过来）的题
+                  → 两个代理打架的地方，**只有眼睛能裁**。画质结论要站得住，
+                    必须在这一组上过一遍，不能只看均值
       colourless  CountGen 自己就把它变成无色的题
                   → 验证「黑白剪贴画是在位者的失效，不是我们加上去的」
       worse       相对 CountGen 掉得最狠、且**基准本身还有颜色**的题
@@ -79,6 +86,10 @@ def main():
                     help="worse 组只收掉超过百分之几的题。凑数把 −2%% 的也列进来，"
                          "会让人以为那也算「弄坏了」（argparse 会对 help 做 %% 展开，"
                          "所以这里的百分号要写两遍）")
+    ap.add_argument("--clip", action="store_true",
+                    help="按 CLIPScore（而不是 colourfulness）挑 worse 组，"
+                         "并另出一个「两个代理打架」的 disagree 组。"
+                         "要 GPU 但很轻（每配置 60 次前向）")
     ap.add_argument("--seed", type=int, default=0, help="random 组的种子，固定可复现")
     ap.add_argument("--no-figs", action="store_true", help="只打印题目 id，不拼图")
     a = ap.parse_args()
@@ -96,6 +107,21 @@ def main():
         pv, pm = Path(a.ref) / "countgen" / f, Path(a.arm) / "countgen" / f
         if pv.exists() and pm.exists():
             stats[s] = (_photo_stats(pv)[0], _photo_stats(pm)[0])
+
+    # ---- CLIPScore（可选）：逐题算参照与本配置的图文一致性 ----
+    clip_d = {}
+    if a.clip:
+        sys.path.insert(0, str(HERE.parent / "scalediff_probe"))
+        from clip_score import load_clip
+        from PIL import Image
+        c = load_clip()
+        for s in common:
+            f, p = rb[s]["file"], rb[s].get("prompt", "")
+            pv = Path(a.ref) / "countgen" / f
+            pm = Path(a.arm) / "countgen" / f
+            if p and pv.exists() and pm.exists():
+                clip_d[s] = (c.score(Image.open(pv).convert("RGB"), p),
+                             c.score(Image.open(pm).convert("RGB"), p))
 
     groups = {}
 
@@ -119,6 +145,22 @@ def main():
     groups["fixed"] = fixed[:a.n]
     groups["broken"] = broken[:a.n]
 
+    if clip_d:
+        # CLIPScore 掉得最狠 —— 换掉按 colourfulness 挑的那一组
+        by_clip = sorted(clip_d, key=lambda s: clip_d[s][1] - clip_d[s][0])
+        groups["worse-clip"] = by_clip[:a.n]
+        groups["better-clip"] = by_clip[-a.n:][::-1]
+        # 两个代理打架：一个说更好、另一个说更差
+        dis = []
+        for s in clip_d:
+            dclip = clip_d[s][1] - clip_d[s][0]
+            if s not in stats or stats[s][0] <= 1e-6:
+                continue
+            dcol = 100.0 * (stats[s][1] - stats[s][0]) / stats[s][0]
+            if dclip * dcol < 0 and abs(dclip) > 0.3 and abs(dcol) > 10:
+                dis.append((-abs(dclip), s))
+        groups["disagree"] = [s for _, s in sorted(dis)[:a.n]]
+
     # ⑤ 随机抽样 —— 前四组全是尾巴，没有这一组会严重高估问题
     rng = random.Random(a.seed)
     groups["random"] = rng.sample(common, min(a.n, len(common)))
@@ -132,6 +174,9 @@ def main():
         "broken": f"CountGen 数对了、我们数错了（共 {len(broken)} 题）"
                   "—— **必须看**，不看就是在挑好的看",
         "random": f"固定种子随机抽样（中位数变化是 +0，前四组都是尾巴）",
+        "worse-clip": "CLIPScore 相对 CountGen 掉得最狠 —— 「我们把图弄坏了」的正经候选",
+        "better-clip": "CLIPScore 涨得最多 —— 论文定性图的候选，也防止只看坏的",
+        "disagree": "CLIPScore 与 colourfulness **打架**的题，只有眼睛能裁",
     }
 
     out = Path(a.out)
@@ -144,7 +189,11 @@ def main():
         for s in stems:
             cv, cm = stats.get(s, (float("nan"), float("nan")))
             d = 100.0 * (cm - cv) / cv if cv == cv and cv > 1e-6 else float("nan")
-            print(f"  {s:<42} colour CountGen {cv:>5.1f} → 本配置 {cm:>5.1f} ({d:>+5.0f}%)")
+            line = f"  {s:<42} colour {cv:>5.1f}→{cm:>5.1f} ({d:>+5.0f}%)"
+            if s in clip_d:
+                a0, a1 = clip_d[s]
+                line += f"   CLIP {a0:>5.2f}→{a1:>5.2f} ({a1-a0:>+5.2f})"
+            print(line)
         if a.no_figs:
             continue
         for s in stems:

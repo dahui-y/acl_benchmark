@@ -156,6 +156,26 @@ def main():
             print(f"⚠ CLIP 塔拿不到（{type(e).__name__}: {str(e)[:80]}），"
                   f"跳过该列，其余不受影响")
 
+    def _clip_sanity(c, rows):
+        """灌错权重的 CLIP 会给出看着正常、其实全是噪声的分数 —— 必须先验它能分辨。
+
+        拿真图配**它自己的 prompt** 和**别题的 prompt** 各打一次。分不开就别用。
+        两次前向，几乎不花时间，但能挡住一整轮无效的质量结论。
+        """
+        from PIL import Image
+        cand = [r for r in rows if (root / arms[0] / r["file"]).exists()]
+        if len(cand) < 2:
+            return True
+        a, b = cand[0], cand[len(cand) // 2]
+        im = Image.open(root / arms[0] / a["file"]).convert("RGB")
+        s_hit, s_miss = c.score(im, a["prompt"]), c.score(im, b["prompt"])
+        ok = s_hit > s_miss
+        print(f"  [CLIP 自检] 同题 prompt {s_hit:.2f} vs 别题 prompt {s_miss:.2f}"
+              + ("   ✓ 能分辨" if ok else
+                 "   ⚠️ **分不开，这一列不可信** —— 多半是权重灌错了架构"))
+        return ok
+
+
     # ---------- 明细 ----------
     rows = []
     for fn, meta in idx.items():
@@ -174,6 +194,9 @@ def main():
         w.writeheader()
         w.writerows(rows)
     print(f"\n逐题明细 → {csv_p}")
+
+    if clip is not None and not _clip_sanity(clip, rows):
+        clip = None          # 自检没过就别报这一列，宁可空着也不要错数
 
     main_rows = [r for r in rows if not r["skipped_by_official"]]
     over9 = [r for r in rows if r["skipped_by_official"]]

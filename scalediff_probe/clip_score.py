@@ -67,12 +67,43 @@ class HFClip:
         return float(100.0 * max(0.0, (ie * te).sum().item()))
 
 
+def _read_state_dict(ckpt):
+    """读权重。**不能**把 .safetensors 直接交给 open_clip 2.24.0。
+
+    2.24.0 的 `load_checkpoint` 无条件走 `torch.load`（pickle），喂 safetensors
+    会炸成 `UnpicklingError: invalid load key, '\\xf0'` —— `\\xf0` 正是
+    safetensors 头部长度那 8 个字节的第一个。safetensors 支持是后来的版本才加的，
+    而升级 open_clip 会连带动 timm / huggingface-hub，那套依赖是钉死的，不能碰。
+    所以自己读，再手动 load_state_dict。
+    """
+    ckpt = str(ckpt)
+    if ckpt.endswith(".safetensors"):
+        from safetensors.torch import load_file
+        return load_file(ckpt, device="cpu")
+    sd = torch.load(ckpt, map_location="cpu")
+    return sd.get("state_dict", sd)
+
+
 class OpenClip:
     def __init__(self, arch, ckpt):
         import open_clip
         self.name = f"open_clip:{arch}"
+        # 只建架构，权重自己灌 —— 见 _read_state_dict
         self.m, _, self.pre = open_clip.create_model_and_transforms(
-            arch, pretrained=str(ckpt))
+            arch, pretrained=None)
+        sd = _read_state_dict(ckpt)
+        sd = {(k[7:] if k.startswith("module.") else k): v for k, v in sd.items()}
+        missing, unexpected = self.m.load_state_dict(sd, strict=False)
+        # 少几个 position_ids / attn_mask 之类的 buffer 是正常的；少一堆权重不是。
+        # 静默地灌错权重会给出看着正常、其实全是噪声的 CLIPScore，必须在这里拦住。
+        heavy = [k for k in missing if k.endswith((".weight", ".bias"))]
+        if heavy:
+            raise RuntimeError(
+                f"{arch} 有 {len(heavy)} 个权重没灌上（例：{heavy[:3]}）。"
+                f"架构名和权重对不上，别用这个分数。")
+        if missing or unexpected:
+            print(f"   [open_clip] 缺 {len(missing)} 个非权重项、"
+                  f"多 {len(unexpected)} 个 —— 只要没有 .weight/.bias 就正常")
         self.m = self.m.eval().to("cuda")
         self.tok = open_clip.get_tokenizer(arch)
 

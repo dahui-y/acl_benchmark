@@ -78,7 +78,15 @@ def blockiness(path, periods, side_max=1024):
     return out
 
 
-def _files(d):
+def _files(d, ref=None):
+    """→ [(文件名, 基准图, 本配置的图)]
+
+    基准默认是**本配置自己的 vanilla 臂**（问「相对没有任何干预的原图退化了多少」）。
+    给了 --ref 就换成参照配置的 countgen 臂（问「相对在位者的输出退化了多少」）。
+    后者才是「我们有没有把 CountGen 弄得更糟」的直接读数 —— 我们是建在它上面的，
+    它自己造成的那部分退化不该记在我们头上。两张都是同 prompt、同 seed 的修正图，
+    可以逐张配对。
+    """
     p = Path(d) / "yolo_results.csv"
     if not p.exists():
         return []
@@ -86,7 +94,8 @@ def _files(d):
     for r in csv.DictReader(p.open()):
         if r["skipped_by_official"] in ("True", "true", "1"):
             continue
-        pv, pm = Path(d) / "vanilla" / r["file"], Path(d) / "countgen" / r["file"]
+        pm = Path(d) / "countgen" / r["file"]
+        pv = (Path(ref) / "countgen" / r["file"]) if ref else (Path(d) / "vanilla" / r["file"])
         if pv.exists() and pm.exists():
             out.append((r["file"], pv, pm))
     return out
@@ -106,12 +115,23 @@ def main():
                     help="相对自己那张 vanilla 掉超过百分之几算「塌了」")
     ap.add_argument("--grey", type=float, default=15.0,
                     help="colourfulness 绝对值低于多少算「基本没颜色」")
+    ap.add_argument("--ref", default=None,
+                    help="把基准从「本配置自己的 vanilla」换成「参照配置的 countgen 臂」，"
+                         "例如 --ref $SD_OUT/count/tune_orig_arms。我们是建在 CountGen "
+                         "上面的，判据应当是「有没有比它更糟」，而不是「有没有比完全不"
+                         "干预更糟」—— 后者把在位者自己造成的退化也算到了我们头上")
     a = ap.parse_args()
+    if a.ref and not (Path(a.ref) / "countgen").is_dir():
+        raise SystemExit(f"!! --ref {a.ref} 下面没有 countgen/ 目录")
+    BASE = "CountGen" if a.ref else "vanilla"
 
     rows = []
     for d in a.arms:
         d = Path(d)
-        fs = _files(d)
+        if a.ref and d.resolve() == Path(a.ref).resolve():
+            print(f"（跳过 {d.name}：它就是参照本身）")
+            continue
+        fs = _files(d, a.ref)
         if not fs:
             print(f"（跳过 {d.name}：没有可用的成对图）")
             continue
@@ -138,22 +158,29 @@ def main():
         raise SystemExit("!! 一个配置都没读到")
 
     # ---------- 表一：逐张配对的 colourfulness 变化，看分布不看均值 ----------
-    print(f"\n表一 每张图相对**它自己那张 vanilla** 的 colourfulness 变化（%）")
+    lab = (f"参照配置（{Path(a.ref).name}）的同一题输出" if a.ref
+           else "它自己那张 vanilla")
+    print(f"\n表一 每张图相对**{lab}**的 colourfulness 变化（%）")
     print(f"{'配置':<12}{'题数':>5}{'p10':>8}{'中位':>8}{'p90':>8}"
-          f"{'掉>' + str(int(a.drop)) + '%':>10}{'方法无色':>10}{'vanilla无色':>12}")
+          f"{'掉>' + str(int(a.drop)) + '%':>10}{'方法无色':>10}{BASE + '无色':>12}")
     for r in rows:
         v = np.array([x for x in r["dcol"] if x == x])
         bad = int((v < -a.drop).sum())
         print(f"{r['name']:<12}{r['n']:>5}{_pct(v,10):>+8.0f}{_pct(v,50):>+8.0f}"
               f"{_pct(v,90):>+8.0f}{bad:>7} 张{r['grey_m']:>8} 张{r['grey_v']:>10} 张")
-    print(f"  「方法无色 / vanilla 无色」= colourfulness < {a.grey:.0f} 的张数。"
-          f"两边一样多说明本来就是那种题（雪地、白底），不是我们弄的。")
+    print(f"  「方法无色 / {BASE}无色」= colourfulness < {a.grey:.0f} 的张数。"
+          + ("两边一样多 = **我们没有比 CountGen 更糟**，它自己造成的那部分退化"
+             "不该记在我们头上。" if a.ref else
+             "两边一样多说明本来就是那种题（雪地、白底），不是我们弄的。"))
     print("  中位数≈0 而 p10 很负 = **只有尾巴塌了**，这正是均值看不见、肉眼看得见的情形。")
+    if not a.ref:
+        print("  ⚠️ 这一栏的基准是「完全不干预」，包含了 CountGen 自己造成的退化。"
+              "\n     要判「我们有没有把它弄更糟」，加 --ref <原版的 _arms 目录>。")
 
     # ---------- 表二：块状伪影 ----------
     print(f"\n表二 块状伪影：网格线上的边强度 / 非网格线上的边强度（≈1 = 没有周期性硬边）")
     hdr = "".join(f"{'P=' + str(p):>16}" for p in a.periods)
-    print(f"{'配置':<12}{hdr}{'峰值在':>10}")
+    print(f"{'配置':<12}{hdr}{'峰值在':>10}   （每格：{BASE} → 本配置）")
     for r in rows:
         cells, ms = "", []
         for p in a.periods:

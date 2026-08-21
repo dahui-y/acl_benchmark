@@ -236,6 +236,9 @@ def tally(rows, box, run, img_size, amb_frac, min_cover, rule="cover"):
                         "错·有空blob": int(empty > 0),
                         "错·有背景漏": int(bg > 0),
                         "错·有多长下界": int(len(adj) - m > 0)})
+        cls = r.get("coco_class", "?")
+        agg[f"类·多长下界·{cls}"] += len(adj) - m
+        agg[f"类·题·{cls}"] += 1
         per.append((stem, N, k, yolo, over, empty, bg, amb, len(adj) - m))
     return stat, agg, per
 
@@ -326,6 +329,21 @@ def main():
         for r in sorted(per0, key=lambda x: -x[8])[:a.list]:
             print(f"{r[0]:<40}{r[1]:>3}{r[2]:>5}{r[3]:>5}"
                   f"{r[4]:>5}{r[8]:>5}{r[5]:>4}{r[6]:>5}{r[7]:>5}")
+
+    # ---- 表四：类别集中度。唯一能把整个发现解释掉的混杂 ----
+    print(f"\n{'='*76}\n表四 「多长下界」的类别集中度（检测器类别伪影 vs 机制缺口）")
+    print("  ★ 门槛见数前写死：若**前两类**贡献了多长下界的 ≥50%，判定为检测器的")
+    print("  类别伪影（细长/成簇物体易被切成多个框），实例级约束的立项依据不成立。")
+    for tag, st, ag, _ in runs:
+        cls = sorted(((v, k[len('类·多长下界·'):]) for k, v in ag.items()
+                      if k.startswith('类·多长下界·') and v > 0), reverse=True)
+        tot = sum(v for v, _ in cls)
+        top2 = sum(v for v, _ in cls[:2])
+        head = "  ".join(f"{c}:{v}" for v, c in cls[:6])
+        print(f"\n  【{tag}】多长下界合计 {tot}，涉及 {len(cls)} 个类")
+        print(f"    前六：{head}")
+        print(f"    前两类占比 {100*top2/max(tot,1):.1f}%"
+              + ("   ⚠️ ≥50%，判为类别伪影" if top2 >= 0.5 * tot and tot else "   ✓ <50%"))
 
     print(f"\n判据（见数前写下，不因结果好看而放宽）：以**表二的下界**为准，"
           f"\n「多长下界 / (多长下界 + 空blob下界 + 背景漏)」在整条 min-cover 曲线上"

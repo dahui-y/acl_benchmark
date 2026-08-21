@@ -493,6 +493,12 @@ def main():
     ap.add_argument("--out", required=True, help="输出目录（官方布局）")
     ap.add_argument("--dataset", default=str(MIC / "dataset" / "CoCoCount.json"))
     ap.add_argument("--config", default=str(MIC / "pipeline" / "pipeline_config.yaml"))
+    ap.add_argument("--no-self-mask", action="store_true",
+                    help="关掉自注意力遮罩（CountGen 的第二个强制机制，原文无消融）。"
+                         "用于把增益在「梯度引导」与「注意力硬约束」之间归因")
+    ap.add_argument("--self-mask-steps", type=int, nargs=2, default=None,
+                    metavar=("START", "END"),
+                    help="改自注意力遮罩的步区间（默认 0 10）")
     ap.add_argument("--sdxl", default=os.environ.get(
         "SDXL_PATH", "stabilityai/stable-diffusion-xl-base-1.0"))
     ap.add_argument("--variant", default="fp16",
@@ -622,6 +628,22 @@ def main():
     cfg = yaml.safe_load(open(a.config))
     cfg["model"] = {"sdxl_path": a.sdxl, "variant": a.variant,
                     "local_only": a.local_files_only}
+
+    # ---- 自注意力遮罩（attention_processors.py:32-63）的开关与步区间 ----
+    # 这是 CountGen 被我长期漏读的**第二个强制机制**：前 10 步、up 块 32×32，
+    # 把「背景 token 看向任何 blob token」的注意力硬置零。它作用在**主去噪
+    # 前向**（shape[0]==40 = CFG 的 batch 2 × 20 头），不是作用在算损失的
+    # 那个 batch=1 前向上 —— 即它直接塑造生成，不经梯度。
+    # 原文没有报过这一项的消融。关掉它再跑评测集，就能把 CountGen 的增益
+    # 在「梯度引导 (a)」与「注意力硬约束 (b)」之间做归因。
+    sam = cfg["counting_model"]["self_attention_masking"]
+    if a.no_self_mask:
+        sam["enable"] = False
+    if a.self_mask_steps:
+        sam["start_step"], sam["end_step"] = a.self_mask_steps
+    print(f"自注意力遮罩：enable={sam['enable']} "
+          f"步区间=[{sam['start_step']}, {sam['end_step']}]"
+          + ("   ← 已关闭（归因消融）" if not sam["enable"] else ""))
     if a.local_files_only:
         print("SDXL 只从本地缓存加载（local_files_only=True）")
     out = Path(a.out).resolve()

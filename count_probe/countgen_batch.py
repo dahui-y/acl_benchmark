@@ -1072,7 +1072,15 @@ def main():
                # step_sum / step_n 是所有梯度步（含精修内循环）的逐步位移之和与次数。
                "disp_net": [d for _, d in DISP],
                "disp_step_sum": round(float(getattr(pipe, "_disp_sum", 0.0)), 5),
-               "disp_step_n": int(getattr(pipe, "_disp_n", 0))}
+               "disp_step_n": int(getattr(pipe, "_disp_n", 0)),
+               # 方向 d：亲和损失的接线状态与两项的量级。λ 的定法（DESIGN2 §2）
+               # 要的就是 base/aff 之比，落盘之后不必再从终端里翻。
+               "aff_hit": int(getattr(pipe, "_aff_hit", 0)),
+               "aff_miss": int(getattr(pipe, "_aff_miss", 0)),
+               "aff_last": getattr(pipe, "_aff_last", None),
+               "base_last": getattr(pipe, "_base_last", None),
+               "sa_mask_mode": a.sa_mask_mode, "inter_blob": bool(a.inter_blob),
+               "inst_lam": a.inst_lam if a.inst_loss else None}
         REFINE.clear()
         if not any(m["id"] == img_id for m in meta):     # 补跑时别重复写
             meta.append({k: rec[k] for k in

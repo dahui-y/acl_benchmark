@@ -39,15 +39,22 @@ def main():
     ap.add_argument("--n", type=int, default=60, help="调参集大小")
     ap.add_argument("--out", required=True)
     ap.add_argument("--seed", type=int, default=20260819)
-    ap.add_argument("--exclude", default=str(MIC / "dataset" / "CoCoCount.json"),
-                    help="评测集，用于剔重")
+    ap.add_argument("--exclude", nargs="+",
+                    default=[str(MIC / "dataset" / "CoCoCount.json")],
+                    help="要剔重的题目 json，可给多份 —— 新方法阶段必须同时排除"
+                         "评测集**和已烧掉的旧调参集**（旧集上评过 16 个配置，"
+                         "在它上面再选任何东西都是在挑噪声）")
     ap.add_argument("--drop-over9", action="store_true", default=True,
                     help="剔掉 N>9（官方代码整题跳过，调参用不上）")
     a = ap.parse_args()
 
-    excl = {f"{d['object']}_num={d['int_number']}_seed={d['seed']}"
-            for d in json.load(open(a.exclude))}
-    print(f"评测集 {len(excl)} 题，将从调参集中剔除重合项")
+    excl = set()
+    for p in a.exclude:
+        got = {f"{d['object']}_num={d['int_number']}_seed={d['seed']}"
+               for d in json.load(open(p))}
+        excl |= got
+        print(f"剔重来源 {p}：{len(got)} 题")
+    print(f"合计剔除名单 {len(excl)} 题")
 
     # 多抽一些，剔除后再截断
     want = a.n * 3
@@ -85,7 +92,7 @@ def main():
     import collections
     print(f"调参集 {len(out)} 题 → {a.out}")
     print(f"  N 分布 {dict(sorted(collections.Counter(d['int_number'] for d in out).items()))}")
-    print(f"  与评测集重合 0 题（已剔除）")
+    print(f"  与剔除名单重合 0 题（已剔除）")
     print(f"\n⚠️ 把这份 json 提交进版本库。他们的脚本没有 seed 参数，"
           f"可复现性靠保留文件，不靠重跑。")
 

@@ -114,7 +114,7 @@ def main():
     ap.add_argument("--weights", default="yolov8x.pt", help="环内计数器")
     # ---- 预登记网格：只有这两个旋钮许动，且只在新调参集上 ----
     ap.add_argument("--strength", type=float, default=1.0, choices=[0.8, 1.0])
-    ap.add_argument("--prompt-mode", default="ctx", choices=["ctx", "bg"])
+    ap.add_argument("--prompt-mode", default="ctx", choices=["ctx", "bg", "none"])
     # ---- 其余全是定死的默认，不扫 ----
     ap.add_argument("--dilate", type=int, default=24)
     ap.add_argument("--feather", type=int, default=8)
@@ -202,12 +202,19 @@ def main():
                 del_log.append([[round(v, 1) for v in b] for b in dele])
                 keep_log.append([[round(v, 1) for v in b] for b in keep])
                 pos, tag = (ctx_prompt(prompt, cls) if a.prompt_mode == "ctx"
-                            else ("background", "bg"))
+                            else ("background", "bg") if a.prompt_mode == "bg"
+                            else ("", "none"))
+                # none 模式（DESIGN §5.7）：删除要的是背景延续，不是照文本
+                # 生图。base SDXL 的 4 通道 UNet 没被训练过 inpainting，遮罩区
+                # 的去噪几乎全由文本+CFG 驱动 —— 给它一句话它就画个主体出来
+                # （洞里长出菜苗/煎蛋/蓝笔）。空提示 + 关掉 CFG，模型只能靠
+                # latent 混合带来的邻域信息，这才是背景延续该有的条件。
+                gs = 1.0 if a.prompt_mode == "none" else a.guidance
                 g = torch.Generator("cuda").manual_seed(seed + 1000 * (rnd + 1))
                 edited = pipe(prompt=pos, negative_prompt=cls, image=cur,
                               mask_image=mask, strength=a.strength,
                               num_inference_steps=a.steps,
-                              guidance_scale=a.guidance, generator=g,
+                              guidance_scale=gs, generator=g,
                               height=cur.size[1], width=cur.size[0]).images[0]
                 cur = paste_back(cur, edited, mask, a.feather)
                 deleted += len(dele)

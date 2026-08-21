@@ -458,6 +458,12 @@ def _patch_aff_loss(a):
         self._aff_hit = getattr(self, "_aff_hit", 0) + 1
         self._aff_last = float(aff.detach())
         self._base_last = float(base.detach()) if hasattr(base, "detach") else float(base)
+        # DESIGN2 §2 的 λ 定法要的是**步 0 的初值**，不是最后一次调用的值
+        # （L_cross 在精修里会大幅下降，两者不是一回事）。每题开跑前由主循环
+        # 置 None，这里只记第一次。
+        if getattr(self, "_aff_first", None) is None:
+            self._aff_first = self._aff_last
+            self._base_first = self._base_last
         return base + a.inst_lam * aff
 
     SP.SelfCountingSDXLPipeline.compute_loss = compute_loss
@@ -1027,6 +1033,12 @@ def main():
                     st.clear()
                 pipe.attention_store.all_cross_attention = {}
                 pipe.attention_store.all_self_attention = {}
+                # 每题清空：不清的话没走引导的题会留着上一题的值，
+                # counter_log 里就出现整段重复的「读数」，把 6 个样本
+                # 看成 12 个（λ 那张表实测踩过）。
+                pipe._aff_first = pipe._base_first = None
+                pipe._aff_last = pipe._base_last = None
+                pipe._aff_hit0 = getattr(pipe, "_aff_hit", 0)
                 torch.cuda.empty_cache()
                 image = run_counting_pipeline_corrected_masks(
                     pipe, prompt, generator, object_masks, latents, cfg)
@@ -1079,6 +1091,12 @@ def main():
                "aff_miss": int(getattr(pipe, "_aff_miss", 0)),
                "aff_last": getattr(pipe, "_aff_last", None),
                "base_last": getattr(pipe, "_base_last", None),
+               # 步 0 的初值：λ 的定法只认这一对（DESIGN2 §2）
+               "aff_first": getattr(pipe, "_aff_first", None),
+               "base_first": getattr(pipe, "_base_first", None),
+               # 本题内的调用次数（aff_hit 是累计值，容易误读）
+               "aff_calls": int(getattr(pipe, "_aff_hit", 0)
+                                - getattr(pipe, "_aff_hit0", 0)),
                "sa_mask_mode": a.sa_mask_mode, "inter_blob": bool(a.inter_blob),
                "inst_lam": a.inst_lam if a.inst_loss else None}
         REFINE.clear()

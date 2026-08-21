@@ -59,7 +59,10 @@ CountDiffusion 表报 CountGen 51 / SDXL 34（Grounded SAM）。评测器不同�
 却唯一有效——它靠"大概率朝对的方向粗暴推一把"生效，不靠精确执行。
 出处：`decompose.py` 表九，`failure_scan.py`。
 
-### 1.5 CountGen 伤画质（原论文未报）
+### 1.5 CountGen 伤画质（原文在 Limitations 里承认，未量化）
+⚠️ 更正：原文第 7 节 Limitations 明写「In other cases CountGen generates
+plain backgrounds compared to SDXL (Fig. 8 in Appendix)」。所以「伤画质」
+不是我们的新发现，我们的贡献只是**逐张配对量化**了它。
 四项读数全部差于 vanilla（评测集）：CLIPScore 31.295 vs 31.891、
 YOLO 置信度 0.868 vs 0.897、平涂块 31.8% vs 29.5%；调参集上逐张配对：
 colourfulness 均值 −13.6%、p10 −89.7%，13/60 张塌成无色（vanilla 仅 5 张）。
@@ -238,7 +241,14 @@ blob token」的注意力硬置零。触发条件 `attention_probs.shape[0] == 4
   计数出错的主要形态。
 - 置零后**不重新归一化**，注意力行不再和为 1，背景 token 的输出被无意衰减。
   疑似无心的实现副作用，可作为一项干净的对照。
-- 只在 32×32 的 up 块、步 0–10，全部写死；原文无此项消融。
+- 只在 32×32 的 up 块、步 0–10，全部写死。
+  ⚠️ 更正：**原文有消融**（Tab. 3），但量的是**对输入 mask 的贴合度**
+  （Precision/Recall/IOU），不是计数准确率：
+      CountGen        Prec 59  Rec 82  IOU 52
+      − SA masking    Prec 48  Rec 81  IOU 51   ← 物体跑到背景里
+      − Layout loss   Prec 49  Rec 64  IOU 36   ← 不贴合 mask
+  两个部件分工不同，不是「一个承重一个装饰」。**未报的是两个消融各自的
+  计数准确率** —— Precision 59 vs 48 不告诉你有多少张图恰好是 N 个。
 
 ### 6.6 待做的归因实验（一次跑批定性）
 
@@ -247,3 +257,71 @@ blob token」的注意力硬置零。触发条件 `attention_probs.shape[0] == 4
 - 准确率不塌 → 两个强制机制都不重要，增益来自「改布局后重新生成」本身，
   那是更尖锐的一个问题。
 两种结果都是原文没报过的一手归因结论。
+
+---
+
+## 7. 读完论文 + 代码之后的完整理解（2026-08-21）
+
+### 7.1 论文自己报的数（用于对账）
+
+| CoCoCount | YOLOv9 | 人工 | Compbench 人工 |
+|---|---|---|---|
+| SDXL | 28 | 26 | 29 |
+| CountGen | **50** | **52** | **48** |
+
+我们复现：评测集 167 题（N≤9）上 vanilla 40.1%、CountGen 56.9%。两边都比
+原文高，最可能的原因是**口径**：官方 `run_countgen.py:104` 对 `N>9` 整题
+`continue`（200 题里 33 题），而论文 Tab. 1 报的是 200 题。若那 33 题按失败
+计入，CountGen 50%×200=100 题全部来自剩下的 167 题 → 59.9%，与我们的 56.9%
+量级相符。SDXL 那一侧对不太上（28%×200=56 题 < 我们的 67 题），可能是基线
+的采样器/步数或检测阈值不同。**这条差异要在论文里写明，不能默认可比。**
+
+### 7.2 CountGen 的完整机制（论文 §3.3 + 代码逐行核对）
+
+    文本 → SDXL 生成到 t=500 → Instance Localization
+      · 交叉注意力 Otsu 阈值 → 前景 mask M
+      · 自注意力 l^up_52 的前景特征 → DBSCAN(ε 动态) → 每个实例一个 cluster
+    → ReLayout（多了就删最小的；少了就用训练的 U-Net 逐个加，Dice + 重叠损失）
+    → **用同一组初始 latent 重新生成**，两个机制并行（论文原话 "a dual approach"）：
+      (a) Object layout loss：加权 BCE(w_fg=10)，把交叉注意力推进前景，步 0–25
+      (b) Self-attention masking：S*[i,j]=0 当 i∈背景 且 j∈前景，步 0–10
+
+### 7.3 ★ 关键发现：两个机制都只认「前景/背景」，都不认「有几个实例」
+
+代码证据两处，互相印证：
+
+- `utils/loss_utils.py:5`　`foreground_mask = (desired_mask != 0)`
+  → **损失把带实例编号的布局二值化了**，k 个 blob 的区分被丢弃。
+- `pipeline/attention_processors.py:45-61`　`blob_coordinates` 是**所有 blob 的
+  并集**，只置零「背景 → 并集」，**不置零「blob_i → blob_j」**。
+  论文 §3.3 的公式也是这么写的：i∈B(l) 且 j∈F(l)，F 是前景**整体**。
+
+也就是说：**实例结构只存在于 ReLayout 产出的布局里，一进入生成阶段就被抹平
+成一张前景二值图。** 两个强制机制合起来表达的约束是「物体要长在这里、不要长
+在那里」，**从来没有表达过「这里恰好长一个」**。
+
+而计数问题的核心恰恰是实例分离（论文 Introduction 自己说的：
+"the generative model needs to keep a sense of separate identity for every
+instance ... even if several objects look identical or overlap"）。
+
+### 7.4 论文自己承认的失效，正是这个缺口的直接后果
+
+原文 §7 Limitations 第一句：
+> "Occasionally, our optimization (Sec. 3.3) results in **multiple instances
+> of an object in an area intended for just one** by the layout."
+
+一个 blob 里长出多个实例 —— 这在 §7.3 的约束下是**必然可能**的，因为没有任何
+一项约束禁止它。作者点了名，没有解决。
+
+### 7.5 由此产生的方向（尚未预登记，先记想法）
+
+把布局约束从**前景级**升级到**实例级**，全部训练自由、零新权重：
+- 自注意力：除了「背景→前景」，再置零「blob_i → blob_j」(i≠j)，
+  使每个实例只能从自己的区域内聚合，不能与邻居合并、也不易一分为二。
+- 交叉注意力损失：改成逐 blob 计算并对齐，而不是对并集做一次二值 BCE。
+- 顺带一个可能是无心之失的实现细节：`attention_probs` 置零后**不重新归一化**，
+  注意力行不再和为 1，背景 token 的输出被衰减。归一化与否是一项干净的对照。
+
+判据要在跑之前登记，且必须能在小样本上快速判死（前两次都是拖到评测集才发现
+不迁移）。**这不是方向 c 的复活** —— 方向 c（后验删除）按 DESIGN §5.7 已判死，
+不改。这是一个新作用点：生成过程内部的实例级约束。

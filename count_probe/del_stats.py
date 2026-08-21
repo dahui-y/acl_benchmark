@@ -49,6 +49,26 @@ def _i(v):
     return None if v in ("", "None", None) else int(float(v))
 
 
+def _carved(box, keeps, grid=64):
+    """待删框 box 有多大比例被 keeps（保留框，不膨胀）挖掉。
+
+    用 grid×grid 的均匀采样近似面积并集，避免为了矩形并集写扫描线 ——
+    这里只需要判「大约挖掉了多少」，0.01 的精度足够分档。
+    """
+    x1, y1, x2, y2 = box
+    w, h = x2 - x1, y2 - y1
+    if w <= 0 or h <= 0:
+        return 0.0
+    hit = 0
+    for i in range(grid):
+        px = x1 + (i + 0.5) * w / grid
+        for j in range(grid):
+            py = y1 + (j + 0.5) * h / grid
+            if any(k[0] <= px <= k[2] and k[1] <= py <= k[3] for k in keeps):
+                hit += 1
+    return hit / (grid * grid)
+
+
 def load_arms(run):
     """{stem: row}，只留计分题（N≤9）。arms 目录约定是 {run}_arms。"""
     p = Path(str(run) + "_arms") / "yolo_results.csv"
@@ -208,6 +228,35 @@ def main():
         print(f"{n:<16}{cell1:>22}{cell2:>24}")
     print("\n  提醒：这是**调参集**。四个配置里挑最好的那个，其优势含选择偏倚；"
           "\n  「四个全部为正」比「最好的那个为正」结实得多，判读要以前者为准。")
+
+    # ---- 遮罩取证：被删物体有多少被保留框「挖回去」了 ----
+    if any(L[s].get("corrector", {}).get("del_boxes")
+           for L in logs.values() for s in L):
+        print(f"\n{'='*74}\n表六 遮罩取证：待删框被保留框挖掉的比例（嵌合体的成因）")
+        print("  挖回保留框是为了不吃掉邻居，代价是：待删框与保留框重叠时，"
+              "\n  被删物体的一部分也被保护下来 → 重去噪只重画上半截 → "
+              "模型顺着残留补成别的东西（半个杯子长成狗）。")
+        print(f"\n{'配置':<16}{'待删框数':>9}{'被挖过的':>9}{'挖掉>30%':>9}"
+              f"{'中位挖掉':>9}{'最大':>7}")
+        for n in names:
+            L = logs[n]
+            fr = []
+            for s, r in L.items():
+                c = r.get("corrector", {})
+                for dele, keep in zip(c.get("del_boxes", []),
+                                      c.get("keep_boxes", [])):
+                    for b in dele:
+                        fr.append(_carved(b, keep))
+            if not fr:
+                continue
+            fr.sort()
+            hit = sum(1 for v in fr if v > 0.01)
+            big = sum(1 for v in fr if v > 0.30)
+            print(f"{n:<16}{len(fr):>9}{hit:>9}{big:>9}"
+                  f"{fr[len(fr)//2]:>9.2f}{fr[-1]:>7.2f}")
+        print("  判读：'挖掉>30%' 的框基本注定长成嵌合体 —— 一半原物体、"
+              "一半新内容。\n  这个数不是超参没调好，是轴对齐矩形框表达不了"
+              "「删这个、不碰那个」（DESIGN §6 风险 #3）。")
 
 
 if __name__ == "__main__":

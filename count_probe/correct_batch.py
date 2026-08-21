@@ -122,6 +122,10 @@ def main():
     ap.add_argument("--guidance", type=float, default=5.0)
     ap.add_argument("--rounds", type=int, default=2)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--dump-mask", action="store_true",
+                    help="把每轮的重去噪遮罩存成 {stem}_mask{r}.png（纯诊断，"
+                         "不改生成行为）。嵌合体到底是遮罩漏掉了半个物体，"
+                         "还是提示词画错了东西，只有看遮罩能定案")
     a = ap.parse_args()
 
     import torch
@@ -181,6 +185,7 @@ def main():
         boxes, scores = count_boxes(img, cls)
         n0 = len(boxes)
         trail, deleted, mask_frac, want = [n0], 0, [], []
+        del_log, keep_log = [], []
         cur = img
         if N <= 9 and n0 > N:
             for rnd in range(a.rounds):
@@ -192,6 +197,10 @@ def main():
                 dele = [b_now[i] for i in idx]
                 keep = [b_now[i] for i in range(len(b_now)) if i not in idx]
                 mask = build_mask(dele, keep, cur.size, a.dilate)
+                if a.dump_mask:
+                    mask.save(out / f"{stem}_mask{rnd}.png")
+                del_log.append([[round(v, 1) for v in b] for b in dele])
+                keep_log.append([[round(v, 1) for v in b] for b in keep])
                 pos, tag = (ctx_prompt(prompt, cls) if a.prompt_mode == "ctx"
                             else ("background", "bg"))
                 g = torch.Generator("cuda").manual_seed(seed + 1000 * (rnd + 1))
@@ -225,7 +234,12 @@ def main():
                              # 意图 vs 实际：want[i] 是该轮想删几个，
                              # trail[i]-trail[i+1] 是实际掉了几个。两者背离
                              # 就是 mask 吃到邻居（冒烟里 15→4 而 want=8）。
-                             "want": want, "mask_frac": mask_frac}}
+                             "want": want, "mask_frac": mask_frac,
+                             # 逐轮的待删框与保留框。嵌合体（半个杯子长成狗）
+                             # 的成因只能靠它验：若待删框与保留框重叠，挖回
+                             # 保留框就会把被删物体的一部分也保护下来，重去噪
+                             # 只重画上半截，模型顺着残留补成别的东西。
+                             "del_boxes": del_log, "keep_boxes": keep_log}}
         meta.append({k: rec[k] for k in
                      ("id", "prompt", "seed", "obj_class", "requiered_object_num")})
         json.dump(meta, open(out / "metadata.json", "w"), indent=4)

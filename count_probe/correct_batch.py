@@ -145,10 +145,16 @@ def main():
                if r.names[int(c)] == cls]
         return [b for b, _ in sel], [s for _, s in sel]
 
+    # HF_HUB_OFFLINE=1 时 diffusers 仍会先去 hub 查 model_info 再抛异常；
+    # 离线就直接走本地，省得报成「要联网/要登录」这种误导性的错。
+    offline = os.environ.get("HF_HUB_OFFLINE", "").strip() not in ("", "0", "false")
     kw = dict(torch_dtype=torch.float16, use_safetensors=True,
-              local_files_only=a.local_files_only)
+              local_files_only=a.local_files_only or offline)
     if a.variant:
         kw["variant"] = a.variant
+    if not Path(a.sdxl).exists() and "/" in a.sdxl and offline:
+        print(f"  提示：--sdxl={a.sdxl} 不是本地路径且当前离线，"
+              f"将只在 HF 缓存里找；若失败请 export SDXL_PATH=<本地 SDXL 目录>")
     pipe = StableDiffusionXLInpaintPipeline.from_pretrained(a.sdxl, **kw)
     pipe.to("cuda")
     pipe.set_progress_bar_config(disable=True)

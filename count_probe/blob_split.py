@@ -106,6 +106,52 @@ def max_matching(adj, k):
     return sum(1 for b in range(len(adj)) if adj[b] and aug(b, set()))
 
 
+def centroids(lab, k):
+    """每个 blob 取一个**保证落在自身内部**的代表点（离质心最近的自身格）。
+
+    直接用算术质心在凹形/环形 blob 上可能落到外面，那会静默错判归属。
+    """
+    out = {}
+    for j in range(1, k + 1):
+        ys, xs = np.nonzero(lab == j)
+        if len(ys) == 0:
+            continue
+        cy, cx = ys.mean(), xs.mean()
+        i = np.argmin((ys - cy) ** 2 + (xs - cx) ** 2)
+        out[j] = (int(ys[i]), int(xs[i]))
+    return out
+
+
+def assign_centroid(boxes, lab, img_size):
+    """归属规则二：blob 的代表点落在框里 = 该框实现了这个 blob。→ (背景框数, 邻接表)
+
+    ★ 登记（2026-08-21，在拿到全量 npz **之前**写下）：改用这条规则的理由是
+    几何性的，不是为了结果好看 —— 论文 §3.2.1 末句写明「We also slightly
+    erode instance masks after the ReLayout」，**blob 按设计就比生成出来的
+    物体小**。因此「框面积被 blob 覆盖的比例」这个门槛天生偏低，扫到 0.30
+    时会把大量正常归属误判成「长到布局之外」（实测：背景漏 0 → 33，而这
+    33 个框在 min-cover=0 时每一个都与某 blob 有重叠）。代表点规则对
+    blob 与物体的尺寸失配免疫。
+
+    恒等式仍然精确：有归属框数 + 背景框数 = yolo，故
+    (有归属框 − 匹配) − (k − 匹配) + 背景 = yolo − k。
+    """
+    H, W = lab.shape
+    sy, sx = img_size[1] / H, img_size[0] / W
+    k = int(lab.max())
+    cen = centroids(lab, k)
+    bg = 0
+    adj = []
+    for x1, y1, x2, y2 in boxes:
+        hit = [j for j, (r, c) in cen.items()
+               if x1 <= (c + 0.5) * sx <= x2 and y1 <= (r + 0.5) * sy <= y2]
+        if not hit:
+            bg += 1
+        else:
+            adj.append(hit)
+    return bg, adj
+
+
 def assign(boxes, lab, img_size, amb_frac=0.30, min_cover=0.0):
     """每个框归到覆盖格数最多的 blob。→ (每 blob 框数, 背景框数, 模糊框数, 邻接表)
 
@@ -140,7 +186,7 @@ def assign(boxes, lab, img_size, amb_frac=0.30, min_cover=0.0):
     return cnt, bg, amb, adj
 
 
-def tally(rows, box, run, img_size, amb_frac, min_cover):
+def tally(rows, box, run, img_size, amb_frac, min_cover, rule="cover"):
     """跑一遍摊派。→ (stat, agg, per)"""
     stat = Counter()
     agg = Counter()
@@ -161,14 +207,23 @@ def tally(rows, box, run, img_size, amb_frac, min_cover):
         if k == 0:
             stat["缺npz"] += 1
             continue
-        cnt, bg, amb, adj = assign(box[stem]["boxes"], lab,
-                                   (img_size, img_size), amb_frac, min_cover)
-        over = sum(max(c - 1, 0) for c in cnt.values())
-        empty = sum(1 for j in range(1, k + 1) if cnt.get(j, 0) == 0)
+        if rule == "centroid":
+            # 代表点规则：点估计**就是**下界（把每个框尽量塞进空着的 blob），
+            # 因为这条规则下不存在「归到哪个 blob」的自由度之外的信息。
+            bg, adj = assign_centroid(box[stem]["boxes"], lab,
+                                      (img_size, img_size))
+            amb = sum(1 for h in adj if len(h) > 1)
+            m = max_matching(adj, k)
+            over, empty = len(adj) - m, k - m
+        else:
+            cnt, bg, amb, adj = assign(box[stem]["boxes"], lab,
+                                       (img_size, img_size), amb_frac, min_cover)
+            over = sum(max(c - 1, 0) for c in cnt.values())
+            empty = sum(1 for j in range(1, k + 1) if cnt.get(j, 0) == 0)
+            m = max_matching(adj, k)
         yolo = len(box[stem]["boxes"])
         assert yolo - k == over - empty + bg, (stem, yolo, k, over, empty, bg)
         N = int(r["N"])
-        m = max_matching(adj, k)
         stat["用"] += 1
         agg.update({"题": 1, "blob": k, "多长": over, "空blob": empty,
                     "背景漏": bg, "模糊框": amb,
@@ -196,6 +251,10 @@ def main():
     ap.add_argument("--min-cover", type=float, nargs="+", default=[0.0, 0.15, 0.30],
                     help="框面积中落在该 blob 上的最低比例，低于则算背景。"
                          "给多个值 = 敏感性扫描；结论要在整条曲线上都成立")
+    ap.add_argument("--rule", default="both", choices=["cover", "centroid", "both"],
+                    help="归属规则。cover=框面积被 blob 覆盖的比例（原版，对 blob "
+                         "被腐蚀这一点敏感）；centroid=blob 代表点落在框内（尺寸"
+                         "失配免疫，见 assign_centroid 的登记说明）")
     ap.add_argument("--list", type=int, default=0, help="逐题列出前 N 条")
     a = ap.parse_args()
 
@@ -204,8 +263,11 @@ def main():
             if r["skipped_by_official"] not in ("True", "true", "1")}
     box = {json.loads(l)["stem"]: json.loads(l) for l in Path(a.boxes).open()}
 
-    runs = [(mc, *tally(rows, box, run, a.img_size, a.amb_frac, mc))
-            for mc in a.min_cover]
+    runs = ([(f"cover {mc:.2f}", *tally(rows, box, run, a.img_size, a.amb_frac, mc))
+             for mc in a.min_cover] if a.rule in ("cover", "both") else [])
+    if a.rule in ("centroid", "both"):
+        runs.append(("centroid", *tally(rows, box, run, a.img_size,
+                                        a.amb_frac, 0.0, "centroid")))
     stat0, agg0, per0 = runs[0][1], runs[0][2], runs[0][3]
 
     print(f"素材：可用 {stat0['用']} 题 / csv 里 {len(rows)} 题"
@@ -226,22 +288,23 @@ def main():
 
     print(f"\n{'='*76}\n表一 误差摊派 × min-cover 敏感性"
           f"（恒等式 yolo − k = 多长 − 空blob + 背景漏）")
-    print(f"{'min-cover':>10}{'题数':>6}{'多长':>7}{'空blob':>8}{'背景漏':>8}"
+    print(f"{'归属规则':>12}{'题数':>6}{'多长':>7}{'空blob':>8}{'背景漏':>8}"
           f"{'多长占比':>10}{'模糊框':>8}")
     for mc, st, ag, _ in runs:
         tot = ag["多长"] + ag["空blob"] + ag["背景漏"]
-        print(f"{mc:>10.2f}{ag['题']:>6}{ag['多长']:>7}{ag['空blob']:>8}"
+        print(f"{mc:>12}{ag['题']:>6}{ag['多长']:>7}{ag['空blob']:>8}"
               f"{ag['背景漏']:>8}{100*ag['多长']/max(tot,1):>9.1f}%{ag['模糊框']:>8}")
     print("  读法：三项随 min-cover 的漂移量 = 归属规则带来的不确定度。"
           "\n  「多长占比」在整条曲线上都 ≥30% 才算过门；只在某一点过不算。")
 
     print(f"\n{'='*76}\n表二 ★ 与归属摇摆无关的下界（把每个框尽量塞进空着的 blob）")
-    print(f"{'min-cover':>10}{'多长（点估计）':>16}{'多长下界':>10}"
-          f"{'空blob下界':>12}{'错题里有下界多长':>18}")
+    print(f"{'归属规则':>12}{'多长（点估计）':>16}{'多长下界':>10}"
+          f"{'空blob下界':>12}{'★判据比值':>11}{'错题里有下界多长':>18}")
     for mc, st, ag, _ in runs:
         frac = f"{ag['错·有多长下界']}/{ag['错题']}"
-        print(f"{mc:>10.2f}{ag['多长']:>15}{ag['多长下界']:>10}"
-              f"{ag['空下界']:>12}{frac:>18}")
+        den = ag["多长下界"] + ag["空下界"] + ag["背景漏"]
+        print(f"{mc:>12}{ag['多长']:>15}{ag['多长下界']:>10}"
+              f"{ag['空下界']:>12}{100*ag['多长下界']/max(den,1):>10.1f}%{frac:>18}")
     print("  下界的含义：即使按最有利于「没有重复生成」的方式分配每一个框，"
           "\n  仍然剩下这么多「一个 blob 里不止一个物体」。这个数消不掉，"
           "\n  **它才是论文 §7 那条 Limitation 的硬证据**。")

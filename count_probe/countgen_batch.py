@@ -325,6 +325,11 @@ def _patch_mem_attn():
                 return True                      # loss 要 aggregate_attention(get_cross=True)
             if not st.loss:
                 return True                      # 原版那趟：self_step_store 要喂 DBSCAN
+            # ★ 方向 d 的例外：开了亲和损失后，`up_52` 的**计数前向** self-attn
+            #   要被 compute_loss 读走并回传梯度，必须保留显式路径。不加这条，
+            #   它会走 SDPA、不进 store，损失静默退化成「只跑了原版」。
+            if _AFF_LAYER is not None and self.place_in_unet == _AFF_LAYER:
+                return True
             # counting 那趟的 self-attn：只会进 all_self_attention，而
             # aggregate_attention 全仓库仅 :152 一处调用且 get_cross=True → 从不读。
             # 唯一还会用到它的是屏蔽块，条件见 attention_processors.py:34-38。
@@ -368,6 +373,95 @@ def _patch_mem_attn():
 
     SP.CountingProcessor = MemAttnCountingProcessor   # register_attention_control 用的是这个名字
     return MemAttnCountingProcessor
+
+
+_AFF_LAYER = None      # 开了亲和损失时置为层名（如 "up_52"），供 _probs_are_read 用
+
+
+def _patch_sa_mask(a):
+    """替换自注意力屏蔽块：支持 code / paper 两种基座 + 我们的跨 blob 屏蔽。
+
+    只在**需要偏离发布版行为**时安装（mode != code 或 --inter-blob），
+    默认路径一行都不碰。`inst_attn.zero_mask(..., "code")` 已与发布版的
+    原始循环做过 20 组随机对拍、逐元素相同，故安装后基座行为不变。
+    """
+    import torch
+    from pipeline.attention_processors import CountingProcessor
+    sys.path.insert(0, str(REPO / "count_probe"))
+    from inst_attn import zero_mask
+
+    cache = {}
+
+    def _mask_for(st):
+        key = (id(st.desired_mask), a.sa_mask_mode, a.inter_blob)
+        if key not in cache:
+            cache.clear()                      # 每题一张，不累积
+            cache[key] = zero_mask(st.desired_mask, a.sa_mask_mode, a.inter_blob)
+        return cache[key]
+
+    def __call__(self, attn, hidden_states, encoder_hidden_states=None,
+                 attention_mask=None, **kwargs):
+        # 以下逐行对应 attention_processors.py:12-72，唯一改动是屏蔽块
+        batch_size, sequence_length, _ = hidden_states.shape
+        attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length,
+                                                     batch_size)
+        query = attn.to_q(hidden_states)
+        is_cross = encoder_hidden_states is not None
+        ehs = encoder_hidden_states if encoder_hidden_states is not None else hidden_states
+        key, value = attn.to_k(ehs), attn.to_v(ehs)
+        query = attn.head_to_batch_dim(query)
+        key = attn.head_to_batch_dim(key)
+        value = attn.head_to_batch_dim(value)
+        attention_probs = attn.get_attention_scores(query, key, attention_mask)
+        self.attnstore(attention_probs, is_cross, self.place_in_unet, attn.heads)
+
+        st = self.attnstore
+        d = st.attn_res[0]
+        if (st.loss and st.masking_dict["enable"]
+                and attention_probs.shape[0] == 40          # CFG batch2 × 20 heads
+                and attention_probs.shape[2] == d ** 2
+                and st.masking_dict["start_step"] <= st.curr_step_index
+                <= st.masking_dict["end_step"]
+                and "up" in self.place_in_unet):
+            attention_probs = attention_probs.masked_fill(
+                _mask_for(st).unsqueeze(0), 0.0)            # 与原版一致：不重归一化
+
+        hidden_states = torch.bmm(attention_probs, value)
+        hidden_states = attn.batch_to_head_dim(hidden_states)
+        hidden_states = attn.to_out[0](hidden_states)
+        return attn.to_out[1](hidden_states)
+
+    CountingProcessor.__call__ = __call__
+    print(f"自注意力屏蔽：基座={a.sa_mask_mode}"
+          + ("  + 跨 blob 屏蔽（机制 A）" if a.inter_blob else "")
+          + ("   ⚠️ 偏离发布版行为，非基线" if a.sa_mask_mode != "code" or a.inter_blob else ""))
+
+
+def _patch_aff_loss(a):
+    """在原版 object_layout_loss 之上加 up_52 的实例级亲和损失（机制 B）。"""
+    global _AFF_LAYER
+    _AFF_LAYER = a.inst_layer
+    import pipeline.self_counting_sdxl_pipeline as SP
+    from utils.loss_utils import object_layout_loss
+    sys.path.insert(0, str(REPO / "count_probe"))
+    from inst_attn import affinity_loss
+
+    def compute_loss(self, object_attention_map):
+        base = object_layout_loss(object_attention_map, self.counting_config["loss"],
+                                  desired_mask=self.desired_mask,
+                                  attnstore=self.attention_store)
+        sa = self.attention_store.all_self_attention.get(_AFF_LAYER)
+        if sa is None:
+            self._aff_miss = getattr(self, "_aff_miss", 0) + 1
+            return base
+        aff = affinity_loss(sa, self.desired_mask)
+        self._aff_hit = getattr(self, "_aff_hit", 0) + 1
+        self._aff_last = float(aff.detach())
+        self._base_last = float(base.detach()) if hasattr(base, "detach") else float(base)
+        return base + a.inst_lam * aff
+
+    SP.SelfCountingSDXLPipeline.compute_loss = compute_loss
+    print(f"亲和损失（机制 B）：层={_AFF_LAYER} λ={a.inst_lam}")
 
 
 def _patch_instance_loss(a):
@@ -493,6 +587,23 @@ def main():
     ap.add_argument("--out", required=True, help="输出目录（官方布局）")
     ap.add_argument("--dataset", default=str(MIC / "dataset" / "CoCoCount.json"))
     ap.add_argument("--config", default=str(MIC / "pipeline" / "pipeline_config.yaml"))
+    # ---- 方向 d（DESIGN2.md）：实例级布局约束 ----
+    ap.add_argument("--sa-mask-mode", default="code", choices=["code", "paper", "off"],
+                    help="自注意力屏蔽的基座。code=发布版实测行为（背景整行置零，"
+                         "因 range(0,..) 含背景）；paper=论文 §3.3 公式（只切"
+                         "背景→前景）；off=不屏蔽。默认 code，即基线")
+    ap.add_argument("--inter-blob", action="store_true",
+                    help="机制 A：再置零 blob_a→blob_b (a≠b)，每个实例只能从"
+                         "自身区域+背景聚合。治「两个 blob 合并成一个物体」")
+    ap.add_argument("--inst-loss", action="store_true",
+                    help="机制 B：在 up_52 的自注意力亲和矩阵上加实例级损失，"
+                         "即「让 DBSCAN 恰好读出 k 个簇」的可微版本。"
+                         "治「一个 blob 裂出多个物体」")
+    ap.add_argument("--inst-layer", default="up_52",
+                    help="机制 B 作用的层。默认 up_52 —— 论文认定的实例身份载体，"
+                         "也是 dbscan_mask_extract.py:181 读的那一层")
+    ap.add_argument("--inst-lam", type=float, default=1.0,
+                    help="机制 B 的权重 λ。按 DESIGN2 §2 的规则定（量级对齐），不扫")
     ap.add_argument("--no-self-mask", action="store_true",
                     help="关掉自注意力遮罩（CountGen 的第二个强制机制，原文无消融）。"
                          "用于把增益在「梯度引导」与「注意力硬约束」之间归因")
@@ -772,6 +883,10 @@ def main():
     if not a.no_mem_graph:
         _patch_mem_graph()
         print("显存改动（数值等价）：create_graph=False；进修正步前丢掉上一张图")
+    if a.inst_loss:
+        _patch_aff_loss(a)
+    if a.sa_mask_mode != "code" or a.inter_blob:
+        _patch_sa_mask(a)
     if not a.no_mem_attn:
         _patch_mem_attn()
         print("显存改动（浮点级）：probs 不会被任何地方读的层改走 SDPA")
@@ -915,6 +1030,23 @@ def main():
                 torch.cuda.empty_cache()
                 image = run_counting_pipeline_corrected_masks(
                     pipe, prompt, generator, object_masks, latents, cfg)
+                # ★ Gate 0 的第 2 条（DESIGN2 §3）：亲和损失必须真的接上了。
+                #   不写这个 assert，`up_52` 一旦没进 store，compute_loss 会
+                #   静默退回原版损失，整批白跑 —— 这种失败我们吃过一次
+                #   （--thresh-margin 那回）。命中一次即放行，之后不再检查。
+                if a.inst_loss and not getattr(pipe, "_aff_checked", False):
+                    hit = getattr(pipe, "_aff_hit", 0)
+                    miss = getattr(pipe, "_aff_miss", 0)
+                    assert hit > 0, (
+                        f"亲和损失没接上：命中 {hit} 次、落空 {miss} 次。"
+                        f"检查 `{a.inst_layer}` 是否真在 all_self_attention 里"
+                        f"（--no-mem-attn 可排除内存补丁的干扰）")
+                    pipe._aff_checked = True
+                    print(f"  [Gate0] 亲和损失已接上：命中 {hit} / 落空 {miss}，"
+                          f"L_cross={getattr(pipe,'_base_last',float('nan')):.4f} "
+                          f"L_aff={getattr(pipe,'_aff_last',float('nan')):.4f} "
+                          f"→ λ 量级对齐建议值 "
+                          f"{getattr(pipe,'_base_last',1.0)/max(getattr(pipe,'_aff_last',1.0),1e-8):.2g}")
         t_count = time.time() - t0
 
         vanilla_img.save(out / f"{img_id}_vanilla.png")

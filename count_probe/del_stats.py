@@ -258,6 +258,44 @@ def main():
               "一半新内容。\n  这个数不是超参没调好，是轴对齐矩形框表达不了"
               "「删这个、不碰那个」（DESIGN §6 风险 #3）。")
 
+        # ---- 表七：天然对照组。遮罩兑现了意图的那批题，成绩如何？----
+        print(f"\n{'='*74}\n表七 按「该题最大被挖比例」分层 —— 判决性检验")
+        print("  逻辑：挖得少 = 遮罩真的盖住了目标。若这一层成绩好，病根就只在")
+        print("  遮罩几何，换实例分割掩码可救；若这一层也垮，那重去噪机制本身")
+        print("  就不成立，换掩码救不了。这一格是决定方向 c 生死的免费实验。")
+        BK = [(0.0, 0.10, "≤10% 遮罩兑现"), (0.10, 0.30, "10~30%"),
+              (0.30, 0.60, "30~60%"), (0.60, 1.01, ">60% 基本空转")]
+        for n in names:
+            L, A = logs[n], arms[n]
+            print(f"\n  【{n}】")
+            print(f"  {'分层':<16}{'题数':>5}{'环内成功':>9}{'v9e对':>8}"
+                  f"{'vanilla对':>10}{'净':>5}")
+            for lo, hi, lab in BK:
+                g = []
+                for s, r in L.items():
+                    c = r.get("corrector", {})
+                    if not c.get("del_boxes") or s not in A:
+                        continue
+                    fl = [_carved(b, keep)
+                          for dele, keep in zip(c["del_boxes"], c["keep_boxes"])
+                          for b in dele]
+                    if fl and lo <= max(fl) < hi:
+                        g.append(s)
+                if not g:
+                    continue
+                ok = sum(1 for s in g
+                         if L[s]["corrector"]["n_trail"][-1] == A[s]["N"])
+                m = sum(A[s]["ok_m"] for s in g)
+                v = sum(A[s]["ok_v"] for s in g)
+                print(f"  {lab:<16}{len(g):>5}{ok:>9}{m:>8}{v:>10}{m-v:>+5}")
+            print(f"  题目（≤10% 那层，画质要逐张看）：" +
+                  ", ".join(s for s in L
+                            if s in A and L[s].get("corrector", {}).get("del_boxes")
+                            and max([_carved(b, keep) for dele, keep in
+                                     zip(L[s]["corrector"]["del_boxes"],
+                                         L[s]["corrector"]["keep_boxes"])
+                                     for b in dele] or [1]) < 0.10) or "（无）")
+
 
 if __name__ == "__main__":
     main()

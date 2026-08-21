@@ -162,9 +162,14 @@ def main():
     pipe = StableDiffusionXLInpaintPipeline.from_pretrained(a.sdxl, **kw)
     pipe.to("cuda")
     pipe.set_progress_bar_config(disable=True)
+    # none 模式把 guidance 压到 1.0（DESIGN §5.7）。横幅必须报**实际生效**的
+    # 值，不能报 --guidance 的原值 —— 留档与实跑不符是复现事故。
+    eff_g = 1.0 if a.prompt_mode == "none" else a.guidance
     print(f"★ 纯删除修正器：strength={a.strength} prompt={a.prompt_mode} "
           f"dilate={a.dilate} feather={a.feather} steps={a.steps} "
-          f"guidance={a.guidance} rounds={a.rounds}")
+          f"guidance={eff_g} rounds={a.rounds}"
+          + ("   ⚠️ guidance=1.0 → diffusers 关闭 CFG，negative_prompt 失效，"
+             "「洞里长回目标类」没有防线" if a.prompt_mode == "none" else ""))
 
     meta, log_p = [], out / "counter_log.jsonl"
     done = {json.loads(l)["id"] for l in log_p.open()} if log_p.exists() else set()
@@ -237,6 +242,7 @@ def main():
                "sec": round(time.time() - t0, 2),
                "corrector": {"kind": "delete-only", "counter": a.weights,
                              "strength": a.strength, "prompt_mode": a.prompt_mode,
+                             "guidance": eff_g,   # 实际生效值，非 --guidance 原值
                              "n_trail": trail, "n_deleted_boxes": deleted,
                              # 意图 vs 实际：want[i] 是该轮想删几个，
                              # trail[i]-trail[i+1] 是实际掉了几个。两者背离

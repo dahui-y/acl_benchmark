@@ -119,8 +119,15 @@ SLD 靠 GPT-4 控制器 + GLIGEN 训练权重 + 自修自评（OWLv2 修 OWLv2 �
 先修 D2，因为它零下载、零新权重、一次 3 分钟，且它不过就没必要修 D1。
 
 - **D2 的修法**（唯一允许的一组，不扫）：把遮罩区的条件降到最低 ——
-  `prompt=""`、`guidance_scale=1.0`（等于关掉 CFG）、`negative_prompt` 保留
-  类名。其余全部沿用 §3 的定死值。记为 prompt-mode `none`。
+  `prompt=""`、`guidance_scale=1.0`（等于关掉 CFG）。其余全部沿用 §3 的
+  定死值。记为 prompt-mode `none`。
+  **更正（写下当时的事实错误）**：本条初稿写「`negative_prompt` 保留类名」。
+  错。diffusers 里 `do_classifier_free_guidance = guidance_scale > 1.0`，
+  guidance=1.0 即关闭 CFG，**`negative_prompt` 完全失效**。故 none 模式下
+  「防止洞里长回目标类」没有任何防线。
+  → 由此给出见图前的预测：none 的失效形态更可能是**目标物体原地长回**，
+    而非长出外来物体。两者分开判：下面的零容忍门只管**外来物体**；
+    长回目标类是计数问题，由 p_del 承担。
   理由：删除任务要的是**背景延续**，不是照本文生图；最小条件让模型只能
   依赖 latent 混合带来的邻域信息。
 - **D2 的门（肉眼红线，零容忍）**：在表七 ≤10% 层那 **8 题**（遮罩已正确）

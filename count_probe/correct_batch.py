@@ -51,21 +51,33 @@ from make_arms import coco_name  # noqa: E402  短名→COCO 类名（ball→spo
 
 
 def pick_deletions(boxes, scores, k):
-    """删「最不像真实实例」的 k 个：分数最低优先，并列取面积小者。"""
+    """删「最不像真实实例」的 k 个：分数最低优先，并列取面积小者。→ 索引。"""
     def area(b):
         return max(b[2] - b[0], 0) * max(b[3] - b[1], 0)
     order = sorted(range(len(boxes)), key=lambda i: (scores[i], area(boxes[i])))
-    return [boxes[i] for i in order[:k]]
+    return order[:k]
 
 
-def build_mask(boxes, size, dilate):
+def build_mask(del_boxes, keep_boxes, size, dilate):
+    """删除区域 = 膨胀后的待删框之并，再**挖掉要保留的框**（不膨胀）。
+
+    冒烟实测的缺陷：apple N=7、初检 15，删 8 个框后只剩 4 —— 多掉了 3 个。
+    密集场景里框彼此相邻，dilate=24 让待删框的 mask 盖住了邻居，重去噪把
+    邻居一起抹掉。这不是超参没调好，是 mask 构造没兑现设计意图（「删掉
+    恰好 k 个」），属实现缺陷，修它不计入 DESIGN.md 的标定预算。
+
+    挖掉时不给保留框加膨胀：保留框自身的边缘允许被重画（否则删除区域和
+    保留区域之间会留一圈无人管的缝），但主体像素受保护。
+    """
     from PIL import Image, ImageDraw
+    W, H = size
     m = Image.new("L", size, 0)
     d = ImageDraw.Draw(m)
-    W, H = size
-    for x1, y1, x2, y2 in boxes:
+    for x1, y1, x2, y2 in del_boxes:
         d.rectangle([max(x1 - dilate, 0), max(y1 - dilate, 0),
                      min(x2 + dilate, W), min(y2 + dilate, H)], fill=255)
+    for x1, y1, x2, y2 in keep_boxes:
+        d.rectangle([max(x1, 0), max(y1, 0), min(x2, W), min(y2, H)], fill=0)
     return m
 
 
@@ -162,7 +174,7 @@ def main():
         img = Image.open(van_p).convert("RGB")
         boxes, scores = count_boxes(img, cls)
         n0 = len(boxes)
-        trail, deleted = [n0], 0
+        trail, deleted, mask_frac, want = [n0], 0, [], []
         cur = img
         if N <= 9 and n0 > N:
             for rnd in range(a.rounds):
@@ -170,8 +182,10 @@ def main():
                 k = len(b_now) - N
                 if k <= 0:
                     break
-                dele = pick_deletions(b_now, s_now, k)
-                mask = build_mask(dele, cur.size, a.dilate)
+                idx = set(pick_deletions(b_now, s_now, k))
+                dele = [b_now[i] for i in idx]
+                keep = [b_now[i] for i in range(len(b_now)) if i not in idx]
+                mask = build_mask(dele, keep, cur.size, a.dilate)
                 pos, tag = (ctx_prompt(prompt, cls) if a.prompt_mode == "ctx"
                             else ("background", "bg"))
                 g = torch.Generator("cuda").manual_seed(seed + 1000 * (rnd + 1))
@@ -182,6 +196,9 @@ def main():
                               height=cur.size[1], width=cur.size[0]).images[0]
                 cur = paste_back(cur, edited, mask, a.feather)
                 deleted += len(dele)
+                import numpy as _np
+                mask_frac.append(round(float((_np.asarray(mask) > 127).mean()), 4))
+                want.append(k)
                 trail.append(len(count_boxes(cur, cls)[0]))
                 if trail[-1] <= N:
                     break
@@ -198,7 +215,11 @@ def main():
                "sec": round(time.time() - t0, 2),
                "corrector": {"kind": "delete-only", "counter": a.weights,
                              "strength": a.strength, "prompt_mode": a.prompt_mode,
-                             "n_trail": trail, "n_deleted_boxes": deleted}}
+                             "n_trail": trail, "n_deleted_boxes": deleted,
+                             # 意图 vs 实际：want[i] 是该轮想删几个，
+                             # trail[i]-trail[i+1] 是实际掉了几个。两者背离
+                             # 就是 mask 吃到邻居（冒烟里 15→4 而 want=8）。
+                             "want": want, "mask_frac": mask_frac}}
         meta.append({k: rec[k] for k in
                      ("id", "prompt", "seed", "obj_class", "requiered_object_num")})
         json.dump(meta, open(out / "metadata.json", "w"), indent=4)

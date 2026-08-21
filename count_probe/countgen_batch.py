@@ -942,6 +942,12 @@ def main():
         prompt, seed = item["prompt"], item["seed"]
         N, obj = item["int_number"], item["object"]
         img_id = f"{obj}_num={N}_seed={seed}"
+        # ★ 每题都重置（不能只在走引导的分支里做）：obj_num_match=True 的题
+        #   既不重置也不调 compute_loss，counter_log 里就会留着上一道引导题的
+        #   读数，而 aff_calls 也会显示上一题的增量 —— λ 那两张表都被这个骗过。
+        pipe._aff_first = pipe._base_first = None
+        pipe._aff_last = pipe._base_last = None
+        pipe._aff_hit0 = getattr(pipe, "_aff_hit", 0)
         if img_id in done:
             continue
         over9 = N > 9
@@ -1033,12 +1039,6 @@ def main():
                     st.clear()
                 pipe.attention_store.all_cross_attention = {}
                 pipe.attention_store.all_self_attention = {}
-                # 每题清空：不清的话没走引导的题会留着上一题的值，
-                # counter_log 里就出现整段重复的「读数」，把 6 个样本
-                # 看成 12 个（λ 那张表实测踩过）。
-                pipe._aff_first = pipe._base_first = None
-                pipe._aff_last = pipe._base_last = None
-                pipe._aff_hit0 = getattr(pipe, "_aff_hit", 0)
                 torch.cuda.empty_cache()
                 image = run_counting_pipeline_corrected_masks(
                     pipe, prompt, generator, object_masks, latents, cfg)
